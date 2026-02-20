@@ -243,8 +243,8 @@ instance : HasModel Int8 (BitVec 8) where
   decode x := .ofBitVec x
   encode_decode := by simp
   decode_encode := by simp
-  le_iff_encode_le := by simp only [Int8.le_iff_toBitVec_sle]; simp [LE.le]
-  lt_iff_encode_lt := by simp only [Int8.lt_iff_toBitVec_slt]; simp [LT.lt]
+  le_iff_encode_le := by simp [LE.le, Int8.le]
+  lt_iff_encode_lt := by simp [LT.lt, Int8.lt]
 
 set_option backward.whnf.reducibleClassField false in
 theorem instUpwardEnumerable_eq :
@@ -339,10 +339,8 @@ instance : HasModel Int16 (BitVec 16) where
   decode x := .ofBitVec x
   encode_decode := by simp
   decode_encode := by simp
-  -- le_iff_encode_le := by simp [LE.le, Int16.le]
-  -- lt_iff_encode_lt := by simp [LT.lt, Int16.lt]
-  le_iff_encode_le := by simp only [Int16.le_iff_toBitVec_sle]; simp [LE.le]
-  lt_iff_encode_lt := by simp only [Int16.lt_iff_toBitVec_slt]; simp [LT.lt]
+  le_iff_encode_le := by simp [LE.le, Int16.le]
+  lt_iff_encode_lt := by simp [LT.lt, Int16.lt]
 
 set_option backward.whnf.reducibleClassField false in
 theorem instUpwardEnumerable_eq :
@@ -437,10 +435,8 @@ instance : HasModel Int32 (BitVec 32) where
   decode x := .ofBitVec x
   encode_decode := by simp
   decode_encode := by simp
-  -- le_iff_encode_le := by simp [LE.le, Int32.le]
-  -- lt_iff_encode_lt := by simp [LT.lt, Int32.lt]
-  le_iff_encode_le := by simp only [Int32.le_iff_toBitVec_sle]; simp [LE.le]
-  lt_iff_encode_lt := by simp only [Int32.lt_iff_toBitVec_slt]; simp [LT.lt]
+  le_iff_encode_le := by simp [LE.le, Int32.le]
+  lt_iff_encode_lt := by simp [LT.lt, Int32.lt]
 
 set_option backward.whnf.reducibleClassField false in
 theorem instUpwardEnumerable_eq :
@@ -535,10 +531,8 @@ instance : HasModel Int64 (BitVec 64) where
   decode x := .ofBitVec x
   encode_decode := by simp
   decode_encode := by simp
-  -- le_iff_encode_le := by simp [LE.le, Int64.le]
-  -- lt_iff_encode_lt := by simp [LT.lt, Int64.lt]
-  le_iff_encode_le := by simp only [Int64.le_iff_toBitVec_sle]; simp [LE.le]
-  lt_iff_encode_lt := by simp only [Int64.lt_iff_toBitVec_slt]; simp [LT.lt]
+  le_iff_encode_le := by simp [LE.le, Int64.le]
+  lt_iff_encode_lt := by simp [LT.lt, Int64.lt]
 
 set_option backward.whnf.reducibleClassField false in
 theorem instUpwardEnumerable_eq :
@@ -638,10 +632,8 @@ instance : HasModel ISize (BitVec System.Platform.numBits) where
   decode x := .ofBitVec x
   encode_decode := by simp
   decode_encode := by simp
-  -- le_iff_encode_le := by simp [LE.le, ISize.le]
-  -- lt_iff_encode_lt := by simp [LT.lt, ISize.lt]
-  le_iff_encode_le := by simp only [ISize.le_iff_toBitVec_sle]; simp [LE.le]
-  lt_iff_encode_lt := by simp only [ISize.lt_iff_toBitVec_slt]; simp[LT.lt]
+  le_iff_encode_le := by simp [LE.le, ISize.le]
+  lt_iff_encode_lt := by simp [LT.lt, ISize.lt]
 
 set_option backward.whnf.reducibleClassField false in
 theorem instUpwardEnumerable_eq :
