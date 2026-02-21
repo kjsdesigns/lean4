@@ -38,7 +38,7 @@ structure Request.Head where
   version : Version := .v11
 
   /--
-  The request target/URI indicating the resource being requested
+  The raw request-target string (commonly origin-form path/query, `"*"`, or authority-form).
   -/
   uri : String := "*"
 deriving Inhabited, Repr
@@ -48,7 +48,7 @@ HTTP request structure parameterized by body type
 -/
 structure Request (t : Type) where
   /--
-  The request headers and metadata
+  The request line information (`method`, `version`, and request-target `uri`).
   -/
   head : Request.Head
 
