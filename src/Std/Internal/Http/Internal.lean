@@ -8,6 +8,7 @@ module
 prelude
 public import Std.Internal.Http.Internal.ChunkedBuffer
 public import Std.Internal.Http.Internal.Encode
+public import Std.Internal.Http.Internal.StringQuoting
 
 public section
 
