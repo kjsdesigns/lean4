@@ -16,6 +16,9 @@ jobs:
         if: github.event_name == 'pull_request_target'
         uses: actions/github-script@v8
         with:
+          # Safety note: this uses pull_request_target, so the workflow has elevated privileges.
+          # The PR title and body are only used in regex tests (read-only string matching),
+          # never interpolated into shell commands, eval'd, or written to GITHUB_ENV/GITHUB_OUTPUT.
           script: |
             const { title, body, labels, draft } = context.payload.pull_request;
             if (!draft && /^(feat|fix):/.test(title) && !labels.some(label => label.name == "changelog-no")) {
