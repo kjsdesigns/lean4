@@ -10,7 +10,7 @@ public import Init.Data.String
 public import Std.Data.HashMap
 public import Std.Internal.Http.Internal
 public import Std.Internal.Http.Data.Headers
-
+public import Std.Internal.Http.Internal.String
 
 public section
 
@@ -25,12 +25,7 @@ open Internal Char
 
 set_option linter.all true
 
-/--
-Proposition that asserts all characters in a string are valid token characters and that it is
-non-empty.
--/
-abbrev IsValidExtensionName (s : String) : Prop :=
-  s.toList.all isTokenCharacter ∧ ¬s.isEmpty
+namespace Chunk
 
 /--
 A validated chunk extension name that ensures all characters conform to HTTP token standards
@@ -54,7 +49,7 @@ instance : Hashable ExtensionName where
   hash x := Hashable.hash x.value
 
 instance : Inhabited ExtensionName where
-  default := ⟨"x", by decide⟩
+  default := ⟨"_", by native_decide⟩
 
 /--
 Attempts to create an `ExtensionName` from a `String`, returning `none` if the string contains
@@ -80,6 +75,7 @@ instance : ToString ExtensionName where
   toString name := name.value
 
 end ExtensionName
+end Chunk
 
 /--
 Represents a chunk of data with optional extensions (key-value pairs).
@@ -92,10 +88,10 @@ structure Chunk where
   data : ByteArray
 
   /--
-  Optional metadata associated with this chunk as key-value pairs. Keys are strings, values are
-  optional strings.
+  Optional metadata associated with this chunk as key-value pairs. Keys are validated
+  `Chunk.ExtensionName` values, values are optional strings.
   -/
-  extensions : Array (ExtensionName × Option String) := #[]
+  extensions : Array (Chunk.ExtensionName × Option String) := #[]
 deriving Inhabited
 
 namespace Chunk
@@ -104,7 +100,7 @@ namespace Chunk
 Quotes an extension value if it contains non-token characters, otherwise returns it as-is.
 -/
 def quoteExtensionValue (s : String) : String :=
-  if s.any (fun c => !isTokenCharacter c) then s.quote else s
+  Std.Http.Internal.quoteTokenOrString isTokenCharacter s
 
 /--
 An empty chunk with no data and no extensions.
@@ -121,7 +117,7 @@ def ofByteArray (data : ByteArray) : Chunk :=
 /--
 Adds an extension to a chunk.
 -/
-def withExtension (chunk : Chunk) (key : ExtensionName) (value : String) : Chunk :=
+def withExtension (chunk : Chunk) (key : Chunk.ExtensionName) (value : String) : Chunk :=
   { chunk with extensions := chunk.extensions.push (key, some value) }
 
 /--

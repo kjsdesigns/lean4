@@ -18,7 +18,7 @@ public section
 # Response
 
 This module provides the `Response` type, which represents an HTTP response. It also defines
-builder functions and convenience methods for constructing responses with various content types.
+builder functions for constructing responses and selecting common HTTP status codes.
 -/
 
 namespace Std.Http
@@ -164,7 +164,8 @@ def body (builder : Builder) (body : t) : Response t :=
   { head := builder.head, body := body, extensions := builder.extensions }
 
 /--
-Builds and returns the final HTTP Response.
+Builds and returns the final HTTP Response with an empty body (`{}`).
+Requires an `EmptyCollection` instance for the response body type.
 -/
 def build [EmptyCollection t] (builder : Builder) : Response t :=
   { head := builder.head, body := {}, extensions := builder.extensions }
