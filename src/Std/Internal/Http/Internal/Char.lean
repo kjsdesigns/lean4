@@ -8,6 +8,7 @@ module
 prelude
 public import Init.Data.String
 
+@[expose]
 public section
 
 /-!
@@ -66,7 +67,6 @@ Checks if a character is a valid HTTP token character per RFC 9110 §5.6.2.
 
 token = 1*tchar
 -/
-@[expose]
 def token (c : Char) : Bool :=
   isAscii c ∧ Nat.testBit 0x57ffffffc7fffffe03ff6cfa00000000 c.toNat
 

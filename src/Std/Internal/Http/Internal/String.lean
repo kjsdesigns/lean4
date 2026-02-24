@@ -12,6 +12,7 @@ public import Std.Internal.Http.Internal.Char
 
 public section
 
+
 /-!
 # Internal Quoting Helpers
 
@@ -21,7 +22,6 @@ extensions.
 
 namespace Std.Http.Internal
 
-set_option linter.all true
 set_option linter.all true
 
 /--
@@ -52,6 +52,7 @@ Attempts to quote `s` as an HTTP `quoted-string`:
 
 Returns `none` when any character in `s` cannot be represented by the grammar.
 -/
+@[expose]
 def quoteHttpString? (s : String) : Option String :=
   if s.all Std.Http.Internal.Char.quotedStringChar then
     some (String.Internal.append
