@@ -55,6 +55,8 @@ private def Consumer.resolve (c : Consumer) (x : Option Chunk) : BaseIO Bool := 
 
 private structure Producer where
   chunk : Chunk
+  /-- Resolved with `true` when consumed by a receiver, `false` when the channel closes. -/
+  done : IO.Promise Bool
 
 open Internal.IO.Async in
 private def resolveInterestWaiter (waiter : Waiter Bool) (x : Bool) : BaseIO Bool := do
@@ -181,6 +183,7 @@ private def tryRecv' [Monad m] [MonadLiftT (ST IO.RealWorld) m] [MonadLiftT Base
       pendingProducer := none
       knownSize := decreaseKnownSize st.knownSize producer.chunk
     }
+    discard <| producer.done.resolve true
     return some producer.chunk
   else
     return none
@@ -196,6 +199,9 @@ private def close' [Monad m] [MonadLiftT (ST IO.RealWorld) m] [MonadLiftT BaseIO
 
   if let some waiter := st.interestWaiter then
     discard <| resolveInterestWaiter waiter false
+
+  if let some producer := st.pendingProducer then
+    discard <| producer.done.resolve false
 
   set {
     st with
@@ -404,21 +410,17 @@ private def collapseForSend
       set { st with pendingIncompleteChunk := none }
       return .ok (some merged)
 
+-- Returns `some true` = delivered directly, `some false` = consumer race lost (retry),
+-- `none` = producer installed, caller must await `done`.
 private def send' (outgoing : Outgoing) (chunk : Chunk) : Async Unit := do
-  let mut installedPendingProducer := false
+  let done ← IO.Promise.new
   while true do
-    let result ← outgoing.state.atomically do
+    let result : Except IO.Error (Option Bool) ← outgoing.state.atomically do
       Channel.pruneFinishedWaiters
       let st ← get
 
       if st.closed then
-        return Except.error (IO.Error.userError "channel closed")
-
-      if installedPendingProducer then
-        if st.pendingProducer.isNone then
-          return Except.ok true
-        else
-          return Except.ok false
+        return .error (IO.Error.userError "channel closed")
 
       if let some consumer := st.pendingConsumer then
         let success ← consumer.resolve (some chunk)
@@ -428,26 +430,31 @@ private def send' (outgoing : Outgoing) (chunk : Chunk) : Async Unit := do
             pendingConsumer := none
             knownSize := Channel.decreaseKnownSize st.knownSize chunk
           }
-          return Except.ok true
+          return .ok (some true)
         else
+          -- Consumer's selector race was lost; clear the stale entry and retry.
           set { st with pendingConsumer := none }
-          return Except.ok false
+          return .ok (some false)
       else if st.pendingProducer.isSome then
-        return Except.error (IO.Error.userError "only one blocked producer is allowed")
+        return .error (IO.Error.userError "only one blocked producer is allowed")
       else
-        set { st with pendingProducer := some { chunk := chunk } }
-        return Except.ok false
+        set { st with pendingProducer := some { chunk, done } }
+        return .ok none
 
     match result with
     | .error err =>
       throw err
-    | .ok true =>
+    | .ok (some true) =>
       return ()
-    | .ok false =>
-      installedPendingProducer := true
-      let _ ← Selectable.one #[
-        .case (← Selector.sleep 1) pure
-      ]
+    | .ok (some false) =>
+      -- Retry immediately; no sleep needed, no producer installed yet.
+      pure ()
+    | .ok none =>
+      -- Producer is installed; block until the consumer signals via `done`.
+      -- `done` resolves with `true` when consumed, `false` when the channel closes.
+      match ← await done.result? with
+      | some true => return ()
+      | _ => throw (IO.Error.userError "channel closed")
 
 /--
 Sends a chunk.
