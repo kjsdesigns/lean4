@@ -35,7 +35,7 @@ Checks if a byte is a valid character in a percent-encoded URI component. Valid 
 unreserved characters or the percent sign (for escape sequences).
 -/
 def isEncodedChar (rule : UInt8 → Bool) (c : UInt8) : Bool :=
-  isAscii c ∧ (rule c ∨ isHexDigit c ∨ c = '%'.toUInt8)
+  isAsciiByte c ∧ (rule c ∨ isHexDigitByte c ∨ c = '%'.toUInt8)
 
 /--
 Checks if a byte is valid in a percent-encoded query string component. Extends `isEncodedChar` to also
@@ -84,7 +84,7 @@ def isValidPercentEncoding (ba : ByteArray) : Bool :=
           if h₂ : i + 2 < ba.size then
             let d1 := ba[i + 1]'(by omega)
             let d2 := ba[i + 2]'h₂
-            if isHexDigit d1 && isHexDigit d2 then
+            if isHexDigitByte d1 && isHexDigitByte d2 then
               loop (i + 3)
           else false
         else false
@@ -123,19 +123,19 @@ private theorem isAllowedEncodedQueryChars.push {bs : ByteArray} (h : isAllowedE
     isAllowedEncodedQueryChars r (bs.push c) := by
   simpa [isAllowedEncodedQueryChars, ByteArray.push, Array.all_push, And.intro h h₁]
 
-private theorem isEncodedChar_isAscii (c : UInt8) (h : isEncodedChar r c) : isAscii c := by
-  simp [isEncodedChar, isAscii] at *
+private theorem isEncodedChar_isAscii (c : UInt8) (h : isEncodedChar r c) : isAsciiByte c := by
+  simp [isEncodedChar, isAsciiByte] at *
   exact h.left
 
-private theorem isEncodedQueryChar_isAscii (c : UInt8) (h : isEncodedQueryChar r c) : isAscii c := by
-  unfold isEncodedQueryChar isAscii at *
+private theorem isEncodedQueryChar_isAscii (c : UInt8) (h : isEncodedQueryChar r c) : isAsciiByte c := by
+  unfold isEncodedQueryChar isAsciiByte at *
   simp at h
   rcases h
   next h => exact isEncodedChar_isAscii c h
   next h => subst_vars; decide
 
-private theorem hexDigit_isHexDigit (h₀ : x < 16) : isHexDigit (hexDigit x) := by
-  unfold hexDigit isHexDigit
+private theorem hexDigit_isHexDigit (h₀ : x < 16) : isHexDigitByte (hexDigit x) := by
+  unfold hexDigit isHexDigitByte
   have h₁ : x.toNat < 16 := h₀
   split <;> simp [Char.toUInt8]
 
@@ -161,19 +161,19 @@ private theorem hexDigit_isHexDigit (h₀ : x < 16) : isHexDigit (hexDigit x) :=
     · simpa [UInt8.ofNat_add, UInt8.ofNat_sub (by omega : 10 ≤ x.toNat)] using
         UInt8.ofNat_le_iff_le h₄ (by decide : 70 < 256) |>.mpr h₅
 
-private theorem isHexDigit_isAscii {c : UInt8} (h : isHexDigit c) : isAscii c := by
-  simp [isHexDigit, isAscii, Char.toUInt8] at *
+private theorem isHexDigit_isAscii {c : UInt8} (h : isHexDigitByte c) : isAsciiByte c := by
+  simp [isHexDigitByte, isAsciiByte, Char.toUInt8] at *
   rcases h with ⟨h1, h2⟩ | ⟨h1, h2⟩
   · exact UInt8.lt_of_le_of_lt h2 (by decide)
   next h => exact UInt8.lt_of_le_of_lt h.right (by decide)
   · exact UInt8.lt_of_le_of_lt h2 (by decide)
 
-private theorem isHexDigit_isEncodedChar {c : UInt8} (h : isHexDigit c) : isEncodedChar r c := by
+private theorem isHexDigit_isEncodedChar {c : UInt8} (h : isHexDigitByte c) : isEncodedChar r c := by
   unfold isEncodedChar
   simp at *
   exact And.intro (isHexDigit_isAscii h) (Or.inr (Or.inl h))
 
-private theorem isHexDigit_isEncodedQueryChar {c : UInt8} (h : isHexDigit c) : isEncodedQueryChar r c := by
+private theorem isHexDigit_isEncodedQueryChar {c : UInt8} (h : isHexDigitByte c) : isEncodedQueryChar r c := by
   unfold isEncodedQueryChar isEncodedChar
   simp at *
   exact Or.inl (And.intro (isHexDigit_isAscii h) (Or.inr (Or.inl h)))
@@ -215,13 +215,13 @@ private theorem ByteArray.toList_toByteArray (ba : ByteArray) :
     simp [List.toByteArray_loop_eq, ByteArray.empty]
     decide
 
-theorem ascii_is_valid_utf8 (ba : ByteArray) (s : ba.data.all isAscii) : ByteArray.IsValidUTF8 ba := by
+theorem ascii_is_valid_utf8 (ba : ByteArray) (s : ba.data.all isAsciiByte) : ByteArray.IsValidUTF8 ba := by
   refine ⟨ba.data.toList.map Char.ofUInt8, ?_⟩
   rw [List.utf8Encode]
   simp only [List.flatMap_map]
   have is_ascii : ∀ (x : UInt8), x ∈ ba.data.toList → x < 128 := by
     let is_ascii := Array.all_eq_true_iff_forall_mem.mp s
-    simp [isAscii] at is_ascii
+    simp [isAsciiByte] at is_ascii
     intro x hx
     exact is_ascii x (by simp_all)
   rw [autf8EncodeChar_flatMap_ascii is_ascii]
@@ -294,7 +294,7 @@ Encodes a raw string into an `EncodedString` with automatic proof construction. 
 -/
 def encode (s : String) : EncodedString r :=
   s.toUTF8.foldl (init := EncodedString.empty) fun acc c =>
-    if h : isAscii c ∧ r c then
+    if h : isAsciiByte c ∧ r c then
       acc.push c (by simp [isEncodedChar]; exact And.intro h.left (Or.inl h.right))
     else
       byteToHex c acc
@@ -478,7 +478,7 @@ are kept as-is, spaces are encoded as '+', and all other characters are percent-
 -/
 def encode (s : String) (r : UInt8 → Bool := isQueryChar) : EncodedQueryString r :=
   s.toUTF8.foldl (init := EncodedQueryString.empty) fun acc c =>
-    if h : isAscii c ∧ r c then
+    if h : isAsciiByte c ∧ r c then
       acc.push c (by simp [isEncodedQueryChar, isEncodedChar]; exact Or.inl (And.intro h.left (Or.inl h.right)))
     else if _ : c = ' '.toUInt8 then
       acc.push '+'.toUInt8 (by simp [isEncodedQueryChar])

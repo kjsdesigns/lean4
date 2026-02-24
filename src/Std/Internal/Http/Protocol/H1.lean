@@ -351,7 +351,7 @@ drained after a response was already sent), returns `none`.
 private def mkPulledChunk? (machine : Machine dir)
     (final : Bool)
     (incomplete : Bool)
-    (extensions : Array (ExtensionName × Option String))
+    (extensions : Array (Chunk.ExtensionName × Option Chunk.ExtensionValue))
     (data : ByteSlice) : Option PulledChunk :=
   if shouldIgnoreBodyPull machine then
     none
@@ -1080,7 +1080,7 @@ private def emitBodyChunk (machine : Machine dir)
     (nextState : Reader.State dir)
     (final : Bool)
     (incomplete : Bool)
-    (extensions : Array (ExtensionName × Option String))
+    (extensions : Array (Chunk.ExtensionName × Option Chunk.ExtensionValue))
     (data : ByteSlice)
     (closeBody : Bool := false) :
     Machine dir × Option PulledChunk × Bool :=
@@ -1139,7 +1139,7 @@ private def parseChunkSizeBody (machine : Machine dir) :
 Parses trailers after a zero-size chunk and finalizes chunked body processing.
 -/
 private def parseLastChunkBodyState (machine : Machine dir)
-    (ext : Array (ExtensionName × Option String)) :
+    (ext : Array (Chunk.ExtensionName × Option Chunk.ExtensionValue)) :
     Machine dir × Option PulledChunk × Bool :=
   let (machine, result) := parseWith machine (parseLastChunkBody machine.config) (limit := none)
   match result with
@@ -1153,7 +1153,7 @@ Consumes chunk-data bytes for the current chunk, handling complete and partial
 chunk payload reads.
 -/
 private def parseChunkedBodyState (machine : Machine dir)
-    (ext : Array (ExtensionName × Option String))
+    (ext : Array (Chunk.ExtensionName × Option Chunk.ExtensionValue))
     (size : Nat) :
     Machine dir × Option PulledChunk × Bool :=
   let (machine, result) := parseWith machine (parseChunkSizedData size) (limit := none) (some size)

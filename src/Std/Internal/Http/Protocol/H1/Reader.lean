@@ -45,7 +45,7 @@ inductive Reader.BodyState where
   /--
   Parse chunk data for the current chunk.
   -/
-  | chunkedBody (ext : Array (ExtensionName × Option String)) (remaining : Nat)
+  | chunkedBody (ext : Array (Chunk.ExtensionName × Option Chunk.ExtensionValue)) (remaining : Nat)
 
   /--
   Parse body bytes until EOF (connection close).

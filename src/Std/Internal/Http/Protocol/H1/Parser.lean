@@ -24,36 +24,28 @@ set_option linter.all true
 
 @[inline]
 def isVChar (c : UInt8) : Bool :=
-  c ≥ 0x21 ∧ c ≤ 0x7E
-
-@[inline]
-def isObsChar (c : UInt8) : Bool :=
-  c ≥ 0x80 ∧ c ≤ 0xFF
+  vchar (Char.ofUInt8 c)
 
 /--
 Checks if a byte may appear inside a field value.
 
-RFC 9110 §5.5 defines `field-vchar = VCHAR / obs-text`, but also permits embedded SP/HTAB
-between non-whitespace characters within a field value. This predicate covers all bytes that
-may appear anywhere inside a field value (including interior whitespace), so callers do not
-need to special-case them.
+This parser enforces strict ASCII-only field values and allows only `field-content`
+(`HTAB / SP / VCHAR`).
 -/
 @[inline]
 def isFieldVChar (c : UInt8) : Bool :=
-  isVChar c ∨ isObsChar c ∨ c = ' '.toUInt8 ∨ c = '\t'.toUInt8
+  fieldContent (Char.ofUInt8 c)
 
--- HTAB / SP / %x21 / %x23-5B / %x5D-7E / obs-text
+-- HTAB / SP / %x21 / %x23-5B / %x5D-7E (strict ASCII-only; no obs-text)
 @[inline]
 def isQdText (c : UInt8) : Bool :=
-  c == '\t'.toUInt8 ∨
-  c == ' '.toUInt8 ∨
-  c == '!'.toUInt8 ∨
-  (c ≥ '#'.toUInt8 ∧ c ≤ '['.toUInt8) ∨
-  (c ≥ ']'.toUInt8 ∧ c ≤ '~'.toUInt8) ∨
-  isObsChar c
+  qdtext (Char.ofUInt8 c)
+
+@[inline]
+def isOwsByte (c : UInt8) : Bool :=
+  ows (Char.ofUInt8 c)
 
 -- Parser blocks
-
 
 partial def manyItems {α : Type} (parser : Parser (Option α)) (maxCount : Nat) : Parser (Array α) := do
   let rec go (acc : Array α) : Parser (Array α) := do
@@ -89,8 +81,8 @@ Parses an HTTP token (RFC 9110 §5.6.2): one or more token characters, up to `li
 Fails if the input starts with a non-token character or is empty.
 -/
 @[inline]
-def token (limit : Nat) : Parser ByteSlice :=
-  takeWhileUpTo1 (fun c => isTokenCharacter (Char.ofUInt8 c)) limit
+def parseToken (limit : Nat) : Parser ByteSlice :=
+  takeWhileUpTo1 (fun c => token (Char.ofUInt8 c)) limit
 
 /--
 Parses a line terminator.
@@ -98,6 +90,18 @@ Parses a line terminator.
 @[inline]
 def crlf : Parser Unit := do
   skipBytes "\r\n".toUTF8
+
+/--
+Consumes and ignores empty lines (`CRLF`) that appear before a request-line.
+
+https://httpwg.org/specs/rfc9112.html#rfc.section.2.2:
+
+"In the interest of robustness, a server that is expecting to receive and parse a request-line SHOULD
+ignore at least one empty line (CRLF) received prior to the request-line."
+-/
+def skipLeadingRequestEmptyLines : Parser Unit := do
+  while (← peekWhen? (· == '\r'.toUInt8)).isSome do
+    crlf
 
 /--
 Parses a single space (SP, 0x20).
@@ -113,9 +117,9 @@ padding is rejected rather than silently truncated.
 -/
 @[inline]
 def ows (limits : H1.Config) : Parser Unit := do
-  discard <| takeWhileUpTo (fun c => c == ' '.toUInt8 || c == '\t'.toUInt8) limits.maxSpaceSequence
+  discard <| takeWhileUpTo isOwsByte limits.maxSpaceSequence
 
-  if (← peekWhen? (fun c => c == ' '.toUInt8 || c == '\t'.toUInt8)) |>.isSome then
+  if (← peekWhen? isOwsByte) |>.isSome then
     fail "invalid space sequence"
   else
     pure ()
@@ -130,9 +134,10 @@ def uint8 : Parser UInt8 := do
 
 def hexDigit : Parser UInt8 := do
   let b ← any
-  if b ≥ '0'.toUInt8 && b ≤ '9'.toUInt8 then return b - '0'.toUInt8
-  else if b ≥ 'A'.toUInt8 && b ≤ 'F'.toUInt8 then return b - 'A'.toUInt8 + 10
-  else if b ≥ 'a'.toUInt8 && b ≤ 'f'.toUInt8 then return b - 'a'.toUInt8 + 10
+  if isHexDigitByte b then
+    if b ≥ '0'.toUInt8 && b ≤ '9'.toUInt8 then return b - '0'.toUInt8
+    else if b ≥ 'A'.toUInt8 && b ≤ 'F'.toUInt8 then return b - 'A'.toUInt8 + 10
+    else return b - 'a'.toUInt8 + 10
   else fail s!"Invalid hex digit {Char.ofUInt8 b |>.quote}"
 
 partial def hex : Parser Nat := do
@@ -183,7 +188,7 @@ def parseMethod : Parser Method :=
 Parses the method token as text.
 -/
 def parseMethodToken : Parser String := do
-  let raw ← token 16
+  let raw ← parseToken 16
 
   let methodToken ← liftOption<| String.fromUTF8? raw.toByteArray
   if methodToken.toList.any (fun c => c.toNat ≥ 'a'.toNat ∧ c.toNat ≤ 'z'.toNat) then
@@ -200,6 +205,7 @@ Parses a request line and returns a fully-typed `Request.Head`.
 `request-line = method SP request-target SP HTTP-version`
 -/
 public def parseRequestLine (limits : H1.Config) : Parser Request.Head := do
+  skipLeadingRequestEmptyLines
   let method ← parseMethod <* sp
   let uri ← parseURI limits <* sp
 
@@ -219,6 +225,7 @@ Parses a request line and returns the recognized HTTP method and version when av
 request-line = method SP request-target SP HTTP-version
 -/
 public def parseRequestLineRawVersion (limits : H1.Config) : Parser (Option Method × RequestTarget × Option Version) := do
+  skipLeadingRequestEmptyLines
   let methodToken ← parseMethodToken <* sp
   let uri ← parseURI limits <* sp
 
@@ -231,7 +238,7 @@ public def parseRequestLineRawVersion (limits : H1.Config) : Parser (Option Meth
 
 -- field-line   = field-name ":" OWS field-value OWS
 def parseFieldLine (limits : H1.Config) : Parser (String × String) := do
-  let name ← token limits.maxHeaderNameLength
+  let name ← parseToken limits.maxHeaderNameLength
   let value ← skipByte ':'.toUInt8 *> ows limits *> optional (takeWhileUpTo isFieldVChar limits.maxHeaderValueLength) <* ows limits
 
   let name ← liftOption <| String.fromUTF8? name.toByteArray
@@ -253,12 +260,12 @@ public def parseSingleHeader (limits : H1.Config) : Parser (Option (String × St
   else
     some <$> (parseFieldLine limits <* crlf)
 
--- quoted-pair = "\" ( HTAB / SP / VCHAR / obs-text )
+-- quoted-pair = "\" ( HTAB / SP / VCHAR ) ; strict ASCII-only (no obs-text)
 def parseQuotedPair : Parser UInt8 := do
   skipByte '\\'.toUInt8
   let b ← any
 
-  if b == '\t'.toUInt8 ∨ b == ' '.toUInt8 ∨ isVChar b ∨ isObsChar b then
+  if quotedPairChar (Char.ofUInt8 b) then
     return b
   else
     fail s!"invalid quoted-pair byte: {Char.ofUInt8 b |>.quote}"
@@ -274,7 +281,7 @@ partial def parseQuotedString (maxLength : Nat) : Parser String := do
       return buf
     else if b == '\\'.toUInt8 then
       let next ← any
-      if next == '\t'.toUInt8 ∨ next == ' '.toUInt8 ∨ isVChar next ∨ isObsChar next
+      if quotedPairChar (Char.ofUInt8 next)
         then
           let length := length + 1
           if length > maxLength then
@@ -294,11 +301,11 @@ partial def parseQuotedString (maxLength : Nat) : Parser String := do
   liftOption <| String.fromUTF8? (← loop .empty 0)
 
 -- chunk-ext = *( BWS ";" BWS chunk-ext-name [ BWS "=" BWS chunk-ext-val] )
-def parseChunkExt (limits : H1.Config) : Parser (ExtensionName × Option String) := do
+def parseChunkExt (limits : H1.Config) : Parser (Chunk.ExtensionName × Option Chunk.ExtensionValue) := do
   ows limits *> skipByte ';'.toUInt8 *> ows limits
-  let name ← (liftOption =<< String.fromUTF8? <$> ByteSlice.toByteArray <$> token limits.maxChunkExtNameLength) <* ows limits
+  let name ← (liftOption =<< String.fromUTF8? <$> ByteSlice.toByteArray <$> parseToken limits.maxChunkExtNameLength) <* ows limits
 
-  let some name := ExtensionName.ofString? name
+  let some name := Chunk.ExtensionName.ofString? name
     | fail "invalid extension name"
 
   if (← peekWhen? (· == '='.toUInt8)) |>.isSome then
@@ -306,7 +313,10 @@ def parseChunkExt (limits : H1.Config) : Parser (ExtensionName × Option String)
     -- The `<* ows limits` after the name already consumed any trailing whitespace,
     -- so these ows calls are no-ops in practice, but kept for explicit grammar correspondence.
     ows limits *> skipByte '='.toUInt8 *> ows limits
-    let value ← ows limits *> (parseQuotedString limits.maxChunkExtValueLength <|> liftOption =<< (String.fromUTF8? <$> ByteSlice.toByteArray <$> token limits.maxChunkExtValueLength))
+    let value ← ows limits *> (parseQuotedString limits.maxChunkExtValueLength <|> liftOption =<< (String.fromUTF8? <$> ByteSlice.toByteArray <$> parseToken limits.maxChunkExtValueLength))
+
+    let some value := Chunk.ExtensionValue.ofString? value
+      | fail "invalid extension value"
 
     return (name, some value)
 
@@ -315,7 +325,7 @@ def parseChunkExt (limits : H1.Config) : Parser (ExtensionName × Option String)
 /--
 Parses the size and extensions of a chunk.
 -/
-public def parseChunkSize (limits : H1.Config) : Parser (Nat × Array (ExtensionName × Option String)) := do
+public def parseChunkSize (limits : H1.Config) : Parser (Nat × Array (Chunk.ExtensionName × Option Chunk.ExtensionValue)) := do
   let size ← hex
   let ext ← manyItems (optional (attempt (parseChunkExt limits))) limits.maxChunkExtensions
   crlf
@@ -331,7 +341,7 @@ public inductive TakeResult
 /--
 Parses a single chunk in chunked transfer encoding.
 -/
-public def parseChunkPartial (limits : H1.Config) : Parser (Option (Nat × Array (ExtensionName × Option String) × ByteSlice)) := do
+public def parseChunkPartial (limits : H1.Config) : Parser (Option (Nat × Array (Chunk.ExtensionName × Option Chunk.ExtensionValue) × ByteSlice)) := do
   let (size, ext) ← parseChunkSize limits
   if size == 0 then
     return none
@@ -379,12 +389,12 @@ Parses reason phrase (text after status code)
 -/
 @[inline]
 def isReasonPhraseByte (c : UInt8) : Bool :=
-  c == '\t'.toUInt8 ∨ c == ' '.toUInt8 ∨ isVChar c ∨ isObsChar c
+  fieldContent (Char.ofUInt8 c)
 
 /--
 Parses reason phrase (text after status code).
 
-Allows only `HTAB / SP / VCHAR / obs-text` bytes.
+Allows only `HTAB / SP / VCHAR` bytes (strict ASCII-only).
 -/
 def parseReasonPhrase (limits : H1.Config) : Parser String := do
   let bytes ← takeWhileUpTo isReasonPhraseByte limits.maxReasonPhraseLength
