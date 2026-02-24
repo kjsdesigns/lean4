@@ -301,7 +301,7 @@ partial def parseQuotedString (maxLength : Nat) : Parser String := do
   liftOption <| String.fromUTF8? (← loop .empty 0)
 
 -- chunk-ext = *( BWS ";" BWS chunk-ext-name [ BWS "=" BWS chunk-ext-val] )
-def parseChunkExt (limits : H1.Config) : Parser (Chunk.ExtensionName × Option String) := do
+def parseChunkExt (limits : H1.Config) : Parser (Chunk.ExtensionName × Option Chunk.ExtensionValue) := do
   ows limits *> skipByte ';'.toUInt8 *> ows limits
   let name ← (liftOption =<< String.fromUTF8? <$> ByteSlice.toByteArray <$> parseToken limits.maxChunkExtNameLength) <* ows limits
 
@@ -315,6 +315,9 @@ def parseChunkExt (limits : H1.Config) : Parser (Chunk.ExtensionName × Option S
     ows limits *> skipByte '='.toUInt8 *> ows limits
     let value ← ows limits *> (parseQuotedString limits.maxChunkExtValueLength <|> liftOption =<< (String.fromUTF8? <$> ByteSlice.toByteArray <$> parseToken limits.maxChunkExtValueLength))
 
+    let some value := Chunk.ExtensionValue.ofString? value
+      | fail "invalid extension value"
+
     return (name, some value)
 
   return (name, none)
@@ -322,7 +325,7 @@ def parseChunkExt (limits : H1.Config) : Parser (Chunk.ExtensionName × Option S
 /--
 Parses the size and extensions of a chunk.
 -/
-public def parseChunkSize (limits : H1.Config) : Parser (Nat × Array (Chunk.ExtensionName × Option String)) := do
+public def parseChunkSize (limits : H1.Config) : Parser (Nat × Array (Chunk.ExtensionName × Option Chunk.ExtensionValue)) := do
   let size ← hex
   let ext ← manyItems (optional (attempt (parseChunkExt limits))) limits.maxChunkExtensions
   crlf
@@ -338,7 +341,7 @@ public inductive TakeResult
 /--
 Parses a single chunk in chunked transfer encoding.
 -/
-public def parseChunkPartial (limits : H1.Config) : Parser (Option (Nat × Array (Chunk.ExtensionName × Option String) × ByteSlice)) := do
+public def parseChunkPartial (limits : H1.Config) : Parser (Option (Nat × Array (Chunk.ExtensionName × Option Chunk.ExtensionValue) × ByteSlice)) := do
   let (size, ext) ← parseChunkSize limits
   if size == 0 then
     return none
