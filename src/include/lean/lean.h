@@ -43,7 +43,7 @@ extern "C" {
 #if defined(__GNUC__) || defined(__clang__)
 #define LEAN_UNLIKELY(x) (__builtin_expect((x), 0))
 #define LEAN_LIKELY(x) (__builtin_expect((x), 1))
-#define LEAN_UNREACHABLE_UB (__builtin_unreachable())
+#define LEAN_UNREACHABLE_UB __builtin_unreachable();
 
 #ifdef NDEBUG
 #define LEAN_ALWAYS_INLINE __attribute__((always_inline))
