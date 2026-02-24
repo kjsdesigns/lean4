@@ -139,9 +139,9 @@ def channelExtensions : Async Unit := do
 def channelCollapseIncompleteChunks : Async Unit := do
   let (outgoing, incoming) ← Body.mkChannel
 
-  let first : Chunk := { data := "aaaaaaaaaa".toUTF8, extensions := #[(.mk "part", some "first")] }
-  let second : Chunk := { data := "bbbbbbbbbb".toUTF8, extensions := #[(.mk "part", some "second")] }
-  let last : Chunk := { data := "cccccccccccccccccccc".toUTF8, extensions := #[(.mk "part", some "last")] }
+  let first : Chunk := { data := "aaaaaaaaaa".toUTF8, extensions := #[(.mk "part", some <| .ofString! "first")] }
+  let second : Chunk := { data := "bbbbbbbbbb".toUTF8, extensions := #[(.mk "part", some <| .ofString! "second")] }
+  let last : Chunk := { data := "cccccccccccccccccccc".toUTF8, extensions := #[(.mk "part", some <| .ofString! "last")] }
 
   outgoing.send first (incomplete := true)
   outgoing.send second (incomplete := true)
@@ -156,7 +156,7 @@ def channelCollapseIncompleteChunks : Async Unit := do
   let merged := result.get!
   assert! merged.data == "aaaaaaaaaabbbbbbbbbbcccccccccccccccccccc".toUTF8
   assert! merged.data.size == 40
-  assert! merged.extensions == #[(.mk "part", some "first")]
+  assert! merged.extensions == #[(.mk "part", some <| .ofString! "first")]
 
   await sendFinal
 

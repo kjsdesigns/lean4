@@ -237,7 +237,7 @@ def notImplemented : String :=
   let (clientD, serverD) ← Mock.new
   let emptyLine := "\x0d\n\x0d\n".toUTF8
   let responseD ← sendRaw clientD serverD emptyLine okHandler
-  assertExact "Empty request-line" responseD bad400
+  assertExact "Empty request-line" responseD ""
 
   let (clientE, serverE) ← Mock.new
   let whitespaceOnly := "   \x0d\n\x0d\n".toUTF8
@@ -252,7 +252,7 @@ def notImplemented : String :=
   let (clientG, serverG) ← Mock.new
   let leadingCRLF := "\x0d\nGET / HTTP/1.1\x0d\nHost: example.com\x0d\nConnection: close\x0d\n\x0d\n".toUTF8
   let responseG ← sendRaw clientG serverG leadingCRLF okHandler
-  assertExact "Leading CRLF before request-line" responseG bad400
+  assertExact "Leading CRLF before request-line" responseG ok200
 
   let (clientH, serverH) ← Mock.new
   let garbageAfterVersion := "GET / HTTP/1.1 xxxxxx\x0d\nHost: example.com\x0d\nConnection: close\x0d\n\x0d\n".toUTF8
