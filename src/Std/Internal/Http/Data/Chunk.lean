@@ -9,7 +9,7 @@ prelude
 public import Init.Data.String
 public import Std.Data.HashMap
 public import Std.Internal.Http.Internal
-public import Std.Internal.Http.Internal.StringQuoting
+public import Std.Internal.Http.Internal.String
 
 public section
 
@@ -63,7 +63,7 @@ instance : Hashable ExtensionName where
   hash x := Hashable.hash x.value
 
 instance : Inhabited ExtensionName where
-  default := ⟨"x", by native_decide⟩
+  default := ⟨"_", by native_decide⟩
 
 /--
 Attempts to create an `ExtensionName` from a `String`, returning `none` if the string contains

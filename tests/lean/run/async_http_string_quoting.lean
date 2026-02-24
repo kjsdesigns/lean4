@@ -1,40 +1,41 @@
-import Std.Internal.Http.Internal.StringQuoting
+import Std.Internal.Http.Internal.String
+import Std.Internal.Http.Internal.Char
 
 open Std.Http.Internal
 
 private def c (n : Nat) : Char := Char.ofNat n
 
-#guard isQdTextChar (c 0x08) = false
-#guard isQdTextChar (c 0x09) = true
-#guard isQdTextChar (c 0x0a) = false
-#guard isQdTextChar (c 0x1f) = false
-#guard isQdTextChar (c 0x20) = true
-#guard isQdTextChar (c 0x21) = true
-#guard isQdTextChar (c 0x22) = false
-#guard isQdTextChar (c 0x23) = true
-#guard isQdTextChar (c 0x5b) = true
-#guard isQdTextChar (c 0x5c) = false
-#guard isQdTextChar (c 0x5d) = true
-#guard isQdTextChar (c 0x7e) = true
-#guard isQdTextChar (c 0x7f) = false
+#guard Std.Http.Internal.Char.qdtext (c 0x08) = false
+#guard Std.Http.Internal.Char.qdtext (c 0x09) = true
+#guard Std.Http.Internal.Char.qdtext (c 0x0a) = false
+#guard Std.Http.Internal.Char.qdtext (c 0x1f) = false
+#guard Std.Http.Internal.Char.qdtext (c 0x20) = true
+#guard Std.Http.Internal.Char.qdtext (c 0x21) = true
+#guard Std.Http.Internal.Char.qdtext (c 0x22) = false
+#guard Std.Http.Internal.Char.qdtext (c 0x23) = true
+#guard Std.Http.Internal.Char.qdtext (c 0x5b) = true
+#guard Std.Http.Internal.Char.qdtext (c 0x5c) = false
+#guard Std.Http.Internal.Char.qdtext (c 0x5d) = true
+#guard Std.Http.Internal.Char.qdtext (c 0x7e) = true
+#guard Std.Http.Internal.Char.qdtext (c 0x7f) = false
 
-#guard isQuotedPairChar (c 0x08) = false
-#guard isQuotedPairChar (c 0x09) = true
-#guard isQuotedPairChar (c 0x1f) = false
-#guard isQuotedPairChar (c 0x20) = true
-#guard isQuotedPairChar (c 0x21) = true
-#guard isQuotedPairChar (c 0x22) = true
-#guard isQuotedPairChar (c 0x5c) = true
-#guard isQuotedPairChar (c 0x7e) = true
-#guard isQuotedPairChar (c 0x7f) = false
+#guard Std.Http.Internal.Char.quotedPairChar (c 0x08) = false
+#guard Std.Http.Internal.Char.quotedPairChar (c 0x09) = true
+#guard Std.Http.Internal.Char.quotedPairChar (c 0x1f) = false
+#guard Std.Http.Internal.Char.quotedPairChar (c 0x20) = true
+#guard Std.Http.Internal.Char.quotedPairChar (c 0x21) = true
+#guard Std.Http.Internal.Char.quotedPairChar (c 0x22) = true
+#guard Std.Http.Internal.Char.quotedPairChar (c 0x5c) = true
+#guard Std.Http.Internal.Char.quotedPairChar (c 0x7e) = true
+#guard Std.Http.Internal.Char.quotedPairChar (c 0x7f) = false
 
-#guard isQuotableStringChar (c 0x09) = true
-#guard isQuotableStringChar (c 0x20) = true
-#guard isQuotableStringChar (c 0x22) = true
-#guard isQuotableStringChar (c 0x5c) = true
-#guard isQuotableStringChar (c 0x0a) = false
-#guard isQuotableStringChar (c 0x0d) = false
-#guard isQuotableStringChar (c 0x7f) = false
+#guard Std.Http.Internal.Char.quotedStringChar (c 0x09) = true
+#guard Std.Http.Internal.Char.quotedStringChar (c 0x20) = true
+#guard Std.Http.Internal.Char.quotedStringChar (c 0x22) = true
+#guard Std.Http.Internal.Char.quotedStringChar (c 0x5c) = true
+#guard Std.Http.Internal.Char.quotedStringChar (c 0x0a) = false
+#guard Std.Http.Internal.Char.quotedStringChar (c 0x0d) = false
+#guard Std.Http.Internal.Char.quotedStringChar (c 0x7f) = false
 
 #guard quoteHttpString? "token" = some "\"token\""
 #guard quoteHttpString? "a\t " = some "\"a\t \""
@@ -55,12 +56,15 @@ private def c (n : Nat) : Char := Char.ofNat n
 #guard unquoteHttpString? "\"\\\"\"" = some "\""
 #guard unquoteHttpString? "\"a\\tb\"" = some "atb"
 #guard unquoteHttpString? "\"a\tb\"" = some "a\tb"
-#guard unquoteHttpString? "token" = none
+#guard unquoteHttpString? "token" = some "token"
 #guard unquoteHttpString? "\"" = none
 #guard unquoteHttpString? "\"abc" = none
 #guard unquoteHttpString? "\"abc\\\"" = none
 #guard unquoteHttpString? "\"abc\\\n\"" = none
 #guard unquoteHttpString? "\"abc\r\"" = none
+
+private def isQuotedString (s : String) : Bool :=
+  s.startsWith '"' && (unquoteHttpString? s).isSome
 
 #guard isQuotedString "\"abc\"" = true
 #guard isQuotedString "\"ab\\\\\\\"c\"" = true
@@ -82,7 +86,7 @@ private def c (n : Nat) : Char := Char.ofNat n
 
 private def singleCharRoundTrip (ch : Char) : Bool :=
   let s := String.singleton ch
-  let quotable := isQuotableStringChar ch
+  let quotable := Std.Http.Internal.Char.quotedStringChar ch
   match quoteHttpString? s with
   | some q =>
       quotable &&
