@@ -39,9 +39,16 @@ abbrev isValidHeaderChar (c : Char) : Bool :=
 
 /--
 Proposition that asserts all characters in a string are valid for HTTP header values.
+This adds a simple check for non-visible characters.
+
+  field-value    = *field-content
+  field-content  = field-vchar
+                   [ 1*( SP / HTAB / field-vchar ) field-vchar ]
+
+Reference: https://www.rfc-editor.org/rfc/rfc9110.html#section-5.5
 -/
 abbrev IsValidHeaderValue (s : String) : Prop :=
-  s.toList.all isValidHeaderChar
+  s.toList.all isValidHeaderChar ∧ (s.toList.head?.map Char.fieldVchar |>.getD true)
 
 /--
 A validated HTTP header value that ensures all characters conform to HTTP standards.
@@ -72,6 +79,7 @@ for HTTP header values.
 -/
 @[expose]
 def ofString? (s : String) : Option Value :=
+  -- A field value does not include leading or trailing whitespace.
   let val := s.trimAscii.toString
   if h : IsValidHeaderValue val then
     some ⟨val, h⟩
@@ -84,11 +92,9 @@ characters for HTTP header values.
 -/
 @[expose]
 def ofString! (s : String) : Value :=
-  let val := s.trimAscii.toString
-  if h : IsValidHeaderValue val then
-    ⟨val, h⟩
-  else
-    panic! s!"invalid header value: {s.quote}"
+  match ofString? s with
+  | some res => res
+  | none => panic! s!"invalid header value: {s.quote}"
 
 /--
 Performs a case-insensitive comparison between a `Value` and a `String`. Returns `true` if they match.

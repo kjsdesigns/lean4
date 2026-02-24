@@ -82,11 +82,9 @@ string contains invalid characters for HTTP header names or is empty.
 -/
 @[expose]
 def ofString! (s : String) : Name :=
-  let val := s.trimAscii.toString.toLower
-  if h : IsValidHeaderName val ∧ IsLowerCase val then
-    ⟨val, h.left, h.right⟩
-  else
-    panic! s!"invalid header name: {s.quote}"
+  match ofString? s with
+  | some res => res
+  | none => panic! s!"invalid header name: {s.quote}"
 
 /--
 Converts the header name to title case (e.g., "Content-Type").
