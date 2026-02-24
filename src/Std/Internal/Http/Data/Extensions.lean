@@ -18,14 +18,18 @@ public section
 /-!
 # Extensions
 
-This module provides the `Extensions` type, a dynamically-typed map for storing optional metadata
-on HTTP requests and responses. It can be used by parsers, middleware, or other processing stages
+This module provides the `Extensions` type, a dynamically-typed map for storing metadata on HTTP
+requests and responses. It can be used by parsers, middleware, or other processing stages
 to attach arbitrary typed data.
 -/
 
 namespace Std.Http
 
 set_option linter.all true
+
+/-
+`quickCmp` is unavailable here, so this is a simpler implementation of the same comparison.
+-/
 
 private def compareString (s₁ s₂ : String) : Ordering :=
   let rec go : List Char → List Char → Ordering
