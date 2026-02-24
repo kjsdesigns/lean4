@@ -22,6 +22,8 @@ extensions.
 
 namespace Std.Http.Internal
 
+open Char
+
 set_option linter.all true
 
 /--
@@ -34,15 +36,15 @@ and panics for characters outside the grammar.
 -/
 def quoteCore (c : Char) (inString : Bool := false) : String :=
   if inString then
-    if Std.Http.Internal.Char.qdtext c then
-      String.singleton c
+    if qdtext c then
+      .singleton c
     else if c = '\\' || c = '\"' then
-      String.Internal.append "\\" (String.singleton c)
+      .append "\\" (.singleton c)
     else
       panic! "invalid HTTP quoted-string content"
   else
-    if Std.Http.Internal.Char.quotedPairChar c then
-      String.singleton c
+    if quotedPairChar c then
+      .singleton c
     else
       panic! "invalid HTTP quoted-pair content"
 
@@ -54,10 +56,12 @@ Returns `none` when any character in `s` cannot be represented by the grammar.
 -/
 @[expose]
 def quoteHttpString? (s : String) : Option String :=
-  if s.all Std.Http.Internal.Char.quotedStringChar then
-    some (String.Internal.append
-      (String.Internal.foldl (fun acc c =>
-        String.Internal.append acc (quoteCore c (inString := true))) "\"" s)
+  if s.all token then
+    some s
+  else if s.all quotedStringChar then
+    some (.append
+      (.foldl (fun acc c =>
+        .append acc (quoteCore c (inString := true))) "\"" s)
       "\"")
   else
     none
@@ -89,10 +93,10 @@ def unquoteHttpString? (s : String) : Option String :=
       | .valid false acc =>
           if c == '\\' then .valid true acc
           else if c == '"' then .done acc
-          else if Std.Http.Internal.Char.qdtext c then .valid false (acc.push c)
+          else if qdtext c then .valid false (acc.push c)
           else .invalid
       | .valid true acc =>
-          if Std.Http.Internal.Char.quotedPairChar c then .valid false (acc.push c)
+          if quotedPairChar c then .valid false (acc.push c)
           else .invalid
       | .done _ | .invalid => .invalid) .start with
     | .done result => some result

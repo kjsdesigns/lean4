@@ -9,7 +9,7 @@ prelude
 public import Init.Data.String
 public import Std.Data.HashMap
 public import Std.Internal.Http.Internal
-public import Std.Internal.Http.Internal.String
+public meta import Std.Internal.Http.Internal.String
 
 public section
 
