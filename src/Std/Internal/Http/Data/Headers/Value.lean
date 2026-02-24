@@ -35,7 +35,7 @@ field-vchar     = VCHAR ; We disallow obs-text
 Reference: https://www.rfc-editor.org/rfc/rfc9110.html#section-5.5
 -/
 abbrev isValidHeaderChar (c : Char) : Bool :=
-  Char.fieldVchar c
+  Char.fieldContent c
 
 /--
 Proposition that asserts all characters in a string are valid for HTTP header values.
