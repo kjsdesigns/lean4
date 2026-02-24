@@ -70,17 +70,6 @@ def quoteHttpString! (s : String) : String :=
   | some res => res
   | none => panic! "invalid HTTP quoted-string content"
 
-/--
-Returns `s` unchanged if every character satisfies `isTokenCharacter`; otherwise returns `s`
-encoded as an HTTP `quoted-string`.
--/
-@[inline]
-def quoteTokenOrString (isTokenCharacter : Char → Bool) (s : String) : String :=
-  if s.any (fun c => !isTokenCharacter c) then
-    quoteHttpString! s
-  else
-    s
-
 private inductive UnquoteState where
   | start
   | valid (escaped : Bool) (acc : String)
@@ -107,7 +96,9 @@ def unquoteHttpString? (s : String) : Option String :=
       | .done _ | .invalid => .invalid) .start with
     | .done result => some result
     | _ => none
-  else
+  else if s.all Char.token then
     some s
+  else
+    none
 
 end Std.Http.Internal
