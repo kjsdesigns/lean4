@@ -49,7 +49,7 @@ def isAlpha (c : Char) : Bool :=
 Two character predicates are equivalent on ASCII input (`0x00`-`0x7F`).
 -/
 abbrev EqOnAscii (x : Char → Bool) (y : Char → Bool) : Prop :=
-  ∀ n < 255, x (Char.ofNat n) ↔ y (Char.ofNat n)
+  ∀ n < 255, x (Char.ofNat n) ↔ y (Char.ofNat n) -- To make sure it's ASCII only.
 
 /--
 tchar = "!" / "#" / "$" / "%" / "&" / "'" / "*"
@@ -158,6 +158,23 @@ def fieldVchar (c : Char) : Bool :=
   isAscii c ∧ Nat.testBit 0x7ffffffffffffffffffffffe00000000 c.toNat
 
 theorem fieldVchar_eq_fieldVcharSpec_on_ascii : EqOnAscii fieldVchar fieldVcharSpec := by
+  decide
+
+/--
+field-content character class:
+field-vchar / SP / HTAB
+; ASCII-only variant (no obs-text).
+-/
+def fieldContentSpec (c : Char) : Bool :=
+  fieldVchar c ∨ c = ' ' ∨ c = '\t'
+
+/--
+Checks if `c` is valid in the body of an HTTP `field-content` (ASCII-only).
+-/
+def fieldContent (c : Char) : Bool :=
+  isAscii c ∧ Nat.testBit 0x7fffffffffffffffffffffff00000200 c.toNat
+
+theorem fieldContent_eq_fieldContentSpec_on_ascii : EqOnAscii fieldContent fieldContentSpec := by
   decide
 
 /--

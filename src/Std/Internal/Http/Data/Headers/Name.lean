@@ -27,6 +27,10 @@ open Internal Char
 
 /--
 Proposition that asserts all characters in a string are valid and that it is non-empty for HTTP header names.
+
+  field-name     = token
+
+Reference: https://www.rfc-editor.org/rfc/rfc9110.html#section-5.1
 -/
 abbrev IsValidHeaderName (s : String) : Prop :=
   s.toList.all Char.token ∧ ¬s.isEmpty

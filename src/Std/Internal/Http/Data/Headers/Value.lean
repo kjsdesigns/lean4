@@ -27,9 +27,15 @@ open Internal
 
 /--
 Checks if a character is valid for use in an HTTP header value.
+
+field-content  = field-vchar
+                   [ 1*( SP / HTAB / field-vchar ) field-vchar ]
+field-vchar     = VCHAR ; We disallow obs-text
+
+Reference: https://www.rfc-editor.org/rfc/rfc9110.html#section-5.5
 -/
 abbrev isValidHeaderChar (c : Char) : Bool :=
-  ((' ' ≤ c ∧ c ≤ '~') ∨ c = '\t') ∨ ('\u0080' ≤ c ∧ c ≤ '\u00FF')
+  Char.fieldVchar c
 
 /--
 Proposition that asserts all characters in a string are valid for HTTP header values.
