@@ -202,13 +202,13 @@ info: "0\x0d\n\x0d\n"
 info: "3;lang=en\x0d\nabc\x0d\n"
 -/
 #guard_msgs in
-#eval encodeStr (Chunk.ofByteArray "abc".toUTF8 |>.withExtension (.mk "lang") "en")
+#eval encodeStr (Chunk.ofByteArray "abc".toUTF8 |>.withExtension (Chunk.ExtensionName.mk "lang") (.ofString! "en"))
 
 /--
 info: "3;lang=\"en \\\" u\";type=text\x0d\nabc\x0d\n"
 -/
 #guard_msgs in
-#eval encodeStr (Chunk.ofByteArray "abc".toUTF8 |>.withExtension (.mk "lang") "en \" u" |>.withExtension (.mk "type") "text")
+#eval encodeStr (Chunk.ofByteArray "abc".toUTF8 |>.withExtension (Chunk.ExtensionName.mk "lang") (.ofString! "en \" u") |>.withExtension (Chunk.ExtensionName.mk "type") (.ofString! "text"))
 
 /--
 info: "a\x0d\n0123456789\x0d\n"
@@ -424,42 +424,42 @@ info: "0\x0d\n\x0d\n"
 info: "3;marker\x0d\nabc\x0d\n"
 -/
 #guard_msgs in
-#eval encodeStr ({ data := "abc".toUTF8, extensions := #[(.mk "marker", none)] } : Chunk)
+#eval encodeStr ({ data := "abc".toUTF8, extensions := #[(Chunk.ExtensionName.mk "marker", none)] } : Chunk)
 
 -- Extension with empty string value (not quoted since "".any returns false)
 /--
 info: "3;key=\x0d\nabc\x0d\n"
 -/
 #guard_msgs in
-#eval encodeStr (Chunk.ofByteArray "abc".toUTF8 |>.withExtension (.mk "key") "")
+#eval encodeStr (Chunk.ofByteArray "abc".toUTF8 |>.withExtension (Chunk.ExtensionName.mk "key") (.ofString! ""))
 
 -- Extension value that is all token chars (no quoting needed)
 /--
 info: "3;key=abc123\x0d\nabc\x0d\n"
 -/
 #guard_msgs in
-#eval encodeStr (Chunk.ofByteArray "abc".toUTF8 |>.withExtension (.mk "key") "abc123")
+#eval encodeStr (Chunk.ofByteArray "abc".toUTF8 |>.withExtension (Chunk.ExtensionName.mk "key") (.ofString! "abc123"))
 
 -- Extension value with space (must be quoted)
 /--
 info: "3;key=\"hello world\"\x0d\nabc\x0d\n"
 -/
 #guard_msgs in
-#eval encodeStr (Chunk.ofByteArray "abc".toUTF8 |>.withExtension (.mk "key") "hello world")
+#eval encodeStr (Chunk.ofByteArray "abc".toUTF8 |>.withExtension (Chunk.ExtensionName.mk "key") (.ofString! "hello world"))
 
 -- Extension value with backslash (must be escaped)
 /--
 info: "3;key=\"a\\\\b\"\x0d\nabc\x0d\n"
 -/
 #guard_msgs in
-#eval encodeStr (Chunk.ofByteArray "abc".toUTF8 |>.withExtension (.mk "key") "a\\b")
+#eval encodeStr (Chunk.ofByteArray "abc".toUTF8 |>.withExtension (Chunk.ExtensionName.mk "key") (.ofString! "a\\b"))
 
 -- Multiple extensions with no value and with value
 /--
 info: "3;a;b=1\x0d\nabc\x0d\n"
 -/
 #guard_msgs in
-#eval encodeStr ({ data := "abc".toUTF8, extensions := #[(.mk "a", none), (.mk "b", some "1")] } : Chunk)
+#eval encodeStr ({ data := "abc".toUTF8, extensions := #[(Chunk.ExtensionName.mk "a", none), (Chunk.ExtensionName.mk "b", some (.ofString! "1"))] } : Chunk)
 
 /-! ## Trailer encoding -/
 

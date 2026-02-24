@@ -37,7 +37,7 @@ Checks if a character is valid after the first character of a URI scheme.
 Valid characters are ASCII alphanumeric, `+`, `-`, and `.`.
 -/
 def isValidSchemeChar (c : Char) : Bool :=
-  c.isAlphanum || c == '+' || c == '-' || c == '.'
+  Internal.Char.isValidSchemeChar c
 
 /--
 URI scheme identifier (e.g., "http", "https", "ftp").
@@ -68,7 +68,7 @@ Checks if a character is valid for use in a domain name.
 Valid characters are ASCII alphanumeric, hyphens, and dots.
 -/
 def isValidDomainNameChar (c : Char) : Bool :=
-  c.isAlphanum || c == '-' || c == '.'
+  Internal.Char.isValidDomainNameChar c
 
 /--
 Proposition that asserts all characters in a string are valid domain name characters.

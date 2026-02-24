@@ -11,6 +11,8 @@ public import Std.Internal.Http.Internal.ChunkedBuffer
 public import Std.Internal.Http.Internal.LowerCase
 public import Std.Internal.Http.Internal.MultiMap
 public import Std.Internal.Http.Internal.Encode
+public import Std.Internal.Http.Internal.String
+public import Std.Internal.Http.Internal.Char
 
 public section
 
