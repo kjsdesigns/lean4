@@ -96,14 +96,14 @@ def channelForIn : Async Unit := do
 
 def channelExtensions : Async Unit := do
   let (outgoing, incoming) ← Body.mkChannel
-  let chunk := { data := "hello".toUTF8, extensions := #[(.mk "key", some "value")] : Chunk }
+  let chunk := { data := "hello".toUTF8, extensions := #[(.mk "key", some (Chunk.ExtensionValue.ofString! "value"))] : Chunk }
 
   let sendTask ← async (t := AsyncTask) <| outgoing.send chunk
   let result ← incoming.recv none
 
   assert! result.isSome
   assert! result.get!.extensions.size == 1
-  assert! result.get!.extensions[0]! == (.mk "key", some "value")
+  assert! result.get!.extensions[0]! == (Chunk.ExtensionName.mk "key", some <| .ofString! "value")
   await sendTask
 
 #eval channelExtensions.block
