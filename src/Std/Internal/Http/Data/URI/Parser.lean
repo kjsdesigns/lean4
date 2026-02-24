@@ -51,8 +51,8 @@ private def hexToByte (digit : UInt8) : UInt8 :=
 
 private def parsePctEncoded : Parser UInt8 := do
   skipByte '%'.toUInt8
-  let hi ← hexToByte <$> satisfy isHexDigit
-  let lo ← hexToByte <$> satisfy isHexDigit
+  let hi ← hexToByte <$> satisfy isHexDigitByte
+  let lo ← hexToByte <$> satisfy isHexDigitByte
   return (hi <<< 4) ||| lo
 
 -- scheme = ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )
@@ -120,7 +120,7 @@ private def parseIPv6 : Parser Net.IPv6Addr := do
   skipByte '['.toUInt8
 
   let result ← takeWhileUpTo1
-    (fun x => x = ':'.toUInt8 ∨ isHexDigit x)
+    (fun x => x = ':'.toUInt8 ∨ isHexDigitByte x)
     256
 
   skipByte ']'.toUInt8

@@ -27,9 +27,13 @@ open Internal Char
 
 /--
 Proposition that asserts all characters in a string are valid and that it is non-empty for HTTP header names.
+
+  field-name     = token
+
+Reference: https://www.rfc-editor.org/rfc/rfc9110.html#section-5.1
 -/
 abbrev IsValidHeaderName (s : String) : Prop :=
-  s.toList.all isTokenCharacter ∧ ¬s.isEmpty
+  s.toList.all Char.token ∧ ¬s.isEmpty
 
 /--
 A validated HTTP header name that ensures all characters conform to HTTP standards. Header names are
@@ -78,11 +82,9 @@ string contains invalid characters for HTTP header names or is empty.
 -/
 @[expose]
 def ofString! (s : String) : Name :=
-  let val := s.trimAscii.toString.toLower
-  if h : IsValidHeaderName val ∧ IsLowerCase val then
-    ⟨val, h.left, h.right⟩
-  else
-    panic! s!"invalid header name: {s.quote}"
+  match ofString? s with
+  | some res => res
+  | none => panic! s!"invalid header name: {s.quote}"
 
 /--
 Converts the header name to title case (e.g., "Content-Type").
