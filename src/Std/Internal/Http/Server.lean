@@ -167,17 +167,14 @@ def serve {σ : Type} [Handler σ]
             | .error _ => pure Extensions.empty
 
           if let some limit := httpServer.connectionLimit then
-            if ← limit.tryAcquire then
-
-              ContextAsync.background
-                (frameCancellation httpServer (releaseConnectionPermit := true)
-                  (action := serveConnection client handler config extensions))
-            else
-              -- Drop the connection immediately by shutting down the write side.
-              discard <| client.shutdown
-          else
+            let permit ← limit.acquire
+            await permit
             ContextAsync.background
               (frameCancellation httpServer (releaseConnectionPermit := true)
+                (action := serveConnection client handler config extensions))
+          else
+            ContextAsync.background
+              (frameCancellation httpServer (releaseConnectionPermit := false)
                 (action := serveConnection client handler config extensions))
 
         | none => break
