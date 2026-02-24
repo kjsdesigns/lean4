@@ -54,7 +54,7 @@ namespace Header
 Checks whether a string is a valid non-empty HTTP token.
 -/
 def isToken (s : String) : Bool :=
-  !s.isEmpty && s.toList.all Char.isTokenCharacter
+  !s.isEmpty && s.toList.all Char.token
 
 /--
 Parses a comma-separated token list with OWS trimming and lowercase normalization.

@@ -29,7 +29,7 @@ open Internal Char
 Proposition that asserts all characters in a string are valid and that it is non-empty for HTTP header names.
 -/
 abbrev IsValidHeaderName (s : String) : Prop :=
-  s.toList.all isTokenCharacter ∧ ¬s.isEmpty
+  s.toList.all Char.token ∧ ¬s.isEmpty
 
 /--
 A validated HTTP header name that ensures all characters conform to HTTP standards. Header names are
