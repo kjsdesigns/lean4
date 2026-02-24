@@ -43,6 +43,7 @@ extern "C" {
 #if defined(__GNUC__) || defined(__clang__)
 #define LEAN_UNLIKELY(x) (__builtin_expect((x), 0))
 #define LEAN_LIKELY(x) (__builtin_expect((x), 1))
+#define LEAN_UNREACHABLE_UB (__builtin_unreachable())
 
 #ifdef NDEBUG
 #define LEAN_ALWAYS_INLINE __attribute__((always_inline))
@@ -56,6 +57,7 @@ extern "C" {
 #define LEAN_UNLIKELY(x) (x)
 #define LEAN_LIKELY(x) (x)
 #define LEAN_ALWAYS_INLINE
+#define LEAN_UNREACHABLE_UB
 #endif
 
 #ifndef assert
@@ -309,7 +311,7 @@ typedef struct {
     void *                m_data;
 } lean_external_object;
 
-static inline LEAN_ALWAYS_INLINE bool lean_is_scalar(lean_object * o) { return ((size_t)(o) & 1) == 1; }
+static inline LEAN_ALWAYS_INLINE uint8_t lean_is_scalar(lean_object * o) { return ((size_t)(o) & 1) == 1; }
 static inline lean_object * lean_box(size_t n) { return (lean_object*)(((size_t)(n) << 1) | 1); }
 static inline size_t lean_unbox(lean_object * o) { return (size_t)(o) >> 1; }
 

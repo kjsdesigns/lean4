@@ -541,6 +541,7 @@ def emitReset (z : VarId) (n : Nat) (x : VarId) : M Unit := do
   n.forM fun i _ => do
     emit " lean_ctor_release("; emit x; emit ", "; emit i; emitLn ");"
   emit " "; emitLhs z; emit x; emitLn ";";
+  emit " "; emit "if(lean_is_scalar("; emit x; emitLn ")) { LEAN_UNREACHABLE }"
   emitLn "} else {";
   emit " lean_dec_ref("; emit x; emitLn ");";
   emit " "; emitLhs z; emitLn "lean_box(0);";
