@@ -6,6 +6,7 @@ Authors: Sofia Rodrigues
 module
 
 prelude
+import Std.Tactic.BVDecide
 public import Init.Data.String
 
 @[expose]
@@ -35,15 +36,36 @@ def isAscii (c : Char) : Bool :=
 Checks if a byte is a decimal digit (0-9).
 -/
 @[inline, expose]
-def isDigit (c : Char) : Bool :=
+def isDigitChar (c : Char) : Bool :=
   c >= '0' ∧ c <= '9'
 
 /--
 Checks if a byte is an alphabetic character (a-z or A-Z).
 -/
 @[inline, expose]
-def isAlpha (c : Char) : Bool :=
+def isAlphaChar (c : Char) : Bool :=
   (c >= 'A' ∧ c <= 'Z') ∨ (c >= 'a' ∧ c <= 'z')
+
+/--
+Checks if a byte represents an ASCII character (value < 128).
+-/
+@[expose]
+def isAsciiByte (c : UInt8) : Bool :=
+  c < 128
+
+/--
+Checks if a byte is a decimal digit (0-9).
+-/
+@[inline, expose]
+def isDigit (c : UInt8) : Bool :=
+  c >= '0'.toUInt8 && c <= '9'.toUInt8
+
+/--
+Checks if a byte is an alphabetic character (a-z or A-Z).
+-/
+@[inline, expose]
+def isAlpha (c : UInt8) : Bool :=
+  (c >= 'A'.toUInt8 && c <= 'Z'.toUInt8) || (c >= 'a'.toUInt8 && c <= 'z'.toUInt8)
 
 /--
 Two character predicates are equivalent on ASCII input (`0x00`-`0x7F`).
@@ -59,8 +81,8 @@ tchar = "!" / "#" / "$" / "%" / "&" / "'" / "*"
 -/
 def tchar (c : Char) : Bool :=
   "!#$%&'*+-.^_`|~".toList.contains c
-  ∨ isDigit c
-  ∨ isAlpha c
+  ∨ isDigitChar c
+  ∨ isAlphaChar c
 
 /--
 Checks if a character is a valid HTTP token character per RFC 9110 §5.6.2.
@@ -235,8 +257,26 @@ def rws (c : Char) : Bool :=
 Checks if a byte is a hexadecimal digit (0-9, a-f, or A-F). Note: This accepts both lowercase and
 uppercase hex digits.
 -/
+def isHexDigitSpec (c : Char) : Bool :=
+  (c ≥ '0' && c ≤ '9') ||
+  (c ≥ 'a' && c ≤ 'f') ||
+  (c ≥ 'A' && c ≤ 'F')
+
+/--
+Checks if a byte is a hexadecimal digit (0-9, a-f, or A-F) using a precomputed bitmask.
+-/
 @[expose]
-def isHexDigit (c : UInt8) : Bool :=
+def isHexDigit (c : Char) : Bool :=
+  Nat.testBit 0x0000007e0000007e03ff000000000000 c.toNat
+
+theorem isHexDigit_eq_isHexDigitSpec_on_ascii : EqOnAscii isHexDigit isHexDigitSpec := by
+  decide
+
+/--
+Byte-level wrapper for parsers that operate on UTF-8 bytes.
+-/
+@[expose]
+def isHexDigitByte (c : UInt8) : Bool :=
   (c ≥ '0'.toUInt8 && c ≤ '9'.toUInt8) ||
   (c ≥ 'a'.toUInt8 && c ≤ 'f'.toUInt8) ||
   (c ≥ 'A'.toUInt8 && c ≤ 'F'.toUInt8)
@@ -244,30 +284,89 @@ def isHexDigit (c : UInt8) : Bool :=
 /--
 Checks if a byte is an alphanumeric digit (0-9, a-z, or A-Z).
 -/
-@[expose]
-def isAlphaNum (c : UInt8) : Bool :=
+def isAlphaNumSpec (c : UInt8) : Bool :=
   (c ≥ '0'.toUInt8 && c ≤ '9'.toUInt8) ||
   (c ≥ 'a'.toUInt8 && c ≤ 'z'.toUInt8) ||
   (c ≥ 'A'.toUInt8 && c ≤ 'Z'.toUInt8)
+
+
+
+
+ /--
+Checks if a byte is an alphanumeric digit (0-9, a-z, or A-Z) using a precomputed bitmask.
+-/
+@[expose]
+def isAlphaNum (c : UInt8) : Bool :=
+  Nat.testBit 0x7fffffe07fffffe03ff000000000000 c.toNat
+
+theorem isAlphaNum_eq_isAlphaNumSpec_on_ascii :
+    ∀ i : Fin 128, isAlphaNum (UInt8.ofNat i.1) = isAlphaNumSpec (UInt8.ofNat i.1) := by
+  decide
+
+
+/--
+Checks if a character is an ASCII alphanumeric character.
+-/
+@[inline, expose]
+def isAsciiAlphaNumChar (c : Char) : Bool :=
+  isAscii c && isAlphaNum (UInt8.ofNat c.toNat)
+
+/--
+Checks if a character is valid after the first character of a URI scheme.
+Valid characters are ASCII alphanumeric, `+`, `-`, and `.`.
+-/
+@[expose]
+def isValidSchemeChar (c : Char) : Bool :=
+  isAsciiAlphaNumChar c || c == '+' || c == '-' || c == '.'
+
+/--
+Checks if a character is valid for use in a domain name.
+Valid characters are ASCII alphanumeric, hyphens, and dots.
+-/
+@[expose]
+def isValidDomainNameChar (c : Char) : Bool :=
+  isAsciiAlphaNumChar c || c == '-' || c == '.'
 
 /--
 Checks if a byte is an unreserved character according to RFC 3986. Unreserved characters are:
 alphanumeric, hyphen, period, underscore, and tilde.
 -/
+def isUnreservedSpec (c : UInt8) : Bool :=
+  isAlphaNumSpec c ||
+  (c = '-'.toUInt8 || c = '.'.toUInt8 || c = '_'.toUInt8 || c = '~'.toUInt8)
+
+ /--
+Checks if a byte is an unreserved character according to RFC 3986 using a precomputed bitmask.
+-/
 @[expose]
 def isUnreserved (c : UInt8) : Bool :=
-  isAlphaNum c ||
-  (c = '-'.toUInt8 || c = '.'.toUInt8 || c = '_'.toUInt8 || c = '~'.toUInt8)
+  Nat.testBit 0x47fffffe87fffffe03ff600000000000 c.toNat
+
+theorem isUnreserved_eq_isUnreservedSpec_on_ascii :
+    ∀ i : Fin 128, isUnreserved (UInt8.ofNat i.1) = isUnreservedSpec (UInt8.ofNat i.1) := by
+  decide
+
 
 /--
 Checks if a byte is a sub-delimiter character according to RFC 3986.
 Sub-delimiters are: `!`, `$`, `&`, `'`, `(`, `)`, `*`, `+`, `,`, `;`, `=`.
 -/
-@[expose]
-def isSubDelims (c : UInt8) : Bool :=
+def isSubDelimsSpec (c : UInt8) : Bool :=
   c = '!'.toUInt8 || c = '$'.toUInt8 || c = '&'.toUInt8 || c = '\''.toUInt8 ||
   c = '('.toUInt8 || c = ')'.toUInt8 || c = '*'.toUInt8 || c = '+'.toUInt8 ||
   c = ','.toUInt8 || c = ';'.toUInt8 || c = '='.toUInt8
+
+ /--
+Checks if a byte is a sub-delimiter character according to RFC 3986 using a precomputed bitmask.
+-/
+@[expose]
+def isSubDelims (c : UInt8) : Bool :=
+  Nat.testBit 0x28001fd200000000 c.toNat
+
+theorem isSubDelims_eq_isSubDelimsSpec_on_ascii :
+    ∀ i : Fin 128, isSubDelims (UInt8.ofNat i.1) = isSubDelimsSpec (UInt8.ofNat i.1) := by
+  decide
+
 
 /--
 Checks if a byte is a valid path character (`pchar`) according to RFC 3986.
@@ -276,32 +375,75 @@ Checks if a byte is a valid path character (`pchar`) according to RFC 3986.
 Note: The percent-encoding (`pct-encoded`) is handled separately by `isEncodedChar`,
 so this predicate only covers the non-percent characters.
 -/
+def isPCharSpec (c : UInt8) : Bool :=
+  isUnreservedSpec c || isSubDelimsSpec c || c = ':'.toUInt8 || c = '@'.toUInt8
+
+ /--
+Checks if a byte is a valid path character (`pchar`) according to RFC 3986 using a precomputed bitmask.
+-/
 @[expose]
 def isPChar (c : UInt8) : Bool :=
-  isUnreserved c || isSubDelims c || c = ':'.toUInt8 || c = '@'.toUInt8
+  Nat.testBit 0x47fffffe87ffffff2fff7fd200000000 c.toNat
+
+theorem isPChar_eq_isPCharSpec_on_ascii :
+    ∀ i : Fin 128, isPChar (UInt8.ofNat i.1) = isPCharSpec (UInt8.ofNat i.1) := by
+  decide
+
 
 /--
 Checks if a byte is a valid character in a URI query component according to RFC 3986.
 `query = *( pchar / "/" / "?" )`
 -/
+def isQueryCharSpec (c : UInt8) : Bool :=
+  isPCharSpec c || c = '/'.toUInt8 || c = '?'.toUInt8
+
+ /--
+Checks if a byte is a valid character in a URI query component according to RFC 3986 using a precomputed bitmask.
+-/
 @[expose]
 def isQueryChar (c : UInt8) : Bool :=
-  isPChar c || c = '/'.toUInt8 || c = '?'.toUInt8
+  Nat.testBit 0x47fffffe87ffffffafffffd200000000 c.toNat
+
+theorem isQueryChar_eq_isQueryCharSpec_on_ascii :
+    ∀ i : Fin 128, isQueryChar (UInt8.ofNat i.1) = isQueryCharSpec (UInt8.ofNat i.1) := by
+  decide
+
 
 /--
 Checks if a byte is a valid character in a URI fragment component according to RFC 3986.
 `fragment = *( pchar / "/" / "?" )`
 -/
+def isFragmentCharSpec (c : UInt8) : Bool :=
+  isPCharSpec c || c = '/'.toUInt8 || c = '?'.toUInt8
+
+ /--
+Checks if a byte is a valid character in a URI fragment component according to RFC 3986 using a precomputed bitmask.
+-/
 @[expose]
 def isFragmentChar (c : UInt8) : Bool :=
-  isPChar c || c = '/'.toUInt8 || c = '?'.toUInt8
+  Nat.testBit 0x47fffffe87ffffffafffffd200000000 c.toNat
+
+theorem isFragmentChar_eq_isFragmentCharSpec_on_ascii :
+    ∀ i : Fin 128, isFragmentChar (UInt8.ofNat i.1) = isFragmentCharSpec (UInt8.ofNat i.1) := by
+  decide
 
 /--
 Checks if a byte is a valid character in a URI userinfo component according to RFC 3986.
 `userinfo = *( unreserved / pct-encoded / sub-delims / ":" )`
 -/
+def isUserInfoCharSpec (c : UInt8) : Bool :=
+  isUnreservedSpec c || isSubDelimsSpec c || c = ':'.toUInt8
+
+ /--
+Checks if a byte is a valid character in a URI userinfo component according to RFC 3986 using a precomputed bitmask.
+-/
 @[expose]
 def isUserInfoChar (c : UInt8) : Bool :=
-  isUnreserved c || isSubDelims c || c = ':'.toUInt8
+  Nat.testBit 0x47fffffe87fffffe2fff7fd200000000 c.toNat
+
+theorem isUserInfoChar_eq_isUserInfoCharSpec_on_ascii :
+    ∀ i : Fin 128, isUserInfoChar (UInt8.ofNat i.1) = isUserInfoCharSpec (UInt8.ofNat i.1) := by
+  decide
+
 
 end Std.Http.Internal.Char
