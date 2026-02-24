@@ -608,43 +608,6 @@ def hasUri (req : Request Body.Incoming) (uri : String) : Bool :=
 }
 
 #eval runTestCase {
-  name := "Chunked request with streaming response and other encodings"
-
-  request := Request.new
-    |>.method .post
-    |>.uri! "/"
-    |>.header! "Host" "example.com"
-    |>.header! "Transfer-Encoding" "gzip, chunked"
-    |>.header! "Connection" "close"
-    |>.body #[
-      .mk "data1".toUTF8 #[],
-      .mk "data2".toUTF8 #[]
-    ]
-
-  handler := fun req => do
-    let (stream, _incoming) ← Body.mkChannel
-
-    if isChunkedRequest req
-    then
-      background do
-        for i in [0:2] do
-          stream.send <| Chunk.ofByteArray s!"response{i}".toUTF8
-        stream.close
-      return Response.ok
-        |>.header (.mk "content-length") (.mk "18")
-        |>.body stream
-    else
-      stream.send <| Chunk.ofByteArray "not chunked".toUTF8
-      stream.close
-
-      return Response.badRequest
-        |>.body stream
-
-  expected := "HTTP/1.1 400 Bad Request\x0d\nContent-Length: 0\x0d\nConnection: close\x0d\nServer: LeanHTTP/1.1\x0d\n\x0d\n"
-  chunked := true
-}
-
-#eval runTestCase {
   name := "Fixed-length response overflow closes connection"
 
   request := Request.new

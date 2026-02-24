@@ -78,6 +78,12 @@ def handler (req : Request Body.Incoming) : ContextAsync (Response Body.Outgoing
   Response.ok |>.text "OK"
 ```
 
+### URI Query Semantics
+
+`RequestTarget.query` is parsed using form-style key/value conventions (`k=v&...`), and `+` is decoded as a
+space in query components. If you need RFC 3986 opaque query handling, use the raw request target string
+(`toString req.head.uri`) and parse it with custom logic.
+
 ### Reading the Request Body
 
 The request body is exposed as `Body.Incoming`, which can be consumed incrementally or

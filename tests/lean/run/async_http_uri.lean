@@ -220,6 +220,9 @@ info: some " "
 #eval parseCheckFail ""
 #eval parseCheckFail "[::1"
 #eval parseCheckFail "[:::1]:80"
+#eval parseCheckFail "http://exa_mple.com/path"
+#eval parseCheckFail "http://[::ffff:192.168.1.1]/path"
+#eval parseCheckFail "http://[fe80::1%25eth0]/path"
 #eval parseCheckFail "#frag"
 #eval parseCheckFail "/path/\n"
 #eval parseCheckFail "/path/\u0000"
@@ -669,6 +672,14 @@ info: some (some "value")
 #eval show IO _ from do
   let result ← runParser parseRequestTarget "/api?key=value"
   IO.println (repr (result.query.find? "key"))
+
+/--
+info: some "x y"
+-/
+#guard_msgs in
+#eval show IO _ from do
+  let result ← runParser parseRequestTarget "/form?q=x+y"
+  IO.println (repr (result.query.get "q"))
 
 -- ============================================================================
 -- Query Operations

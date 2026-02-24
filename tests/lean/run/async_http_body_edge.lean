@@ -92,6 +92,9 @@ def assertStatusCount (name : String) (response : ByteArray) (expected : Nat) : 
 def bad400 : String :=
   "HTTP/1.1 400 Bad Request\x0d\nContent-Length: 0\x0d\nConnection: close\x0d\nServer: LeanHTTP/1.1\x0d\n\x0d\n"
 
+def notImplemented : String :=
+  "HTTP/1.1 501 Not Implemented\x0d\nContent-Length: 0\x0d\nConnection: close\x0d\nServer: LeanHTTP/1.1\x0d\n\x0d\n"
+
 
 def echoBodyHandler : TestHandler := fun req => do
   let body : String ← req.body.readAll
@@ -172,18 +175,20 @@ def echoBodyHandler : TestHandler := fun req => do
   let response ← sendRaw client server raw echoBodyHandler
   assertExact "Duplicate TE headers with gzip" response bad400
 
--- Unsupported transfer codings are rejected.
+-- Transfer-coding chains that end in chunked are accepted as chunked framing.
 #eval show IO _ from do
   let (client, server) ← Mock.new
   let raw := "POST /gzip HTTP/1.1\x0d\nHost: example.com\x0d\nTransfer-Encoding: gzip, chunked\x0d\nConnection: close\x0d\n\x0d\n5\x0d\nhello\x0d\n0\x0d\n\x0d\n".toUTF8
   let response ← sendRaw client server raw echoBodyHandler
-  assertExact "gzip, chunked rejected" response bad400
+  assertStatusPrefix "gzip, chunked accepted as chunked framing" response "HTTP/1.1 200"
+  assertContains "gzip, chunked body delivered" response "hello"
 
+-- Unsupported transfer codings without chunked framing are rejected.
 #eval show IO _ from do
   let (client, server) ← Mock.new
   let raw := "POST /identity HTTP/1.1\x0d\nHost: example.com\x0d\nTransfer-Encoding: identity\x0d\nConnection: close\x0d\n\x0d\nhello".toUTF8
   let response ← sendRaw client server raw echoBodyHandler
-  assertExact "identity transfer-coding rejected" response bad400
+  assertExact "identity transfer-coding rejected with 501" response notImplemented
 
 -- Malformed Transfer-Encoding token list is rejected.
 #eval show IO _ from do

@@ -187,17 +187,16 @@ def parseMethod : Parser Method :=
 /--
 Parses the method token as text.
 -/
-def parseMethodToken : Parser String := do
-  let raw ← parseToken 16
-
-  let methodToken ← liftOption<| String.fromUTF8? raw.toByteArray
-  if methodToken.toList.any (fun c => c.toNat ≥ 'a'.toNat ∧ c.toNat ≤ 'z'.toNat) then
-    fail "method token must be uppercase"
-  else
-    pure methodToken
+def parseMethodToken (limits : H1.Config) : Parser String := do
+  let raw ← parseToken limits.maxStartLineLength
+  liftOption <| String.fromUTF8? raw.toByteArray
 
 def parseURI (limits : H1.Config) : Parser ByteArray := do
   let uri ← takeUntilUpTo (· == ' '.toUInt8) limits.maxUriLength
+  if uri.size == limits.maxUriLength then
+    if (← peekWhen? (· != ' '.toUInt8)) |>.isSome then
+      fail "uri too long"
+
   return uri.toByteArray
 
 /--
@@ -226,7 +225,7 @@ request-line = method SP request-target SP HTTP-version
 -/
 public def parseRequestLineRawVersion (limits : H1.Config) : Parser (Option Method × RequestTarget × Option Version) := do
   skipLeadingRequestEmptyLines
-  let methodToken ← parseMethodToken <* sp
+  let methodToken ← parseMethodToken limits <* sp
   let uri ← parseURI limits <* sp
 
   let uri ← match (Std.Http.URI.Parser.parseRequestTarget <* eof).run uri with

@@ -198,12 +198,17 @@ def notImplemented : String :=
   let (clientB, serverB) ← Mock.new
   let emptyHost := "GET / HTTP/1.1\x0d\nHost: \x0d\nConnection: close\x0d\n\x0d\n".toUTF8
   let responseB ← sendRaw clientB serverB emptyHost okHandler
-  assertExact "Empty Host header" responseB bad400
+  assertExact "Empty Host header allowed" responseB ok200
 
   let (clientC, serverC) ← Mock.new
   let multiHost := "GET / HTTP/1.1\x0d\nHost: example.com\x0d\nHost: other.com\x0d\nConnection: close\x0d\n\x0d\n".toUTF8
   let responseC ← sendRaw clientC serverC multiHost okHandler
   assertExact "Multiple Host headers" responseC bad400
+
+  let (clientD, serverD) ← Mock.new
+  let absoluteIgnoresHost := "GET http://good.example/path HTTP/1.1\x0d\nHost: bad host value\x0d\nConnection: close\x0d\n\x0d\n".toUTF8
+  let responseD ← sendRaw clientD serverD absoluteIgnoresHost okHandler
+  assertExact "Absolute-form authority takes precedence over Host" responseD ok200
 
 -- HTTP version handling.
 #eval show IO _ from do
@@ -269,7 +274,7 @@ def notImplemented : String :=
   let (clientB, serverB) ← Mock.new
   let lowercaseMethod := "get / HTTP/1.1\x0d\nHost: example.com\x0d\nConnection: close\x0d\n\x0d\n".toUTF8
   let responseB ← sendRaw clientB serverB lowercaseMethod okHandler
-  assertExact "Lowercase method rejected" responseB bad400
+  assertExact "Lowercase extension method returns 501" responseB notImplemented
 
   let (clientC, serverC) ← Mock.new
   let nonAsciiMethod := "GÉT / HTTP/1.1\x0d\nHost: example.com\x0d\nConnection: close\x0d\n\x0d\n".toUTF8
@@ -280,7 +285,12 @@ def notImplemented : String :=
   let longMethod := String.ofList (List.replicate 20 'G')
   let rawD := s!"{longMethod} / HTTP/1.1\x0d\nHost: example.com\x0d\nConnection: close\x0d\n\x0d\n".toUTF8
   let responseD ← sendRaw clientD serverD rawD okHandler
-  assertExact "Method too long" responseD bad400
+  assertExact "Long extension method returns 501" responseD notImplemented
+
+  let (clientE, serverE) ← Mock.new
+  let tokenMethod := "X-CUSTOM / HTTP/1.1\x0d\nHost: example.com\x0d\nConnection: close\x0d\n\x0d\n".toUTF8
+  let responseE ← sendRaw clientE serverE tokenMethod okHandler
+  assertExact "Token extension method returns 501" responseE notImplemented
 
 -- HEAD framing and authority-form rules.
 #eval show IO _ from do
@@ -298,6 +308,16 @@ def notImplemented : String :=
   let okAuthority := "CONNECT example.com:443 HTTP/1.1\x0d\nHost: example.com\x0d\nConnection: close\x0d\n\x0d\n".toUTF8
   let responseC ← sendRaw clientC serverC okAuthority okHandler
   assertExact "CONNECT authority-form accepted" responseC ok200
+
+  let (clientD, serverD) ← Mock.new
+  let getAsterisk := "GET * HTTP/1.1\x0d\nHost: example.com\x0d\nConnection: close\x0d\n\x0d\n".toUTF8
+  let responseD ← sendRaw clientD serverD getAsterisk okHandler
+  assertExact "Asterisk-form rejected for non-OPTIONS" responseD bad400
+
+  let (clientE, serverE) ← Mock.new
+  let optionsAsterisk := "OPTIONS * HTTP/1.1\x0d\nHost: example.com\x0d\nConnection: close\x0d\n\x0d\n".toUTF8
+  let responseE ← sendRaw clientE serverE optionsAsterisk okHandler
+  assertExact "Asterisk-form accepted for OPTIONS" responseE ok200
 
 -- h11-inspired: GET and HEAD should use the same framing headers.
 #eval show IO _ from do
@@ -423,6 +443,16 @@ def notImplemented : String :=
   let responseC ← sendRaw clientC serverC doubleChunked okHandler
   assertExact "Double chunked rejected" responseC bad400
 
+  let (clientD, serverD) ← Mock.new
+  let unsupportedTe := "POST / HTTP/1.1\x0d\nHost: example.com\x0d\nTransfer-Encoding: gzip, chunked\x0d\nConnection: close\x0d\n\x0d\n5\x0d\nhello\x0d\n0\x0d\n\x0d\n".toUTF8
+  let responseD ← sendRaw clientD serverD unsupportedTe (fun req => do
+    let seenTe := match req.head.headers.getAll? Header.Name.transferEncoding with
+      | some values => String.intercalate "|" (values.map (·.value) |>.toList)
+      | none => "<none>"
+    Response.ok |>.text seenTe)
+  assertStatus "Chunked transfer-coding chain accepted" responseD "HTTP/1.1 200"
+  assertContains "Transfer-coding chain is visible to handler" responseD "gzip, chunked"
+
 -- Size limits.
 #eval show IO _ from do
   let (clientA, serverA) ← Mock.new
@@ -431,11 +461,24 @@ def notImplemented : String :=
   let responseA ← sendRaw clientA serverA rawA okHandler
   assertExact "Header name too long" responseA bad400
 
+  let cfg : Config := {
+    lingeringTimeout := 1000
+    generateDate := false
+    maxStartLineLength := 16384
+  }
+
   let (clientB, serverB) ← Mock.new
-  let longUri := "/" ++ String.ofList (List.replicate 9000 'a')
-  let rawB := s!"GET {longUri} HTTP/1.1\x0d\nHost: example.com\x0d\nConnection: close\x0d\n\x0d\n".toUTF8
-  let responseB ← sendRaw clientB serverB rawB okHandler
-  assertExact "URI too long" responseB bad400
+  let segment := String.ofList (List.replicate 255 'a')
+  let maxUri := "/" ++ String.intercalate "/" (List.replicate 32 segment)
+  let rawB := s!"GET {maxUri} HTTP/1.1\x0d\nHost: example.com\x0d\nConnection: close\x0d\n\x0d\n".toUTF8
+  let responseB ← sendRaw clientB serverB rawB okHandler (config := cfg)
+  assertExact "URI at limit accepted" responseB ok200
+
+  let (clientC, serverC) ← Mock.new
+  let longUri := maxUri ++ "/x"
+  let rawC := s!"GET {longUri} HTTP/1.1\x0d\nHost: example.com\x0d\nConnection: close\x0d\n\x0d\n".toUTF8
+  let responseC ← sendRaw clientC serverC rawC okHandler (config := cfg)
+  assertStatus "URI too long returns 414" responseC "HTTP/1.1 414"
 
 -- Empty connection closes silently (no response bytes).
 #eval show IO _ from do
