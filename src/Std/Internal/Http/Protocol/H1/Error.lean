@@ -51,9 +51,19 @@ inductive Error
   | entityTooLarge
 
   /--
+  Request URI is too long.
+  -/
+  | uriTooLong
+
+  /--
   Unsupported HTTP method.
   -/
   | unsupportedMethod
+
+  /--
+  Unsupported transfer coding in `Transfer-Encoding`.
+  -/
+  | unsupportedTransferEncoding
 
   /--
   Unsupported HTTP version.
@@ -87,7 +97,9 @@ instance : ToString Error where
   | .invalidHeader => "Invalid header"
   | .timeout => "Timeout"
   | .entityTooLarge => "Entity too large"
+  | .uriTooLong => "URI too long"
   | .unsupportedMethod => "Unsupported method"
+  | .unsupportedTransferEncoding => "Unsupported transfer encoding"
   | .unsupportedVersion => "Unsupported version"
   | .invalidChunk => "Invalid chunk"
   | .connectionClosed => "Connection closed"
