@@ -219,3 +219,68 @@ def bad400 : String :=
   let encoded := (Encode.encode (v := .v11) ChunkedBuffer.empty Trailer.empty).toByteArray
   let text := String.fromUTF8! encoded
   assert! text == "0\x0d\n\x0d\n"
+
+-- Trailer injection: forbidden field names must be rejected (RFC 9112 §6.5).
+-- A client injecting framing or routing fields via trailers could confuse proxies.
+#eval show IO _ from do
+  -- content-length in trailer must be rejected
+  let (clientA, serverA) ← Mock.new
+  let rawA := "POST / HTTP/1.1\x0d\nHost: example.com\x0d\nTransfer-Encoding: chunked\x0d\nConnection: close\x0d\n\x0d\n5\x0d\nhello\x0d\n0\x0d\nContent-Length: 1000\x0d\n\x0d\n".toUTF8
+  let responseA ← sendRaw clientA serverA rawA bodyHandler
+  assertExact "content-length in trailer rejected" responseA bad400
+
+  -- transfer-encoding in trailer must be rejected
+  let (clientB, serverB) ← Mock.new
+  let rawB := "POST / HTTP/1.1\x0d\nHost: example.com\x0d\nTransfer-Encoding: chunked\x0d\nConnection: close\x0d\n\x0d\n5\x0d\nhello\x0d\n0\x0d\nTransfer-Encoding: chunked\x0d\n\x0d\n".toUTF8
+  let responseB ← sendRaw clientB serverB rawB bodyHandler
+  assertExact "transfer-encoding in trailer rejected" responseB bad400
+
+  -- host in trailer must be rejected
+  let (clientC, serverC) ← Mock.new
+  let rawC := "POST / HTTP/1.1\x0d\nHost: example.com\x0d\nTransfer-Encoding: chunked\x0d\nConnection: close\x0d\n\x0d\n5\x0d\nhello\x0d\n0\x0d\nHost: evil.example\x0d\n\x0d\n".toUTF8
+  let responseC ← sendRaw clientC serverC rawC bodyHandler
+  assertExact "host in trailer rejected" responseC bad400
+
+  -- connection in trailer must be rejected
+  let (clientD, serverD) ← Mock.new
+  let rawD := "POST / HTTP/1.1\x0d\nHost: example.com\x0d\nTransfer-Encoding: chunked\x0d\nConnection: close\x0d\n\x0d\n5\x0d\nhello\x0d\n0\x0d\nConnection: keep-alive\x0d\n\x0d\n".toUTF8
+  let responseD ← sendRaw clientD serverD rawD bodyHandler
+  assertExact "connection in trailer rejected" responseD bad400
+
+  -- authorization in trailer must be rejected
+  let (clientE, serverE) ← Mock.new
+  let rawE := "POST / HTTP/1.1\x0d\nHost: example.com\x0d\nTransfer-Encoding: chunked\x0d\nConnection: close\x0d\n\x0d\n5\x0d\nhello\x0d\n0\x0d\nAuthorization: Bearer token\x0d\n\x0d\n".toUTF8
+  let responseE ← sendRaw clientE serverE rawE bodyHandler
+  assertExact "authorization in trailer rejected" responseE bad400
+
+  -- cache-control in trailer must be rejected
+  let (clientF, serverF) ← Mock.new
+  let rawF := "POST / HTTP/1.1\x0d\nHost: example.com\x0d\nTransfer-Encoding: chunked\x0d\nConnection: close\x0d\n\x0d\n5\x0d\nhello\x0d\n0\x0d\nCache-Control: no-cache\x0d\n\x0d\n".toUTF8
+  let responseF ← sendRaw clientF serverF rawF bodyHandler
+  assertExact "cache-control in trailer rejected" responseF bad400
+
+  -- te in trailer must be rejected
+  let (clientG, serverG) ← Mock.new
+  let rawG := "POST / HTTP/1.1\x0d\nHost: example.com\x0d\nTransfer-Encoding: chunked\x0d\nConnection: close\x0d\n\x0d\n5\x0d\nhello\x0d\n0\x0d\nTE: trailers\x0d\n\x0d\n".toUTF8
+  let responseG ← sendRaw clientG serverG rawG bodyHandler
+  assertExact "te in trailer rejected" responseG bad400
+
+-- Forbidden trailer field names are rejected regardless of case.
+#eval show IO _ from do
+  let (clientA, serverA) ← Mock.new
+  let rawA := "POST / HTTP/1.1\x0d\nHost: example.com\x0d\nTransfer-Encoding: chunked\x0d\nConnection: close\x0d\n\x0d\n5\x0d\nhello\x0d\n0\x0d\nCONTENT-LENGTH: 0\x0d\n\x0d\n".toUTF8
+  let responseA ← sendRaw clientA serverA rawA bodyHandler
+  assertExact "CONTENT-LENGTH in trailer rejected (uppercase)" responseA bad400
+
+  let (clientB, serverB) ← Mock.new
+  let rawB := "POST / HTTP/1.1\x0d\nHost: example.com\x0d\nTransfer-Encoding: chunked\x0d\nConnection: close\x0d\n\x0d\n5\x0d\nhello\x0d\n0\x0d\nContent-Length: 0\x0d\nChecksum: abc\x0d\n\x0d\n".toUTF8
+  let responseB ← sendRaw clientB serverB rawB bodyHandler
+  assertExact "forbidden trailer among others rejected" responseB bad400
+
+-- Non-forbidden custom trailers are still allowed after the fix.
+#eval show IO _ from do
+  let (client, server) ← Mock.new
+  let raw := "POST / HTTP/1.1\x0d\nHost: example.com\x0d\nTransfer-Encoding: chunked\x0d\nConnection: close\x0d\n\x0d\n5\x0d\nhello\x0d\n0\x0d\nChecksum: deadbeef\x0d\nX-Timing: 12ms\x0d\n\x0d\n".toUTF8
+  let response ← sendRaw client server raw bodyHandler
+  assertStatus "non-forbidden trailers accepted" response "HTTP/1.1 200"
+  assertContains "body delivered with custom trailers" response "hello"

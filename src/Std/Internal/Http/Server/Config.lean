@@ -61,6 +61,14 @@ structure Config where
   keepAliveTimeout : { x : Time.Millisecond.Offset // 0 < x } :=  ⟨12000, by decide⟩
 
   /--
+  Maximum time (in milliseconds) allowed to receive the complete request headers after the first
+  byte of a new request arrives. This prevents Slowloris-style attacks where a client sends bytes
+  at a slow rate to hold a connection slot open without completing a request. Once a request starts,
+  each individual read must complete within this window. Default: 5 seconds.
+  -/
+  headerTimeout : Time.Millisecond.Offset := 5000
+
+  /--
   Whether to enable keep-alive connections by default.
   -/
   enableKeepAlive : Bool := true

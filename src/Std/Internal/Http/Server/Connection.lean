@@ -267,6 +267,14 @@ private def handle
 
       match event with
       | .bytes (some bs) =>
+        -- First byte of a new request: transition from the keepAlive timer to the
+        -- shorter headerTimeout. This caps how long a client can take to deliver
+        -- complete request headers after sending the first byte, preventing
+        -- Slowloris-style drip attacks that would otherwise hold a slot for the
+        -- full keepAliveTimeout per read.
+        if keepAliveTimeout.isSome then
+          keepAliveTimeout := none
+          currentTimeout := config.headerTimeout
         machine := machine.feed bs
 
       | .bytes none =>
