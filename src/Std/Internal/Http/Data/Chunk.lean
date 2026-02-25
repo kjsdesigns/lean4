@@ -6,8 +6,6 @@ Authors: Sofia Rodrigues
 module
 
 prelude
-public import Init.Data.String
-public import Std.Data.HashMap
 public import Std.Internal.Http.Internal
 public import Std.Internal.Http.Data.Headers
 public meta import Std.Internal.Http.Internal.String
@@ -18,6 +16,8 @@ public section
 # Chunk
 
 This module defines the `Chunk` type, which represents a chunk of data from a request or response.
+
+Reference: https://www.rfc-editor.org/rfc/rfc9112.html#section-7.1
 -/
 
 namespace Std.Http
@@ -30,13 +30,17 @@ namespace Chunk
 /--
 A proposition stating that `s` is a valid chunk-extension name: every character in `s` is an
 HTTP token character and `s` is non-empty.
+
+Reference: https://httpwg.org/specs/rfc9112.html#chunked.extension
 -/
 abbrev IsValidExtensionName (s : String) : Prop :=
-  s.toList.all Char.token ∧ ¬s.isEmpty
+  s.toList.all Char.token ∧ ¬s.toList.isEmpty
 
 /--
-A validated chunk extension name that ensures all characters conform to HTTP token standards
-per RFC 9110 §5.6.2. Extension names appear in chunked transfer encoding as key-value metadata.
+A validated chunk extension name that ensures all characters conform to HTTP standards
+per RFC 9112 §7.1.1. Extension names appear in chunked transfer encoding as key-value metadata.
+
+Reference: https://httpwg.org/specs/rfc9112.html#chunked.extension
 -/
 structure ExtensionName where
   /--
@@ -50,13 +54,16 @@ structure ExtensionName where
   validExtensionName : IsValidExtensionName value := by decide
 deriving Repr, DecidableEq, BEq
 
-namespace ExtensionName
-
 instance : Hashable ExtensionName where
   hash x := Hashable.hash x.value
 
 instance : Inhabited ExtensionName where
-  default := ⟨"_", by native_decide⟩
+  default := ⟨"_", by decide⟩
+
+instance : ToString ExtensionName where
+  toString name := name.value
+
+namespace ExtensionName
 
 /--
 Attempts to create an `ExtensionName` from a `String`, returning `none` if the string contains
@@ -73,26 +80,31 @@ Creates an `ExtensionName` from a string, panicking with an error message if the
 invalid characters or is empty.
 -/
 def ofString! (s : String) : ExtensionName :=
-  if h : IsValidExtensionName s then
-    ⟨s, h⟩
-  else
-    panic! ("invalid extension name: " ++ s.quote)
-
-instance : ToString ExtensionName where
-  toString name := name.value
+  match ofString? s with
+  | some res => res
+  | none => panic! ("invalid extension name: " ++ s.quote)
 
 end ExtensionName
 
 /--
-A proposition stating that `s` can be encoded as an HTTP `quoted-string`.
+A proposition asserting that `s` is a valid extension value, meaning it can be correctly encoded and
+decoded as either a token or a quoted-string.
+
+Reference: https://httpwg.org/specs/rfc9112.html#chunked.extension
 -/
 abbrev IsValidExtensionValue (s : String) : Prop :=
   (quoteHttpString? s).isSome
 
 /--
-A validated chunk extension value that ensures the string can be encoded as an HTTP
-`quoted-string` per RFC 9110 §5.6.4. Extension values appear in chunked transfer encoding as
-metadata associated with extension names.
+A validated chunk extension value that all characters conform to HTTP standards per RFC 9112 §7.1.1.
+Extension values appear in chunked transfer encoding as metadata associated with extension names.
+
+Note: UTF-8 encoding is not supported. The quoting mechanism is strict and only permits escaping
+specific values. Additionally, the library does not support obs-text, which means certain UTF-8
+characters or values outside of token, qdtext, and the limited set of escapable characters cannot be
+encoded.
+
+Reference: https://httpwg.org/specs/rfc9112.html#chunked.extension
 -/
 structure ExtensionValue where
   /--
@@ -111,6 +123,16 @@ namespace ExtensionValue
 instance : Inhabited ExtensionValue where
   default := ⟨"", by native_decide⟩
 
+instance : ToString ExtensionValue where
+  toString v := v.value
+
+/--
+Quotes an extension value if it contains non-token characters, otherwise returns it as-is.
+
+-/
+def quote (s : ExtensionValue) : String :=
+  quoteHttpString? s.value |>.get s.validExtensionValue
+
 /--
 Attempts to create an `ExtensionValue` from a `String`, returning `none` if the string contains
 characters that cannot be encoded as an HTTP quoted-string.
@@ -126,20 +148,16 @@ Creates an `ExtensionValue` from a string, panicking with an error message if th
 characters that cannot be encoded as an HTTP quoted-string.
 -/
 def ofString! (s : String) : ExtensionValue :=
-  if h : (quoteHttpString? s).isSome then
-    ⟨s, h⟩
-  else
-    panic! ("invalid extension value: " ++ s.quote)
+  match ofString? s with
+  | some res => res
+  | none => panic! ("invalid extension value: " ++ s.quote)
 
-instance : ToString ExtensionValue where
-  toString v := v.value
-
-end ExtensionValue
-
-end Chunk
+end Chunk.ExtensionValue
 
 /--
 Represents a chunk of data with optional extensions (key-value pairs).
+
+Reference: https://httpwg.org/specs/rfc9112.html#rfc.section.7.1
 -/
 structure Chunk where
 
@@ -158,12 +176,6 @@ deriving Inhabited
 namespace Chunk
 
 /--
-Quotes an extension value if it contains non-token characters, otherwise returns it as-is.
--/
-def quoteExtensionValue (s : ExtensionValue) : String :=
-  quoteHttpString? s.value |>.get s.validExtensionValue
-
-/--
 An empty chunk with no data and no extensions.
 -/
 def empty : Chunk :=
@@ -178,7 +190,7 @@ def ofByteArray (data : ByteArray) : Chunk :=
 /--
 Adds an extension to a chunk.
 -/
-def withExtension (chunk : Chunk) (key : Chunk.ExtensionName) (value : ExtensionValue) : Chunk :=
+def insertExtension (chunk : Chunk) (key : Chunk.ExtensionName) (value : ExtensionValue) : Chunk :=
   { chunk with extensions := chunk.extensions.push (key, some value) }
 
 /--
@@ -191,7 +203,7 @@ instance : Encode .v11 Chunk where
   encode buffer chunk :=
     let chunkLen := chunk.data.size
     let exts := chunk.extensions.foldl (fun acc (name, value)  =>
-      acc ++ ";" ++ name.value.toLower ++ (value.elim "" (fun x => "=" ++ quoteExtensionValue x))) ""
+      acc ++ ";" ++ name.value ++ (value.elim "" (fun x => "=" ++ x.quote))) ""
     let size := Nat.toDigits 16 chunkLen |>.toArray |>.map Char.toUInt8 |> ByteArray.mk
     buffer.append #[size, exts.toUTF8, "\r\n".toUTF8, chunk.data, "\r\n".toUTF8]
 

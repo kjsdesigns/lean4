@@ -114,7 +114,7 @@ info: "500 Internal Server Error"
 info: "999 Unknown"
 -/
 #guard_msgs in
-#eval encodeStr (Status.other 999 ⟨"Unknown", by decide⟩)
+#eval encodeStr (Status.other ⟨999, "Unknown", by decide⟩)
 
 /-! ## Request.Head encoding -/
 
@@ -202,13 +202,13 @@ info: "0\x0d\n\x0d\n"
 info: "3;lang=en\x0d\nabc\x0d\n"
 -/
 #guard_msgs in
-#eval encodeStr (Chunk.ofByteArray "abc".toUTF8 |>.withExtension (Chunk.ExtensionName.mk "lang") (.ofString! "en"))
+#eval encodeStr (Chunk.ofByteArray "abc".toUTF8 |>.insertExtension (Chunk.ExtensionName.mk "lang") (.ofString! "en"))
 
 /--
 info: "3;lang=\"en \\\" u\";type=text\x0d\nabc\x0d\n"
 -/
 #guard_msgs in
-#eval encodeStr (Chunk.ofByteArray "abc".toUTF8 |>.withExtension (Chunk.ExtensionName.mk "lang") (.ofString! "en \" u") |>.withExtension (Chunk.ExtensionName.mk "type") (.ofString! "text"))
+#eval encodeStr (Chunk.ofByteArray "abc".toUTF8 |>.insertExtension (Chunk.ExtensionName.mk "lang") (.ofString! "en \" u") |>.insertExtension (Chunk.ExtensionName.mk "type") (.ofString! "text"))
 
 /--
 info: "a\x0d\n0123456789\x0d\n"
@@ -353,28 +353,28 @@ info: "HTTP/1.1 418 I'm a teapot\x0d\n\x0d\n"
 info: "0 Unknown"
 -/
 #guard_msgs in
-#eval encodeStr (Status.other 0 ⟨"Unknown", by decide⟩)
+#eval encodeStr (Status.other ⟨0, "Unknown", by decide⟩)
 
 -- Status.other that overlaps with a named status (100 = Continue)
 /--
 info: "100 Unknown"
 -/
 #guard_msgs in
-#eval encodeStr (Status.other 100 ⟨"Unknown", by decide⟩)
+#eval encodeStr (Status.other ⟨100, "Unknown", by decide⟩)
 
 -- Status.other max UInt16
 /--
 info: "65535 Unknown"
 -/
 #guard_msgs in
-#eval encodeStr (Status.other 65535 ⟨"Unknown", by decide⟩)
+#eval encodeStr (Status.other ⟨65535, "Unknown", by decide⟩)
 
 -- Non-standard status code in the middle
 /--
 info: "299 Unknown"
 -/
 #guard_msgs in
-#eval encodeStr (Status.other 299 ⟨"Unknown", by decide⟩)
+#eval encodeStr (Status.other ⟨299, "Unknown", by decide⟩)
 
 /-! ## Edge cases: Chunk size hex encoding -/
 
@@ -431,28 +431,28 @@ info: "3;marker\x0d\nabc\x0d\n"
 info: "3;key=\x0d\nabc\x0d\n"
 -/
 #guard_msgs in
-#eval encodeStr (Chunk.ofByteArray "abc".toUTF8 |>.withExtension (Chunk.ExtensionName.mk "key") (.ofString! ""))
+#eval encodeStr (Chunk.ofByteArray "abc".toUTF8 |>.insertExtension (Chunk.ExtensionName.mk "key") (.ofString! ""))
 
 -- Extension value that is all token chars (no quoting needed)
 /--
 info: "3;key=abc123\x0d\nabc\x0d\n"
 -/
 #guard_msgs in
-#eval encodeStr (Chunk.ofByteArray "abc".toUTF8 |>.withExtension (Chunk.ExtensionName.mk "key") (.ofString! "abc123"))
+#eval encodeStr (Chunk.ofByteArray "abc".toUTF8 |>.insertExtension (Chunk.ExtensionName.mk "key") (.ofString! "abc123"))
 
 -- Extension value with space (must be quoted)
 /--
 info: "3;key=\"hello world\"\x0d\nabc\x0d\n"
 -/
 #guard_msgs in
-#eval encodeStr (Chunk.ofByteArray "abc".toUTF8 |>.withExtension (Chunk.ExtensionName.mk "key") (.ofString! "hello world"))
+#eval encodeStr (Chunk.ofByteArray "abc".toUTF8 |>.insertExtension (Chunk.ExtensionName.mk "key") (.ofString! "hello world"))
 
 -- Extension value with backslash (must be escaped)
 /--
 info: "3;key=\"a\\\\b\"\x0d\nabc\x0d\n"
 -/
 #guard_msgs in
-#eval encodeStr (Chunk.ofByteArray "abc".toUTF8 |>.withExtension (Chunk.ExtensionName.mk "key") (.ofString! "a\\b"))
+#eval encodeStr (Chunk.ofByteArray "abc".toUTF8 |>.insertExtension (Chunk.ExtensionName.mk "key") (.ofString! "a\\b"))
 
 -- Multiple extensions with no value and with value
 /--
