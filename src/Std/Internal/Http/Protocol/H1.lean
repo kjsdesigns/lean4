@@ -246,18 +246,24 @@ exactly one value, with absolute-form authority taking precedence over Host.
 private def hasSingleAcceptedHostHeader (message : Message.Head .receiving) : Bool :=
   match message.headers.getAll? Header.Name.host with
   | some headers =>
-      if h : headers.size > 0 then
-        let hostValue := headers[0]'h
-
-        if hostValue.value.isEmpty then
-          -- RFC 9112 §3.2 allows an empty Host when authority is undefined.
-          true
-        else
-          match (Std.Http.URI.Parser.parseHostHeader <* eof).run hostValue.value.toUTF8 with
-          | .ok _ => true
-          | .error _ => false
-      else
+      if headers.size != 1 then
         false
+      else
+        match headers[0]? with
+        | none => false
+        | some hostValue =>
+            match message.uri with
+            | .absoluteForm _ _ =>
+                -- RFC 9112 §3.2: absolute-form authority overrides Host.
+                true
+            | _ =>
+                if hostValue.value.isEmpty then
+                  -- RFC 9112 §3.2 allows an empty Host when authority is undefined.
+                  true
+                else
+                  match (Std.Http.URI.Parser.parseHostHeader <* eof).run hostValue.value.toUTF8 with
+                  | .ok _ => true
+                  | .error _ => false
   | none => false
 
 /--
