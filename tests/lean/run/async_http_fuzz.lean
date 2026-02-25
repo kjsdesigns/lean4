@@ -49,6 +49,11 @@ def runWithTimeout {α : Type} (name : String) (timeoutMs : Nat := 15000) (actio
 
   loop ticks
 
+def closeChannelIdempotent {α : Type} (ch : Std.CloseableChannel α) : IO Unit := do
+  match ← EIO.toBaseIO ch.close with
+  | .ok _ => pure ()
+  | .error .alreadyClosed => pure ()
+  | .error err => throw <| IO.userError (toString err)
 
 def sendRaw
     (client : Mock.Client)
@@ -70,7 +75,7 @@ def sendRawAndClose
     (handler : TestHandler)
     (config : Config := defaultConfig) : IO ByteArray := Async.block do
   client.send raw
-  client.getSendChan.close
+  closeChannelIdempotent client.getSendChan
   Std.Http.Server.serveConnection server handler config
     |>.run
   let res ← client.recv?
@@ -90,7 +95,7 @@ def sendFragmentedAndClose
   for part in parts do
     client.send part
 
-  client.getSendChan.close
+  closeChannelIdempotent client.getSendChan
   await serverTask
 
   let res ← client.recv?
@@ -303,7 +308,7 @@ def runPipelinedReadAll
     Response.ok |>.text uri
 
   client.send raw
-  client.getSendChan.close
+  closeChannelIdempotent client.getSendChan
 
   Std.Http.Server.serveConnection server handler config
     |>.run
