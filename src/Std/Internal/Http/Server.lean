@@ -143,13 +143,14 @@ and TCP connections, and returns a `Server` structure that can be used to cancel
 def serve {σ : Type} [Handler σ]
     (addr : Net.SocketAddress)
     (handler : σ)
-    (config : Config := {}) (backlog : UInt32 := 128) : Async Server := do
+    (config : Config := {}) (backlog : UInt32 := 1024) : Async Server := do
 
   let httpServer ← Server.new config
 
   let server ← Socket.Server.mk
   server.bind addr
   server.listen backlog
+  server.noDelay
 
   let runServer := do
     frameCancellation httpServer (action := do
@@ -166,17 +167,13 @@ def serve {σ : Type} [Handler σ]
             | .ok addr => pure <| Extensions.empty.insert (Server.RemoteAddr.mk addr)
             | .error _ => pure Extensions.empty
 
-          if let some limit := httpServer.connectionLimit then
-            let permit ← limit.acquire
-            await permit
-            ContextAsync.background
-              (frameCancellation httpServer (releaseConnectionPermit := true)
-                (action := serveConnection client handler config extensions))
-          else
-            ContextAsync.background
-              (frameCancellation httpServer (releaseConnectionPermit := false)
-                (action := serveConnection client handler config extensions))
-
+          ContextAsync.background
+            (frameCancellation httpServer (releaseConnectionPermit := httpServer.connectionLimit.isSome)
+              (action := do
+                if let some limit := httpServer.connectionLimit then
+                  let permit ← limit.acquire
+                  await permit
+                serveConnection client handler config extensions))
         | none => break
     )
 
