@@ -89,7 +89,8 @@ structure Config where
   generateDate : Bool := true
 
   /--
-  The server name.
+  The `Server` header value injected into outgoing responses.
+  `none` suppresses the header entirely.
   -/
   serverName : Option Header.Value := some (.mk "LeanHTTP/1.1")
 
@@ -117,6 +118,12 @@ structure Config where
   Maximum number of spaces in delimiter sequences (default: 16)
   -/
   maxSpaceSequence : Nat := 16
+
+  /--
+  Maximum number of leading empty lines (bare CRLF) to skip before a request-line
+  (RFC 9112 §2.2 robustness). Default: 8.
+  -/
+  maxLeadingEmptyLines : Nat := 8
 
   /--
   Maximum length of chunk extension name (default: 256 bytes)
@@ -157,6 +164,7 @@ structure Config where
   Maximum number of extensions on a single chunk-size line (default: 16).
   -/
   maxChunkExtensions : Nat := 16
+
 namespace Config
 
 /--
@@ -165,11 +173,16 @@ Converts to HTTP/1.1 config.
 def toH1Config (config : Config) : Protocol.H1.Config where
   maxMessages := config.maxRequests
   maxHeaders := config.maxHeaders
+  maxHeaderBytes := config.maxHeaderBytes
+  enableKeepAlive := config.enableKeepAlive
+  serverName := config.serverName
   maxUriLength := config.maxUriLength
   maxStartLineLength := config.maxStartLineLength
   maxHeaderNameLength := config.maxHeaderNameLength
   maxHeaderValueLength := config.maxHeaderValueLength
   maxSpaceSequence := config.maxSpaceSequence
+  maxLeadingEmptyLines := config.maxLeadingEmptyLines
+  maxChunkExtensions := config.maxChunkExtensions
   maxChunkExtNameLength := config.maxChunkExtNameLength
   maxChunkExtValueLength := config.maxChunkExtValueLength
   maxChunkLineLength := config.maxChunkLineLength
@@ -177,9 +190,5 @@ def toH1Config (config : Config) : Protocol.H1.Config where
   maxBodySize := config.maxBodySize
   maxReasonPhraseLength := config.maxReasonPhraseLength
   maxTrailerHeaders := config.maxTrailerHeaders
-  enableKeepAlive := config.enableKeepAlive
-  identityHeader := config.serverName
-  maxChunkExtensions := config.maxChunkExtensions
-  maxHeaderBytes := config.maxHeaderBytes
 
 end Std.Http.Config

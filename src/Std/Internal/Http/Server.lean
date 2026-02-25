@@ -155,6 +155,14 @@ def serve {σ : Type} [Handler σ]
   let runServer := do
     frameCancellation httpServer (action := do
       while true do
+        let permitAcquired ←
+          if let some limit := httpServer.connectionLimit then
+            let permit ← limit.acquire
+            await permit
+            pure true
+          else
+            pure false
+
         let result ← Selectable.one #[
           .case (server.acceptSelector) (fun x => pure <| some x),
           .case (← ContextAsync.doneSelector) (fun _ => pure none)
@@ -168,13 +176,14 @@ def serve {σ : Type} [Handler σ]
             | .error _ => pure Extensions.empty
 
           ContextAsync.background
-            (frameCancellation httpServer (releaseConnectionPermit := httpServer.connectionLimit.isSome)
+            (frameCancellation httpServer (releaseConnectionPermit := permitAcquired)
               (action := do
-                if let some limit := httpServer.connectionLimit then
-                  let permit ← limit.acquire
-                  await permit
                 serveConnection client handler config extensions))
-        | none => break
+        | none =>
+          if permitAcquired then
+            if let some limit := httpServer.connectionLimit then
+              limit.release
+          break
     )
 
   background (runServer httpServer.context)

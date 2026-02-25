@@ -248,17 +248,34 @@ private def handle
       pendingHead := none
 
     if requiresData ∨ waitingResponse ∨ respStream.isSome ∨ machine.canPullBody then
-      let socket := some socket
       let answer := if waitingResponse then some response else none
 
+      let requestBodyOpen ←
+        if machine.canPullBody then
+          pure !(← Body.Writer.isClosed requestOutgoing)
+        else
+          pure false
+
+      let requestBodyInterested ←
+        if machine.canPullBody ∧ requestBodyOpen then
+          Body.Writer.hasInterest requestOutgoing
+        else
+          pure false
+
       let requestBody ←
-        if machine.canPullBodyNow then
-          if ← Body.Writer.isClosed requestOutgoing then
-            pure none
-          else
-            pure (some requestOutgoing)
+        if machine.canPullBodyNow ∧ requestBodyOpen then
+          pure (some requestOutgoing)
         else
           pure none
+
+      let shouldPollSocket :=
+        requiresData ∨
+        !waitingResponse ∨
+        respStream.isSome ∨
+        machine.writer.sentMessage ∨
+        (machine.canPullBody ∧ requestBodyInterested)
+
+      let socket := if shouldPollSocket then some socket else none
 
       requiresData := false
 
