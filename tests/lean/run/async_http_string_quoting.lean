@@ -83,14 +83,3 @@ private def isQuotedString (s : String) : Bool :=
 #guard unquoteHttpString? (quoteHttpString! "\"") = some "\""
 #guard unquoteHttpString? (quoteHttpString! "\\") = some "\\"
 #guard unquoteHttpString? (quoteHttpString! " !#$%&'()*+,-./:;<=>?@[\\]^_`{|}~") = some " !#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
-
-private def singleCharRoundTrip (ch : Char) : Bool :=
-  let s := String.singleton ch
-  let quotable := Std.Http.Internal.Char.quotedStringChar ch
-  match quoteHttpString? s with
-  | some q =>
-      quotable &&
-      isQuotedString q &&
-      (unquoteHttpString? q == some s)
-  | none =>
-      !quotable
