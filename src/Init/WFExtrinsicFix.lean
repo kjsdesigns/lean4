@@ -54,42 +54,42 @@ A fixpoint combinator that can be used to construct recursive functions with an 
 of termination.
 
 Given a relation {name}`R` and a fixpoint functional {name}`F` which must be decreasing with respect
-to {name}`R`, {lean}`totalExtrinsicFix R F` is the recursive function obtained by having {name}`F` call
+to {name}`R`, {lean}`extrinsicFix R F` is the recursive function obtained by having {name}`F` call
 itself recursively.
 
-If {name}`R` is not well-founded, {lean}`totalExtrinsicFix R F` might run forever. In this case,
+If {name}`R` is not well-founded, {lean}`extrinsicFix R F` might run forever. In this case,
 nothing interesting can be proved about the recursive function; it is opaque.
 
-If {name}`R` _is_ well-founded, {lean}`totalExtrinsicFix R F` is equivalent to
+If {name}`R` _is_ well-founded, {lean}`extrinsicFix R F` is equivalent to
 {lean}`WellFounded.fix _ F`, logically and regarding its termination behavior.
 -/
 @[implemented_by opaqueFix]
-public def totalExtrinsicFix [∀ a, Nonempty (C a)] (R : α → α → Prop)
+public def extrinsicFix [∀ a, Nonempty (C a)] (R : α → α → Prop)
     (F : ∀ a, (∀ a', R a' a → C a') → C a) (a : α) : C a :=
   open scoped Classical in
   if h : WellFounded R then
     h.fix F a
   else
     -- Return `opaqueFix R F a` so that `implemented_by opaqueFix` is sound.
-    -- In effect, `totalExtrinsicFix` is opaque if `WellFounded R` is false.
+    -- In effect, `extrinsicFix` is opaque if `WellFounded R` is false.
     opaqueFix R F a
 
-public theorem totalExtrinsicFix_eq_fix [∀ a, Nonempty (C a)] {R : α → α → Prop}
+public theorem extrinsicFix_eq_fix [∀ a, Nonempty (C a)] {R : α → α → Prop}
     {F : ∀ a, (∀ a', R a' a → C a') → C a}
     (wf : WellFounded R) {a : α} :
-    totalExtrinsicFix R F a = wf.fix F a := by
-  simp only [totalExtrinsicFix, dif_pos wf]
+    extrinsicFix R F a = wf.fix F a := by
+  simp only [extrinsicFix, dif_pos wf]
 
-public theorem totalExtrinsicFix_eq_apply [∀ a, Nonempty (C a)] {R : α → α → Prop}
+public theorem extrinsicFix_eq_apply [∀ a, Nonempty (C a)] {R : α → α → Prop}
     {F : ∀ a, (∀ a', R a' a → C a') → C a} (h : WellFounded R) {a : α} :
-    totalExtrinsicFix R F a = F a (fun a _ => totalExtrinsicFix R F a) := by
-  simp only [totalExtrinsicFix, dif_pos h]
+    extrinsicFix R F a = F a (fun a _ => extrinsicFix R F a) := by
+  simp only [extrinsicFix, dif_pos h]
   rw [WellFounded.fix_eq]
 
-public theorem totalExtrinsicFix_invImage {α' : Sort _} [∀ a, Nonempty (C a)] (R : α → α → Prop) (f : α' → α)
+public theorem extrinsicFix_invImage {α' : Sort _} [∀ a, Nonempty (C a)] (R : α → α → Prop) (f : α' → α)
     (F : ∀ a, (∀ a', R a' a → C a') → C a) (F' : ∀ a, (∀ a', R (f a') (f a) → C (f a')) → C (f a))
     (h : ∀ a r, F (f a) r = F' a fun a' hR => r (f a') hR) (a : α') (h : WellFounded R) :
-    totalExtrinsicFix (C := (C <| f ·)) (InvImage R f) F' a = totalExtrinsicFix (C := C) R F (f a) := by
+    extrinsicFix (C := (C <| f ·)) (InvImage R f) F' a = extrinsicFix (C := C) R F (f a) := by
   have h' := h
   rcases h with ⟨h⟩
   specialize h (f a)
@@ -97,7 +97,7 @@ public theorem totalExtrinsicFix_invImage {α' : Sort _} [∀ a, Nonempty (C a)]
   clear h
   induction this
   rename_i ih
-  rw [totalExtrinsicFix_eq_apply, totalExtrinsicFix_eq_apply, h]
+  rw [extrinsicFix_eq_apply, extrinsicFix_eq_apply, h]
   · congr; ext a x
     rw [ih _ x]
   · assumption
@@ -106,14 +106,14 @@ public theorem totalExtrinsicFix_invImage {α' : Sort _} [∀ a, Nonempty (C a)]
 /--
 A fixpoint combinator that allows for deferred proofs of termination.
 
-{lean}`totalExtrinsicFix R F` is function implemented as the loop
-{lean}`totalExtrinsicFix R F a = F a (fun a _ => totalExtrinsicFix R F a)`.
+{lean}`extrinsicFix R F` is function implemented as the loop
+{lean}`extrinsicFix R F a = F a (fun a _ => extrinsicFix R F a)`.
 
-If the loop can be shown to be well-founded, {name}`totalExtrinsicFix_eq_apply` proves that it satisfies the
-fixpoint equation. Otherwise, {lean}`totalExtrinsicFix R F` is opaque, i.e., it is impossible to prove
+If the loop can be shown to be well-founded, {name}`extrinsicFix_eq_apply` proves that it satisfies the
+fixpoint equation. Otherwise, {lean}`extrinsicFix R F` is opaque, i.e., it is impossible to prove
 nontrivial properties about it.
 -/
-add_decl_doc totalExtrinsicFix
+add_decl_doc extrinsicFix
 
 /--
 The function implemented as the loop
@@ -141,51 +141,51 @@ A fixpoint combinator that can be used to construct recursive functions of arity
 *extrinsic* proof of termination.
 
 Given a relation {name}`R` and a fixpoint functional {name}`F` which must be decreasing with respect
-to {name}`R`, {lean}`totalExtrinsicFix₂ R F` is the recursive function obtained by having {name}`F` call
+to {name}`R`, {lean}`extrinsicFix₂ R F` is the recursive function obtained by having {name}`F` call
 itself recursively.
 
-If {name}`R` is not well-founded, {lean}`totalExtrinsicFix₂ R F` might run forever. In this case,
+If {name}`R` is not well-founded, {lean}`extrinsicFix₂ R F` might run forever. In this case,
 nothing interesting can be proved about the recursive function; it is opaque.
 
-If {name}`R` _is_ well-founded, {lean}`totalExtrinsicFix₂ R F` is equivalent to a well-founded recursive
+If {name}`R` _is_ well-founded, {lean}`extrinsicFix₂ R F` is equivalent to a well-founded recursive
 function, logically and regarding its termination behavior.
 -/
 @[implemented_by opaqueFix₂]
-public def totalExtrinsicFix₂ [∀ a b, Nonempty (C₂ a b)]
+public def extrinsicFix₂ [∀ a b, Nonempty (C₂ a b)]
     (R : (a : α) ×' β a → (a : α) ×' β a → Prop)
     (F : (a : α) → (b : β a) → ((a' : α) → (b' : β a') → R ⟨a', b'⟩ ⟨a, b⟩ → C₂ a' b') → C₂ a b)
     (a : α) (b : β a) :
     C₂ a b :=
   let F' (x : PSigma β) (G : (y : PSigma β) → R y x → C₂ y.1 y.2) : C₂ x.1 x.2 :=
     F x.1 x.2 (fun a b => G ⟨a, b⟩)
-  totalExtrinsicFix (C := fun x : PSigma β => C₂ x.1 x.2) R F' ⟨a, b⟩
+  extrinsicFix (C := fun x : PSigma β => C₂ x.1 x.2) R F' ⟨a, b⟩
 
-public theorem totalExtrinsicFix₂_eq_fix [∀ a b, Nonempty (C₂ a b)]
+public theorem extrinsicFix₂_eq_fix [∀ a b, Nonempty (C₂ a b)]
     {R : (a : α) ×' β a → (a : α) ×' β a → Prop}
     {F : ∀ a b, (∀ a' b', R ⟨a', b'⟩ ⟨a, b⟩ → C₂ a' b') → C₂ a b}
     (wf : WellFounded R) {a b} :
-    totalExtrinsicFix₂ R F a b = wf.fix (fun x G => F x.1 x.2 (fun a b h => G ⟨a, b⟩ h)) ⟨a, b⟩ := by
-  rw [totalExtrinsicFix₂, totalExtrinsicFix_eq_fix wf]
+    extrinsicFix₂ R F a b = wf.fix (fun x G => F x.1 x.2 (fun a b h => G ⟨a, b⟩ h)) ⟨a, b⟩ := by
+  rw [extrinsicFix₂, extrinsicFix_eq_fix wf]
 
-public theorem totalExtrinsicFix₂_eq_apply [∀ a b, Nonempty (C₂ a b)]
+public theorem extrinsicFix₂_eq_apply [∀ a b, Nonempty (C₂ a b)]
     {R : (a : α) ×' β a → (a : α) ×' β a → Prop}
     {F : (a : α) → (b : β a) → ((a' : α) → (b' : β a') → R ⟨a', b'⟩ ⟨a, b⟩ → C₂ a' b') → C₂ a b}
     (wf : WellFounded R) {a : α} {b : β a} :
-    totalExtrinsicFix₂ R F a b = F a b (fun a' b' _ => totalExtrinsicFix₂ R F a' b') := by
-  rw [totalExtrinsicFix₂, totalExtrinsicFix_eq_apply wf]
+    extrinsicFix₂ R F a b = F a b (fun a' b' _ => extrinsicFix₂ R F a' b') := by
+  rw [extrinsicFix₂, extrinsicFix_eq_apply wf]
   rfl
 
 /--
 A fixpoint combinator that allows for deferred proofs of termination.
 
-{lean}`totalExtrinsicFix₂ R F` is function implemented as the loop
-{lean}`totalExtrinsicFix₂ R F a b = F a b (fun a' b' _ => totalExtrinsicFix₂ R F a' b')`.
+{lean}`extrinsicFix₂ R F` is function implemented as the loop
+{lean}`extrinsicFix₂ R F a b = F a b (fun a' b' _ => extrinsicFix₂ R F a' b')`.
 
-If the loop can be shown to be well-founded, {name}`totalExtrinsicFix₂_eq_apply` proves that it satisfies the
-fixpoint equation. Otherwise, {lean}`totalExtrinsicFix₂ R F` is opaque, i.e., it is impossible to prove
+If the loop can be shown to be well-founded, {name}`extrinsicFix₂_eq_apply` proves that it satisfies the
+fixpoint equation. Otherwise, {lean}`extrinsicFix₂ R F` is opaque, i.e., it is impossible to prove
 nontrivial properties about it.
 -/
-add_decl_doc totalExtrinsicFix₂
+add_decl_doc extrinsicFix₂
 
 /--
 The function implemented as the loop
@@ -213,17 +213,17 @@ A fixpoint combinator that can be used to construct recursive functions of arity
 *extrinsic* proof of termination.
 
 Given a relation {name}`R` and a fixpoint functional {name}`F` which must be decreasing with respect
-to {name}`R`, {lean}`totalExtrinsicFix₃ R F` is the recursive function obtained by having {name}`F` call
+to {name}`R`, {lean}`extrinsicFix₃ R F` is the recursive function obtained by having {name}`F` call
 itself recursively.
 
-If {name}`R` is not well-founded, {lean}`totalExtrinsicFix₃ R F` might run forever. In this case,
+If {name}`R` is not well-founded, {lean}`extrinsicFix₃ R F` might run forever. In this case,
 nothing interesting can be proved about the recursive function; it is opaque.
 
-If {name}`R` _is_ well-founded, {lean}`totalExtrinsicFix₃ R F` is equivalent to a well-founded recursive
+If {name}`R` _is_ well-founded, {lean}`extrinsicFix₃ R F` is equivalent to a well-founded recursive
 function, logically and regarding its termination behavior.
 -/
 @[implemented_by opaqueFix₃]
-public def totalExtrinsicFix₃ [∀ a b c, Nonempty (C₃ a b c)]
+public def extrinsicFix₃ [∀ a b c, Nonempty (C₃ a b c)]
     (R : (a : α) ×' (b : β a) ×' γ a b → (a : α) ×' (b : β a) ×' γ a b → Prop)
     (F : ∀ (a b c), (∀ (a' b' c'), R ⟨a', b', c'⟩ ⟨a, b, c⟩ → C₃ a' b' c') → C₃ a b c)
     (a : α) (b : β a) (c : γ a b) :
@@ -231,60 +231,60 @@ public def totalExtrinsicFix₃ [∀ a b c, Nonempty (C₃ a b c)]
   let F' (x : (a : α) ×' (b : β a) ×' γ a b) (G : (y : (a : α) ×' (b : β a) ×' γ a b) → R y x → C₃ y.1 y.2.1 y.2.2) :
       C₃ x.1 x.2.1 x.2.2 :=
     F x.1 x.2.1 x.2.2 (fun a b c => G ⟨a, b, c⟩)
-  totalExtrinsicFix (C := fun x : (a : α) ×' (b : β a) ×' γ a b => C₃ x.1 x.2.1 x.2.2) R F' ⟨a, b, c⟩
+  extrinsicFix (C := fun x : (a : α) ×' (b : β a) ×' γ a b => C₃ x.1 x.2.1 x.2.2) R F' ⟨a, b, c⟩
 
-public theorem totalExtrinsicFix₃_eq_fix [∀ a b c, Nonempty (C₃ a b c)]
+public theorem extrinsicFix₃_eq_fix [∀ a b c, Nonempty (C₃ a b c)]
     {R : (a : α) ×' (b : β a) ×' γ a b → (a : α) ×' (b : β a) ×' γ a b → Prop}
     {F : ∀ a b c, (∀ a' b' c', R ⟨a', b', c'⟩ ⟨a, b, c⟩ → C₃ a' b' c') → C₃ a b c}
     (wf : WellFounded R) {a b c} :
-    totalExtrinsicFix₃ R F a b c = wf.fix (fun x G => F x.1 x.2.1 x.2.2 (fun a b c h => G ⟨a, b, c⟩ h)) ⟨a, b, c⟩ := by
-  rw [totalExtrinsicFix₃, totalExtrinsicFix_eq_fix wf]
+    extrinsicFix₃ R F a b c = wf.fix (fun x G => F x.1 x.2.1 x.2.2 (fun a b c h => G ⟨a, b, c⟩ h)) ⟨a, b, c⟩ := by
+  rw [extrinsicFix₃, extrinsicFix_eq_fix wf]
 
-public theorem totalExtrinsicFix₃_eq_apply [∀ a b c, Nonempty (C₃ a b c)]
+public theorem extrinsicFix₃_eq_apply [∀ a b c, Nonempty (C₃ a b c)]
     {R : (a : α) ×' (b : β a) ×' γ a b → (a : α) ×' (b : β a) ×' γ a b → Prop}
     {F : ∀ (a b c), (∀ (a' b' c'), R ⟨a', b', c'⟩ ⟨a, b, c⟩ → C₃ a' b' c') → C₃ a b c}
     (wf : WellFounded R) {a : α} {b : β a} {c : γ a b} :
-    totalExtrinsicFix₃ R F a b c = F a b c (fun a b c _ => totalExtrinsicFix₃ R F a b c) := by
-  rw [totalExtrinsicFix₃, totalExtrinsicFix_eq_apply wf]
+    extrinsicFix₃ R F a b c = F a b c (fun a b c _ => extrinsicFix₃ R F a b c) := by
+  rw [extrinsicFix₃, extrinsicFix_eq_apply wf]
   rfl
 
 /--
 A fixpoint combinator that allows for deferred proofs of termination.
 
-{lean}`totalExtrinsicFix₃ R F` is function implemented as the loop
-{lean}`totalExtrinsicFix₃ R F a b c = F a b c (fun a b c _ => totalExtrinsicFix₃ R F a b c)`.
+{lean}`extrinsicFix₃ R F` is function implemented as the loop
+{lean}`extrinsicFix₃ R F a b c = F a b c (fun a b c _ => extrinsicFix₃ R F a b c)`.
 
-If the loop can be shown to be well-founded, {name}`totalExtrinsicFix₃_eq_apply` proves that it satisfies the
-fixpoint equation. Otherwise, {lean}`totalExtrinsicFix₃ R F` is opaque, i.e., it is impossible to prove
+If the loop can be shown to be well-founded, {name}`extrinsicFix₃_eq_apply` proves that it satisfies the
+fixpoint equation. Otherwise, {lean}`extrinsicFix₃ R F` is opaque, i.e., it is impossible to prove
 nontrivial properties about it.
 -/
-add_decl_doc totalExtrinsicFix₃
+add_decl_doc extrinsicFix₃
 
 /--
 A fixpoint combinator that can be used to construct recursive functions with an
 *extrinsic, partial* proof of termination.
 
 Given a relation {name}`R` and a fixpoint functional {name}`F` which must be decreasing with respect
-to {name}`R`, {lean}`extrinsicFix R F` is the recursive function obtained by having {name}`F` call
+to {name}`R`, {lean}`partialExtrinsicFix R F` is the recursive function obtained by having {name}`F` call
 itself recursively.
 
-For each input {given}`a`, {lean}`extrinsicFix R F a` can be verified given a *partial* termination
+For each input {given}`a`, {lean}`partialExtrinsicFix R F a` can be verified given a *partial* termination
 proof. The precise semantics are as follows.
 
-If {lean}`Acc R a` does not hold, {lean}`extrinsicFix R F a` might run forever. In this case,
+If {lean}`Acc R a` does not hold, {lean}`partialExtrinsicFix R F a` might run forever. In this case,
 nothing interesting can be proved about the recursive function; it is opaque and behaves like a
 recursive function with the `partial` modifier.
 
-If {lean}`Acc R a` _does_ hold, {lean}`extrinsicFix R F a` is equivalent to
-{lean}`F a (fun a' _ => extrinsicFix R F a')`, both logically and regarding its termination behavior.
+If {lean}`Acc R a` _does_ hold, {lean}`partialExtrinsicFix R F a` is equivalent to
+{lean}`F a (fun a' _ => partialExtrinsicFix R F a')`, both logically and regarding its termination behavior.
 
-In particular, if {name}`R` is well-founded, {lean}`extrinsicFix R F a` is equivalent to
+In particular, if {name}`R` is well-founded, {lean}`partialExtrinsicFix R F a` is equivalent to
 {lean}`WellFounded.fix _ F`.
 -/
 @[inline]
-public def extrinsicFix [∀ a, Nonempty (C a)] (R : α → α → Prop)
+public def partialExtrinsicFix [∀ a, Nonempty (C a)] (R : α → α → Prop)
     (F : ∀ a, (∀ a', R a' a → C a') → C a) (a : α) : C a :=
-  totalExtrinsicFix (α := { a' : α // a' = a ∨ TransGen R a' a }) (C := (C ·.1))
+  extrinsicFix (α := { a' : α // a' = a ∨ TransGen R a' a }) (C := (C ·.1))
       (fun p q => R p.1 q.1)
       (fun a recur => F a.1 fun a' hR => recur ⟨a', by
         rcases a.property with ha | ha
@@ -294,11 +294,11 @@ public def extrinsicFix [∀ a, Nonempty (C a)] (R : α → α → Prop)
           apply TransGen.single
           assumption⟩ ‹_›) ⟨a, Or.inl rfl⟩
 
-public theorem extrinsicFix_eq_apply_of_acc [∀ a, Nonempty (C a)] {R : α → α → Prop}
+public theorem partialExtrinsicFix_eq_apply_of_acc [∀ a, Nonempty (C a)] {R : α → α → Prop}
     {F : ∀ a, (∀ a', R a' a → C a') → C a} {a : α} (h : Acc R a) :
-    extrinsicFix R F a = F a (fun a' _ => extrinsicFix R F a') := by
-  simp only [extrinsicFix]
-  rw [totalExtrinsicFix_eq_apply]
+    partialExtrinsicFix R F a = F a (fun a' _ => partialExtrinsicFix R F a') := by
+  simp only [partialExtrinsicFix]
+  rw [extrinsicFix_eq_apply]
   congr; ext a' hR
   let f (x : { x : α // x = a' ∨ TransGen R x a' }) : { x : α // x = a ∨ TransGen R x a } :=
     ⟨x.val, by
@@ -310,7 +310,7 @@ public theorem extrinsicFix_eq_apply_of_acc [∀ a, Nonempty (C a)] {R : α → 
         apply Or.inr
         refine TransGen.trans h ?_
         exact .single hR⟩
-  have := totalExtrinsicFix_invImage (C := (C ·.val)) (R := (R ·.1 ·.1)) (f := f)
+  have := extrinsicFix_invImage (C := (C ·.val)) (R := (R ·.1 ·.1)) (f := f)
     (F := fun a r => F a.1 fun a' hR => r ⟨a', Or.inr (by rcases a.2 with ha | ha; exact .single (ha ▸ hR); exact .trans (.single hR) ‹_›)⟩ hR)
     (F' := fun a r => F a.1 fun a' hR => r ⟨a', by rcases a.2 with ha | ha; exact .inr (.single (ha ▸ hR)); exact .inr (.trans (.single hR) ‹_›)⟩ hR)
   unfold InvImage at this
@@ -329,18 +329,18 @@ public theorem extrinsicFix_eq_apply_of_acc [∀ a, Nonempty (C a)] {R : α → 
     · rwa [hx]
     · exact h.inv_of_transGen hx
 
-public theorem extrinsicFix_eq_apply [∀ a, Nonempty (C a)] {R : α → α → Prop}
+public theorem partialExtrinsicFix_eq_apply [∀ a, Nonempty (C a)] {R : α → α → Prop}
     {F : ∀ a, (∀ a', R a' a → C a') → C a} {a : α} (wf : WellFounded R) :
-    extrinsicFix R F a = F a (fun a' _ => extrinsicFix R F a') :=
-  extrinsicFix_eq_apply_of_acc (wf.apply _)
+    partialExtrinsicFix R F a = F a (fun a' _ => partialExtrinsicFix R F a') :=
+  partialExtrinsicFix_eq_apply_of_acc (wf.apply _)
 
-public theorem extrinsicFix_eq_fix [∀ a, Nonempty (C a)] {R : α → α → Prop}
+public theorem partialExtrinsicFix_eq_fix [∀ a, Nonempty (C a)] {R : α → α → Prop}
     {F : ∀ a, (∀ a', R a' a → C a') → C a}
     (wf : WellFounded R) {a : α} :
-    extrinsicFix R F a = wf.fix F a := by
+    partialExtrinsicFix R F a = wf.fix F a := by
   have h := wf.apply a
   induction h with | intro a' h ih
-  rw [extrinsicFix_eq_apply_of_acc (Acc.intro _ h), WellFounded.fix_eq]
+  rw [partialExtrinsicFix_eq_apply_of_acc (Acc.intro _ h), WellFounded.fix_eq]
   congr 1; ext a'' hR
   exact ih _ hR
 
@@ -349,30 +349,30 @@ A 2-ary fixpoint combinator that can be used to construct recursive functions wi
 *extrinsic, partial* proof of termination.
 
 Given a relation {name}`R` and a fixpoint functional {name}`F` which must be decreasing with respect
-to {name}`R`, {lean}`extrinsicFix₂ R F` is the recursive function obtained by having {name}`F` call
+to {name}`R`, {lean}`partialExtrinsicFix₂ R F` is the recursive function obtained by having {name}`F` call
 itself recursively.
 
-For each pair of inputs {given}`a` and {given}`b`, {lean}`extrinsicFix₂ R F a b` can be verified
+For each pair of inputs {given}`a` and {given}`b`, {lean}`partialExtrinsicFix₂ R F a b` can be verified
 given a *partial* termination proof. The precise semantics are as follows.
 
-If {lean}`Acc R ⟨a, b⟩ ` does not hold, {lean}`extrinsicFix₂ R F a b` might run forever. In this
+If {lean}`Acc R ⟨a, b⟩ ` does not hold, {lean}`partialExtrinsicFix₂ R F a b` might run forever. In this
 case, nothing interesting can be proved about the recursive function; it is opaque and behaves like
 a recursive function with the `partial` modifier.
 
-If {lean}`Acc R ⟨a, b⟩` _does_ hold, {lean}`extrinsicFix₂ R F a b` is equivalent to
-{lean}`F a b (fun a' b' _ => extrinsicFix₂ R F a' b')`, both logically and regarding its
+If {lean}`Acc R ⟨a, b⟩` _does_ hold, {lean}`partialExtrinsicFix₂ R F a b` is equivalent to
+{lean}`F a b (fun a' b' _ => partialExtrinsicFix₂ R F a' b')`, both logically and regarding its
 termination behavior.
 
-In particular, if {name}`R` is well-founded, {lean}`extrinsicFix₂ R F a b` is equivalent to
+In particular, if {name}`R` is well-founded, {lean}`partialExtrinsicFix₂ R F a b` is equivalent to
 a well-foundesd fixpoint.
 -/
 @[inline]
-public def extrinsicFix₂ [∀ a b, Nonempty (C₂ a b)]
+public def partialExtrinsicFix₂ [∀ a b, Nonempty (C₂ a b)]
     (R : (a : α) ×' β a → (a : α) ×' β a → Prop)
     (F : (a : α) → (b : β a) → ((a' : α) → (b' : β a') → R ⟨a', b'⟩ ⟨a, b⟩ → C₂ a' b') → C₂ a b)
     (a : α) (b : β a) :
     C₂ a b :=
-  totalExtrinsicFix₂ (α := α) (β := fun a' => { b' : β a' // (PSigma.mk a' b') = (PSigma.mk a b) ∨ TransGen R ⟨a', b'⟩ ⟨a, b⟩ })
+  extrinsicFix₂ (α := α) (β := fun a' => { b' : β a' // (PSigma.mk a' b') = (PSigma.mk a b) ∨ TransGen R ⟨a', b'⟩ ⟨a, b⟩ })
       (C₂ := (C₂ · ·.1))
       (fun p q => R ⟨p.1, p.2.1⟩ ⟨q.1, q.2.1⟩)
       (fun a b recur => F a b.1 fun a' b' hR => recur a' ⟨b', Or.inr (by
@@ -382,15 +382,15 @@ public def extrinsicFix₂ [∀ a b, Nonempty (C₂ a b)]
           apply TransGen.single
           assumption)⟩ ‹_›) a ⟨b, Or.inl rfl⟩
 
-public theorem extrinsicFix₂_eq_extrinsicFix [∀ a b, Nonempty (C₂ a b)]
+public theorem partialExtrinsicFix₂_eq_partialExtrinsicFix [∀ a b, Nonempty (C₂ a b)]
     {R : (a : α) ×' β a → (a : α) ×' β a → Prop}
     {F : (a : α) → (b : β a) → ((a' : α) → (b' : β a') → R ⟨a', b'⟩ ⟨a, b⟩ → C₂ a' b') → C₂ a b}
     {a : α} {b : β a} (h : Acc R ⟨a, b⟩) :
-    extrinsicFix₂ R F a b = extrinsicFix (α := PSigma β) (C := fun a => C₂ a.1 a.2) R (fun p r => F p.1 p.2 fun a' b' hR => r ⟨a', b'⟩ hR) ⟨a, b⟩ := by
-  simp only [extrinsicFix, extrinsicFix₂, totalExtrinsicFix₂]
+    partialExtrinsicFix₂ R F a b = partialExtrinsicFix (α := PSigma β) (C := fun a => C₂ a.1 a.2) R (fun p r => F p.1 p.2 fun a' b' hR => r ⟨a', b'⟩ hR) ⟨a, b⟩ := by
+  simp only [partialExtrinsicFix, partialExtrinsicFix₂, extrinsicFix₂]
   let f (x : ((a' : α) ×' { b' // PSigma.mk a' b' = ⟨a, b⟩ ∨ TransGen R ⟨a', b'⟩ ⟨a, b⟩ })) : { a' // a' = ⟨a, b⟩ ∨ TransGen R a' ⟨a, b⟩ } :=
     ⟨⟨x.1, x.2.1⟩, x.2.2⟩
-  have := totalExtrinsicFix_invImage (C := fun a => C₂ a.1.1 a.1.2) (f := f) (R := (R ·.1 ·.1))
+  have := extrinsicFix_invImage (C := fun a => C₂ a.1.1 a.1.2) (f := f) (R := (R ·.1 ·.1))
     (F := fun a r => F a.1.1 a.1.2 fun a' b' hR => r ⟨⟨a', b'⟩, ?refine_a⟩ hR)
     (F' := fun a r => F a.1 a.2.1 fun a' b' hR => r ⟨a', b', ?refine_b⟩ hR)
     (a := ⟨a, b, ?refine_c⟩); rotate_left
@@ -413,28 +413,28 @@ public theorem extrinsicFix₂_eq_extrinsicFix [∀ a b, Nonempty (C₂ a b)]
   · rwa [heq]
   · exact h.inv_of_transGen heq
 
-public theorem extrinsicFix₂_eq_apply_of_acc [∀ a b, Nonempty (C₂ a b)]
+public theorem partialExtrinsicFix₂_eq_apply_of_acc [∀ a b, Nonempty (C₂ a b)]
     {R : (a : α) ×' β a → (a : α) ×' β a → Prop}
     {F : (a : α) → (b : β a) → ((a' : α) → (b' : β a') → R ⟨a', b'⟩ ⟨a, b⟩ → C₂ a' b') → C₂ a b}
     {a : α} {b : β a} (wf : Acc R ⟨a, b⟩) :
-    extrinsicFix₂ R F a b = F a b (fun a' b' _ => extrinsicFix₂ R F a' b') := by
-  rw [extrinsicFix₂_eq_extrinsicFix wf, extrinsicFix_eq_apply_of_acc wf]
+    partialExtrinsicFix₂ R F a b = F a b (fun a' b' _ => partialExtrinsicFix₂ R F a' b') := by
+  rw [partialExtrinsicFix₂_eq_partialExtrinsicFix wf, partialExtrinsicFix_eq_apply_of_acc wf]
   congr 1; ext a' b' hR
-  rw [extrinsicFix₂_eq_extrinsicFix (wf.inv hR)]
+  rw [partialExtrinsicFix₂_eq_partialExtrinsicFix (wf.inv hR)]
 
-public theorem extrinsicFix₂_eq_apply [∀ a b, Nonempty (C₂ a b)]
+public theorem partialExtrinsicFix₂_eq_apply [∀ a b, Nonempty (C₂ a b)]
     {R : (a : α) ×' β a → (a : α) ×' β a → Prop}
     {F : (a : α) → (b : β a) → ((a' : α) → (b' : β a') → R ⟨a', b'⟩ ⟨a, b⟩ → C₂ a' b') → C₂ a b}
     {a : α} {b : β a} (wf : WellFounded R) :
-    extrinsicFix₂ R F a b = F a b (fun a' b' _ => extrinsicFix₂ R F a' b') :=
-  extrinsicFix₂_eq_apply_of_acc (wf.apply _)
+    partialExtrinsicFix₂ R F a b = F a b (fun a' b' _ => partialExtrinsicFix₂ R F a' b') :=
+  partialExtrinsicFix₂_eq_apply_of_acc (wf.apply _)
 
-public theorem extrinsicFix₂_eq_fix [∀ a b, Nonempty (C₂ a b)]
+public theorem partialExtrinsicFix₂_eq_fix [∀ a b, Nonempty (C₂ a b)]
     {R : (a : α) ×' β a → (a : α) ×' β a → Prop}
     {F : ∀ a b, (∀ a' b', R ⟨a', b'⟩ ⟨a, b⟩ → C₂ a' b') → C₂ a b}
     (wf : WellFounded R) {a b} :
-    extrinsicFix₂ R F a b = wf.fix (fun x G => F x.1 x.2 (fun a b h => G ⟨a, b⟩ h)) ⟨a, b⟩ := by
-  rw [extrinsicFix₂_eq_extrinsicFix (wf.apply _), extrinsicFix_eq_fix wf]
+    partialExtrinsicFix₂ R F a b = wf.fix (fun x G => F x.1 x.2 (fun a b h => G ⟨a, b⟩ h)) ⟨a, b⟩ := by
+  rw [partialExtrinsicFix₂_eq_partialExtrinsicFix (wf.apply _), partialExtrinsicFix_eq_fix wf]
 
 
 /--
@@ -442,30 +442,30 @@ A 3-ary fixpoint combinator that can be used to construct recursive functions wi
 *extrinsic, partial* proof of termination.
 
 Given a relation {name}`R` and a fixpoint functional {name}`F` which must be decreasing with respect
-to {name}`R`, {lean}`extrinsicFix₃ R F` is the recursive function obtained by having {name}`F` call
+to {name}`R`, {lean}`partialExtrinsicFix₃ R F` is the recursive function obtained by having {name}`F` call
 itself recursively.
 
-For each pair of inputs {given}`a`, {given}`b` and {given}`c`, {lean}`extrinsicFix₃ R F a b` can be
+For each pair of inputs {given}`a`, {given}`b` and {given}`c`, {lean}`partialExtrinsicFix₃ R F a b` can be
 verified given a *partial* termination proof. The precise semantics are as follows.
 
-If {lean}`Acc R ⟨a, b, c⟩ ` does not hold, {lean}`extrinsicFix₃ R F a b` might run forever. In this
+If {lean}`Acc R ⟨a, b, c⟩ ` does not hold, {lean}`partialExtrinsicFix₃ R F a b` might run forever. In this
 case, nothing interesting can be proved about the recursive function; it is opaque and behaves like
 a recursive function with the `partial` modifier.
 
-If {lean}`Acc R ⟨a, b, c⟩` _does_ hold, {lean}`extrinsicFix₃ R F a b` is equivalent to
-{lean}`F a b c (fun a' b' c' _ => extrinsicFix₃ R F a' b' c')`, both logically and regarding its
+If {lean}`Acc R ⟨a, b, c⟩` _does_ hold, {lean}`partialExtrinsicFix₃ R F a b` is equivalent to
+{lean}`F a b c (fun a' b' c' _ => partialExtrinsicFix₃ R F a' b' c')`, both logically and regarding its
 termination behavior.
 
-In particular, if {name}`R` is well-founded, {lean}`extrinsicFix₃ R F a b c` is equivalent to
+In particular, if {name}`R` is well-founded, {lean}`partialExtrinsicFix₃ R F a b c` is equivalent to
 a well-foundesd fixpoint.
 -/
 @[inline]
-public def extrinsicFix₃ [∀ a b c, Nonempty (C₃ a b c)]
+public def partialExtrinsicFix₃ [∀ a b c, Nonempty (C₃ a b c)]
     (R : (a : α) ×' (b : β a) ×' γ a b → (a : α) ×' (b : β a) ×' γ a b → Prop)
     (F : (a : α) → (b : β a) → (c : γ a b) → ((a' : α) → (b' : β a') → (c' : γ a' b') → R ⟨a', b', c'⟩ ⟨a, b, c⟩ → C₃ a' b' c') → C₃ a b c)
     (a : α) (b : β a) (c : γ a b) :
     C₃ a b c :=
-  totalExtrinsicFix₃ (α := α) (β := β) (γ := fun a' b' => { c' : γ a' b' // (⟨a', b', c'⟩ : (a : α) ×' (b : β a) ×' γ a b) = ⟨a, b, c⟩ ∨ TransGen R ⟨a', b', c'⟩ ⟨a, b, c⟩ })
+  extrinsicFix₃ (α := α) (β := β) (γ := fun a' b' => { c' : γ a' b' // (⟨a', b', c'⟩ : (a : α) ×' (b : β a) ×' γ a b) = ⟨a, b, c⟩ ∨ TransGen R ⟨a', b', c'⟩ ⟨a, b, c⟩ })
       (C₃ := (C₃ · · ·.1))
       (fun p q => R ⟨p.1, p.2.1, p.2.2.1⟩ ⟨q.1, q.2.1, q.2.2.1⟩)
       (fun a b c recur => F a b c.1 fun a' b' c' hR => recur a' b' ⟨c', Or.inr (by
@@ -475,15 +475,15 @@ public def extrinsicFix₃ [∀ a b c, Nonempty (C₃ a b c)]
           apply TransGen.single
           assumption)⟩ ‹_›) a b ⟨c, Or.inl rfl⟩
 
-public theorem extrinsicFix₃_eq_extrinsicFix [∀ a b c, Nonempty (C₃ a b c)]
+public theorem partialExtrinsicFix₃_eq_partialExtrinsicFix [∀ a b c, Nonempty (C₃ a b c)]
     {R : (a : α) ×' (b : β a) ×' γ a b → (a : α) ×' (b : β a) ×' γ a b → Prop}
     {F : (a : α) → (b : β a) → (c : γ a b) → ((a' : α) → (b' : β a') → (c' : γ a' b') → R ⟨a', b', c'⟩ ⟨a, b, c⟩ → C₃ a' b' c') → C₃ a b c}
     {a : α} {b : β a} {c : γ a b} (h : Acc R ⟨a, b, c⟩) :
-    extrinsicFix₃ R F a b c = extrinsicFix (α := (a : α) ×' (b : β a) ×' γ a b) (C := fun a => C₃ a.1 a.2.1 a.2.2) R (fun p r => F p.1 p.2.1 p.2.2 fun a' b' c' hR => r ⟨a', b', c'⟩ hR) ⟨a, b, c⟩ := by
-  simp only [extrinsicFix, extrinsicFix₃, totalExtrinsicFix₃]
+    partialExtrinsicFix₃ R F a b c = partialExtrinsicFix (α := (a : α) ×' (b : β a) ×' γ a b) (C := fun a => C₃ a.1 a.2.1 a.2.2) R (fun p r => F p.1 p.2.1 p.2.2 fun a' b' c' hR => r ⟨a', b', c'⟩ hR) ⟨a, b, c⟩ := by
+  simp only [partialExtrinsicFix, partialExtrinsicFix₃, extrinsicFix₃]
   let f (x : ((a' : α) ×' (b' : β a') ×' { c' // (⟨a', b', c'⟩ : (a : α) ×' (b : β a) ×' γ a b) = ⟨a, b, c⟩ ∨ TransGen R ⟨a', b', c'⟩ ⟨a, b, c⟩ })) : { a' // a' = ⟨a, b, c⟩ ∨ TransGen R a' ⟨a, b, c⟩ } :=
     ⟨⟨x.1, x.2.1, x.2.2.1⟩, x.2.2.2⟩
-  have := totalExtrinsicFix_invImage (C := fun a => C₃ a.1.1 a.1.2.1 a.1.2.2) (f := f) (R := (R ·.1 ·.1))
+  have := extrinsicFix_invImage (C := fun a => C₃ a.1.1 a.1.2.1 a.1.2.2) (f := f) (R := (R ·.1 ·.1))
     (F := fun a r => F a.1.1 a.1.2.1 a.1.2.2 fun a' b' c' hR => r ⟨⟨a', b', c'⟩, ?refine_a⟩ hR)
     (F' := fun a r => F a.1 a.2.1 a.2.2.1 fun a' b' c' hR => r ⟨a', b', c', ?refine_b⟩ hR)
     (a := ⟨a, b, c, ?refine_c⟩); rotate_left
@@ -506,27 +506,27 @@ public theorem extrinsicFix₃_eq_extrinsicFix [∀ a b c, Nonempty (C₃ a b c)
   · rwa [heq]
   · exact h.inv_of_transGen heq
 
-public theorem extrinsicFix₃_eq_apply_of_acc [∀ a b c, Nonempty (C₃ a b c)]
+public theorem partialExtrinsicFix₃_eq_apply_of_acc [∀ a b c, Nonempty (C₃ a b c)]
     {R : (a : α) ×' (b : β a) ×' γ a b → (a : α) ×' (b : β a) ×' γ a b → Prop}
     {F : ∀ (a b c), (∀ (a' b' c'), R ⟨a', b', c'⟩ ⟨a, b, c⟩ → C₃ a' b' c') → C₃ a b c}
     {a : α} {b : β a} {c : γ a b} (wf : Acc R ⟨a, b, c⟩) :
-    extrinsicFix₃ R F a b c = F a b c (fun a b c _ => extrinsicFix₃ R F a b c) := by
-  rw [extrinsicFix₃_eq_extrinsicFix wf, extrinsicFix_eq_apply_of_acc wf]
+    partialExtrinsicFix₃ R F a b c = F a b c (fun a b c _ => partialExtrinsicFix₃ R F a b c) := by
+  rw [partialExtrinsicFix₃_eq_partialExtrinsicFix wf, partialExtrinsicFix_eq_apply_of_acc wf]
   congr 1; ext a' b' c' hR
-  rw [extrinsicFix₃_eq_extrinsicFix (wf.inv hR)]
+  rw [partialExtrinsicFix₃_eq_partialExtrinsicFix (wf.inv hR)]
 
-public theorem extrinsicFix₃_eq_apply [∀ a b c, Nonempty (C₃ a b c)]
+public theorem partialExtrinsicFix₃_eq_apply [∀ a b c, Nonempty (C₃ a b c)]
     {R : (a : α) ×' (b : β a) ×' γ a b → (a : α) ×' (b : β a) ×' γ a b → Prop}
     {F : ∀ (a b c), (∀ (a' b' c'), R ⟨a', b', c'⟩ ⟨a, b, c⟩ → C₃ a' b' c') → C₃ a b c}
     {a : α} {b : β a} {c : γ a b} (wf : WellFounded R) :
-    extrinsicFix₃ R F a b c = F a b c (fun a b c _ => extrinsicFix₃ R F a b c) :=
-  extrinsicFix₃_eq_apply_of_acc (wf.apply _)
+    partialExtrinsicFix₃ R F a b c = F a b c (fun a b c _ => partialExtrinsicFix₃ R F a b c) :=
+  partialExtrinsicFix₃_eq_apply_of_acc (wf.apply _)
 
-public theorem extrinsicFix₃_eq_fix [∀ a b c, Nonempty (C₃ a b c)]
+public theorem partialExtrinsicFix₃_eq_fix [∀ a b c, Nonempty (C₃ a b c)]
     {R : (a : α) ×' (b : β a) ×' γ a b → (a : α) ×' (b : β a) ×' γ a b → Prop}
     {F : ∀ a b c, (∀ a' b' c', R ⟨a', b', c'⟩ ⟨a, b, c⟩ → C₃ a' b' c') → C₃ a b c}
     (wf : WellFounded R) {a b c} :
-    extrinsicFix₃ R F a b c = wf.fix (fun x G => F x.1 x.2.1 x.2.2 (fun a b c h => G ⟨a, b, c⟩ h)) ⟨a, b, c⟩ := by
-  rw [extrinsicFix₃_eq_extrinsicFix (wf.apply _), extrinsicFix_eq_fix wf]
+    partialExtrinsicFix₃ R F a b c = wf.fix (fun x G => F x.1 x.2.1 x.2.2 (fun a b c h => G ⟨a, b, c⟩ h)) ⟨a, b, c⟩ := by
+  rw [partialExtrinsicFix₃_eq_partialExtrinsicFix (wf.apply _), partialExtrinsicFix_eq_fix wf]
 
 end WellFounded
