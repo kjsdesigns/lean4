@@ -225,6 +225,24 @@ private def assertIncrementalSuccess
   ensure "Chunked pull on empty input" (hasNeedMoreDataEvent pullEvents)
     s!"expected needMoreData after empty pull:\n{repr pullEvents}"
 
+-- Regression: unread buffered input must stay bounded to avoid memory blowups
+-- when upper layers stall request-body consumption.
+#eval show IO Unit from do
+  let cfg : Protocol.H1.Config := {
+    maxBodySize := 32
+    maxHeaderBytes := 16
+    maxStartLineLength := 16
+    maxChunkLineLength := 16
+  }
+  let cap := cfg.maxBodySize + cfg.maxHeaderBytes + cfg.maxStartLineLength + cfg.maxChunkLineLength
+  let payload := ByteArray.mk (Array.replicate (cap + 1) (UInt8.ofNat 97))
+  let machine0 : Machine .receiving := { config := cfg }
+  let machine1 := machine0.feed payload
+
+  ensure "Buffered input cap triggers failure" machine1.failed "expected machine to fail on oversized buffered input"
+  ensure "Buffered input cap triggers entityTooLarge" (machine1.error == some .entityTooLarge)
+    s!"expected entityTooLarge failure, got {repr machine1.error}"
+
 -- Property-style: randomized content-length body and randomized split boundaries.
 #eval show IO Unit from do
   let mut seed : Nat := 0x21436587

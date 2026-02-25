@@ -30,7 +30,7 @@ Connection limits and parser bounds configuration.
 -/
 structure Config where
   /--
-  Maximum number of messages per connection.
+  Maximum number of requests (server) or responses (client) per connection.
   -/
   maxMessages : Nat := 100
 
@@ -51,9 +51,11 @@ structure Config where
   enableKeepAlive : Bool := true
 
   /--
-  The server name (for sending responses) or user agent (for sending requests)
+  The `Server` header value injected into outgoing responses (receiving mode) or the
+  `User-Agent` header value injected into outgoing requests (sending mode).
+  `none` suppresses the header entirely.
   -/
-  identityHeader : Option Header.Value := none
+  serverName : Option Header.Value := none
 
   /--
   Maximum length of request URI (default: 8192 bytes)
@@ -79,6 +81,12 @@ structure Config where
   Maximum number of spaces in delimiter sequences (default: 16)
   -/
   maxSpaceSequence : Nat := 16
+
+  /--
+  Maximum number of leading empty lines (bare CRLF) to skip before a request-line
+  (RFC 9112 §2.2 robustness). Default: 8.
+  -/
+  maxLeadingEmptyLines : Nat := 8
 
   /--
   Maximum number of extensions on a single chunk-size line (default: 16).

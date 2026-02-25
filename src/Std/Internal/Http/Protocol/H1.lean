@@ -429,8 +429,18 @@ Checks whether adding `extra` bytes would exceed configured per-message body
 limits.
 -/
 @[inline]
-private def fitsBodyLimit (machine : Machine dir) (extra : Nat) : Bool :=
+private def fitsBodyLimit {dir} (machine : Machine dir) (extra : Nat) : Bool :=
   machine.reader.bodyBytesRead + extra ≤ machine.config.maxBodySize
+
+/--
+Upper bound for unread input retained in memory at once.
+
+This caps buffered body bytes and parser lookahead (start-line/headers/chunk
+metadata) so a stalled consumer cannot accumulate unbounded pending input.
+-/
+@[inline]
+private def maxBufferedInputBytes (config : Config) : Nat :=
+  config.maxBodySize + config.maxHeaderBytes + config.maxStartLineLength + config.maxChunkLineLength
 
 /--
 Accumulates successfully accepted body bytes into the reader accounting.
@@ -681,7 +691,7 @@ private def writeHead (messageHead : Message.Head dir.swap) (machine : Machine d
 
   -- Add identity header based on direction
   let headers :=
-    let identityOpt := machine.config.identityHeader
+    let identityOpt := machine.config.serverName
     match dir, identityOpt with
     | .receiving, some server => headers.insert Header.Name.server server
     | .sending, some userAgent => headers.insert Header.Name.userAgent userAgent
@@ -728,10 +738,15 @@ Feeds input bytes into the reader side of the machine.
 -/
 @[inline]
 def feed (machine : Machine ty) (data : ByteArray) : Machine ty :=
-  if machine.isReaderClosed then
+  if machine.isReaderClosed ∨ machine.failed then
     machine
   else
-    { machine with reader := machine.reader.feed data, pullBodyStalled := false }
+    let reader := machine.reader.feed data
+    let machine := { machine with reader, pullBodyStalled := false }
+    if reader.remainingBytes > maxBufferedInputBytes machine.config then
+      machine.setFailure .entityTooLarge
+    else
+      machine
 
 /--
 Signals that the reader will not receive any more input bytes.
