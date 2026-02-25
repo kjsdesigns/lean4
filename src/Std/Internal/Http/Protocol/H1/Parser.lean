@@ -150,6 +150,9 @@ partial def hex : Parser Nat := do
           go (acc * 16 + d.toNat) (count + 1)
     | none =>
         if count = 0 then
+          -- Preserve EOF as incremental chunk-size parsing can request more data.
+          -- For non-EOF invalid bytes, keep the specific parse failure.
+          let _ ← peek!
           fail "expected hex digit"
         else
           return acc
