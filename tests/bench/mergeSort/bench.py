@@ -13,6 +13,7 @@ import numpy as np
 from scipy.optimize import curve_fit
 import matplotlib.pyplot as plt
 
+# Function to run the command and capture the elapsed times from stdout
 def benchmark(i):
     result = subprocess.run(
         ['./.lake/build/bin/mergeSort', str(i)],
