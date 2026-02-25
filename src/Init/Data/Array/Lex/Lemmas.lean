@@ -239,7 +239,7 @@ theorem lex_eq_true_iff_exists [BEq α] (lt : α → α → Bool) :
             l₁[j]'(Nat.lt_trans hj h₁) == l₂[j]'(Nat.lt_trans hj h₂)) ∧ lt l₁[i] l₂[i]) := by
   cases l₁
   cases l₂
-  simp [List.lex_eq_true_iff_exists]
+  simp [List.lex_eq_true_iff_exists, List.extract_eq_take_drop]
 
 /--
 `l₁` is *not* lexicographically less than `l₂`
@@ -267,7 +267,7 @@ theorem lex_eq_false_iff_exists [BEq α] [PartialEquivBEq α] (lt : α → α �
             l₁[j]'(Nat.lt_trans hj h₁) == l₂[j]'(Nat.lt_trans hj h₂)) ∧ lt l₂[i] l₁[i]) := by
   cases l₁
   cases l₂
-  simp_all [List.lex_eq_false_iff_exists]
+  simp_all [List.lex_eq_false_iff_exists, List.extract_eq_take_drop]
 
 protected theorem lt_iff_exists [LT α] {xs ys : Array α} :
     xs < ys ↔
@@ -277,7 +277,7 @@ protected theorem lt_iff_exists [LT α] {xs ys : Array α} :
             xs[j]'(Nat.lt_trans hj h₁) = ys[j]'(Nat.lt_trans hj h₂)) ∧ xs[i] < ys[i]) := by
   cases xs
   cases ys
-  simp [List.lt_iff_exists]
+  simp [List.lt_iff_exists, List.extract_eq_take_drop]
 
 protected theorem le_iff_exists [LT α]
     [Std.Asymm (· < · : α → α → Prop)]
@@ -289,7 +289,7 @@ protected theorem le_iff_exists [LT α]
             xs[j]'(Nat.lt_trans hj h₁) = ys[j]'(Nat.lt_trans hj h₂)) ∧ xs[i] < ys[i]) := by
   cases xs
   cases ys
-  simp [List.le_iff_exists]
+  simp [List.le_iff_exists, List.extract_eq_take_drop]
 
 theorem append_left_lt [LT α] {xs ys zs : Array α} (h : ys < zs) :
     xs ++ ys < xs ++ zs := by

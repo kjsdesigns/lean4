@@ -304,7 +304,7 @@ theorem extract_append_right {as bs : Array α} :
 theorem extract_eq_extract_right {as : Array α} {i j j' : Nat} :
     as.extract i j = as.extract i j' ↔ min (j - i) (as.size - i) = min (j' - i) (as.size - i) := by
   rcases as with ⟨as⟩
-  simp
+  simp [List.extract_eq_take_drop, - List.extract_eq_drop_take']
 
 theorem extract_eq_extract_left {as : Array α} {i i' j : Nat} :
     as.extract i j = as.extract i' j ↔ min j as.size - i = min j as.size - i' := by
@@ -328,7 +328,8 @@ theorem extract_add_left {as : Array α} {i j k : Nat} :
 theorem mem_extract_iff_getElem {as : Array α} {a : α} {i j : Nat} :
     a ∈ as.extract i j ↔ ∃ (k : Nat) (hm : k < min j as.size - i), as[i + k] = a := by
   rcases as with ⟨as⟩
-  simp [List.mem_take_iff_getElem]
+  simp only [List.extract_toArray, List.extract_eq_drop_take', List.mem_toArray,
+    List.mem_drop_iff_getElem, List.getElem_take, List.length_take, List.size_toArray]
   constructor <;>
   · rintro ⟨k, h, rfl⟩
     exact ⟨k, by omega, rfl⟩

@@ -392,9 +392,10 @@ set_option doc.verso true in
 This lemma will be renamed to {lit}`List.extract_eq_drop_take` as soon as the current deprecated
 lemma {name}`List.extract_eq_drop_take` has been removed.
 -/
+@[simp]
 theorem extract_eq_drop_take' {l : List α} {start stop : Nat} :
     l.extract start stop = (l.take stop).drop start := by
-  simp only [take_drop]
+  simp only [List.extract_eq_take_drop, take_drop]
   by_cases start ≤ stop
   · rw [add_sub_of_le ‹_›]
   · have h₁ : stop - start = 0 := by omega

@@ -341,9 +341,8 @@ public theorem toList_mkSlice_rci {xs : ListSlice α} {lo : Nat} :
 @[simp, grind =]
 public theorem toArray_mkSlice_rci {xs : ListSlice α} {lo : Nat} :
     xs[lo...*].toArray = xs.toArray.extract lo := by
-  simp only [← toArray_toList, toList_mkSlice_rci]
-  rw (occs := [1]) [← List.take_length (l := List.drop lo xs.toList)]
-  simp [- toArray_toList]
+  simp [← toArray_toList, toList_mkSlice_rci, List.extract_toArray, List.extract_eq_drop_take',
+    - length_toList_eq_size]
 
 @[simp, grind =]
 public theorem size_mkSlice_rci {xs : ListSlice α} {lo : Nat} :
@@ -437,9 +436,8 @@ public theorem toList_mkSlice_roi {xs : ListSlice α} {lo : Nat} :
 @[simp, grind =]
 public theorem toArray_mkSlice_roi {xs : ListSlice α} {lo : Nat} :
     xs[lo<...*].toArray = xs.toArray.extract (lo + 1) := by
-  simp only [← toArray_toList, toList_mkSlice_roi]
-  rw (occs := [1]) [← List.take_length (l := List.drop (lo + 1) xs.toList)]
-  simp [- toArray_toList]
+  simp [← toArray_toList, toList_mkSlice_roi, List.extract_toArray, List.extract_eq_drop_take',
+    - length_toList_eq_size, List.take_length]
 
 @[simp, grind =]
 public theorem size_mkSlice_roi {xs : ListSlice α} {lo : Nat} :

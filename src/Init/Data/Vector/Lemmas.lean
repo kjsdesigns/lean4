@@ -567,7 +567,7 @@ theorem toList_append {xs : Vector α m} {ys : Vector α n} :
 
 @[simp] theorem toList_drop {xs : Vector α n} {i} :
     (xs.drop i).toList = xs.toList.drop i := by
-  simp [toList, List.take_of_length_le]
+  simp [toList, List.take_of_length_le, List.extract_eq_take_drop]
 
 theorem toList_empty : (#v[] : Vector α 0).toList = [] := rfl
 
@@ -593,7 +593,7 @@ theorem toList_cast {xs : Vector α n} (h : n = m) :
 
 theorem toList_extract {xs : Vector α n} {start stop} :
     (xs.extract start stop).toList = (xs.toList.drop start).take (stop - start) := by
-  simp [toList]
+  simp [toList, List.extract_eq_take_drop]
 
 theorem toList_map {f : α → β} {xs : Vector α n} :
     (xs.map f).toList = xs.toList.map f := by simp [toList]
@@ -633,7 +633,7 @@ theorem toList_swap {xs : Vector α n} {i j} (hi hj) :
     (xs.swap i j).toList = (xs.toList.set i xs[j]).set j xs[i] := rfl
 
 @[simp] theorem toList_take {xs : Vector α n} {i} : (xs.take i).toList = xs.toList.take i := by
-  simp [toList]
+  simp [toList, List.extract_eq_take_drop]
 
 @[simp, grind =]
 theorem toList_zip {as : Vector α n} {bs : Vector β n} :
@@ -2324,7 +2324,7 @@ set_option linter.indexVariables false in
 
 @[grind =] theorem extract_empty {start stop : Nat} :
     (#v[] : Vector α 0).extract start stop = #v[].cast (by simp) := by
-  simp
+  simp [List.extract_eq_take_drop]
 
 /-! ### foldlM and foldrM -/
 

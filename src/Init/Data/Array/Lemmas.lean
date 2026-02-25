@@ -2854,11 +2854,7 @@ theorem getElem?_extract {xs : Array α} {start stop : Nat} :
 
 @[simp] theorem toList_extract {xs : Array α} {start stop : Nat} :
     (xs.extract start stop).toList = xs.toList.extract start stop := by
-  apply List.ext_getElem
-  · simp only [length_toList, size_extract, List.length_take, List.length_drop]
-    omega
-  · intro n h₁ h₂
-    simp
+  apply List.ext_getElem <;> simp
 
 @[simp] theorem extract_size {xs : Array α} : xs.extract 0 xs.size = xs := by
   apply ext
@@ -3011,9 +3007,9 @@ theorem foldrM_start_stop {m} [Monad m] {xs : Array α} {f : α → β → m β}
   subst hstart hstop w
   rcases xs with ⟨xs⟩
   rw [foldlM_start_stop, List.extract_toArray]
-  simp only [List.size_toArray, List.length_take, List.length_drop, List.foldlM_toArray']
+  simp only [List.size_toArray, List.foldlM_toArray']
   rw [foldlM_start_stop, List.extract_toArray]
-  simp only [List.size_toArray, List.length_take, List.length_drop, List.foldlM_toArray']
+  simp only [List.size_toArray, List.foldlM_toArray']
   congr
   funext b a
   simp_all
@@ -3025,9 +3021,9 @@ theorem foldrM_start_stop {m} [Monad m] {xs : Array α} {f : α → β → m β}
   subst hstart hstop w
   rcases xs with ⟨xs⟩
   rw [foldrM_start_stop, List.extract_toArray]
-  simp only [List.size_toArray, List.length_take, List.length_drop, List.foldrM_toArray']
+  simp only [List.size_toArray, List.foldrM_toArray']
   rw [foldrM_start_stop, List.extract_toArray]
-  simp only [List.size_toArray, List.length_take, List.length_drop, List.foldrM_toArray']
+  simp only [List.size_toArray, List.foldrM_toArray']
   congr
   funext b a
   simp_all
