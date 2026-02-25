@@ -103,8 +103,6 @@ for ax, pattern in zip(axes.flat, PATTERNS):
                     fontsize=9, color=colors["array"], fontweight='bold')
 
 plt.tight_layout()
-plt.savefig('mergeSort_comparison.png', dpi=150)
-print(f"\nPlot saved to mergeSort_comparison.png")
 
 # --- Speedup summary plot ---
 fig2, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
@@ -139,6 +137,4 @@ ax2.legend(fontsize=9)
 ax2.grid(True, alpha=0.3)
 
 plt.tight_layout()
-plt.savefig('mergeSort_ratio.png', dpi=150)
-print(f"Plot saved to mergeSort_ratio.png")
 plt.show()
