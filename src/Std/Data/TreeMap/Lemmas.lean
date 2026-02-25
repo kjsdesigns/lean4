@@ -298,6 +298,9 @@ theorem getElem?_congr [TransCmp cmp] {a b : α} (hab : cmp a b = .eq) :
 theorem toList_insert_perm [BEq α] [TransCmp cmp] [LawfulBEqCmp cmp] {k : α} {v : β} :
     (t.insert k v).toList.Perm (⟨k, v⟩ :: t.toList.filter (¬k == ·.1)) := DTreeMap.Const.toList_insert_perm
 
+theorem toArray_insert_perm [BEq α] [TransCmp cmp] [LawfulBEqCmp cmp] {k : α} {v : β} :
+    (t.insert k v).toArray.Perm ((t.toArray.filter (¬k == ·.1)).push ⟨k, v⟩) := DTreeMap.Const.toArray_insert_perm
+
 theorem keys_insertIfNew_perm {t : TreeMap α Unit cmp} [BEq α] [TransCmp cmp] [LawfulBEqCmp cmp] {k : α} :
     (t.insertIfNew k ()).keys.Perm (if k ∈ t then t.keys else k :: t.keys) :=
   DTreeMap.keys_insertIfNew_perm
@@ -839,6 +842,7 @@ theorem mem_keys [LawfulEqCmp cmp] [TransCmp cmp] {k : α} :
     k ∈ t.keys ↔ k ∈ t :=
   DTreeMap.mem_keys
 
+@[simp, grind =]
 theorem mem_keysArray [LawfulEqCmp cmp] [TransCmp cmp] {k : α} :
     k ∈ t.keysArray ↔ k ∈ t :=
   DTreeMap.mem_keysArray
@@ -4569,6 +4573,7 @@ theorem toList_filterMap {f : (a : α) → β → Option γ} :
       t.toList.filterMap (fun p => (f p.1 p.2).map (fun x => (p.1, x))) :=
   DTreeMap.Const.toList_filterMap
 
+@[simp, grind =]
 theorem toArray_filterMap {f : α → β → Option γ} :
     (t.filterMap f).toArray =
       t.toArray.filterMap (fun p => (f p.1 p.2).map (fun x => (p.1, x))) :=
@@ -4741,6 +4746,7 @@ theorem toList_filter {f : α → β → Bool} :
     (t.filter f).toList = t.toList.filter (fun p => f p.1 p.2) :=
   DTreeMap.Const.toList_filter
 
+@[simp, grind =]
 theorem toArray_filter {f : α → β → Bool} :
     (t.filter f).toArray = t.toArray.filter (fun p => f p.1 p.2) :=
   DTreeMap.Const.toArray_filter
@@ -4936,6 +4942,7 @@ theorem toList_map {f : α → β → γ} :
     (t.map f).toList = t.toList.map (fun p => (p.1, f p.1 p.2)) :=
   DTreeMap.Const.toList_map
 
+@[simp, grind =]
 theorem toArray_map {f : α → β → γ} :
     (t.map f).toArray = t.toArray.map (fun p => (p.1, f p.1 p.2)) :=
   DTreeMap.Const.toArray_map

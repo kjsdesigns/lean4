@@ -293,6 +293,10 @@ theorem toList_insert_perm [BEq α] [TransCmp cmp] [LawfulBEqCmp cmp] {k : α} :
     (t.insert k).toList.Perm (if k ∈ t then t.toList else k :: t.toList) :=
   DTreeMap.keys_insertIfNew_perm
 
+theorem toArray_insert_perm [BEq α] [TransCmp cmp] [LawfulBEqCmp cmp] {k : α} :
+    (t.insert k).toArray.Perm (if k ∈ t then t.toArray else t.toArray.push k) :=
+  DTreeMap.keysArray_insertIfNew_perm
+
 @[simp, grind =] theorem get_erase [TransCmp cmp] {k a : α} {h'} :
     (t.erase k).get a h' = t.get a (mem_of_mem_erase h') :=
   TreeMap.getKey_erase
@@ -485,12 +489,12 @@ theorem contains_toArray [BEq α] [LawfulBEqCmp cmp] [TransCmp cmp] {k : α} :
     t.toArray.contains k = t.contains k := by
   simp [← toArray_toList, contains_toList]
 
-@[simp]
+@[simp, grind =]
 theorem mem_toList [LawfulEqCmp cmp] [TransCmp cmp] {k : α} :
     k ∈ t.toList ↔ k ∈ t :=
   TreeMap.mem_keys
 
-@[simp]
+@[simp, grind =]
 theorem mem_toArray [LawfulEqCmp cmp] [TransCmp cmp] {k : α} :
     k ∈ t.toArray ↔ k ∈ t :=
   TreeMap.mem_keysArray
@@ -1610,7 +1614,7 @@ theorem min!_eq_head!_toList [TransCmp cmp] [Inhabited α] :
     t.min! = t.toList.head! :=
   TreeMap.minKey!_eq_head!_keys
 
-theorem min!_eq_get!_toArray [TransCmp cmp] [Inhabited α] :
+theorem min!_eq_getElem!_toArray [TransCmp cmp] [Inhabited α] :
     t.min! = t.toArray[0]! :=
   TreeMap.minKey!_eq_getElem!_keysArray
 

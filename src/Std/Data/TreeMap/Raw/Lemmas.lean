@@ -294,6 +294,10 @@ theorem toList_insert_perm [BEq α] [TransCmp cmp] [LawfulBEqCmp cmp] (h : t.WF)
     (t.insert k v).toList.Perm (⟨k, v⟩ :: t.toList.filter (¬k == ·.1)) :=
   DTreeMap.Raw.Const.toList_insert_perm h
 
+theorem toArray_insert_perm [BEq α] [TransCmp cmp] [LawfulBEqCmp cmp] (h : t.WF) {k : α} {v : β} :
+    (t.insert k v).toArray.Perm ((t.toArray.filter (¬k == ·.1)).push ⟨k, v⟩) :=
+  DTreeMap.Raw.Const.toArray_insert_perm h
+
 theorem keys_insertIfNew_perm {t : Raw α Unit cmp} [BEq α] [TransCmp cmp] [LawfulBEqCmp cmp] (h : t.WF) {k : α} :
     (t.insertIfNew k ()).keys.Perm (if k ∈ t then t.keys else k :: t.keys) :=
   DTreeMap.Raw.keys_insertIfNew_perm h
@@ -841,6 +845,7 @@ theorem mem_keys [LawfulEqCmp cmp] [TransCmp cmp] (h : t.WF) {k : α} :
     k ∈ t.keys ↔ k ∈ t :=
   DTreeMap.Raw.mem_keys h
 
+@[simp, grind =]
 theorem mem_keysArray [LawfulEqCmp cmp] [TransCmp cmp] (h : t.WF) {k : α} :
     k ∈ t.keysArray ↔ k ∈ t :=
   DTreeMap.Raw.mem_keysArray h

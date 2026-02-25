@@ -10339,14 +10339,14 @@ theorem keys_filter [TransOrd α] [LawfulEqOrd α] {f : (a : α) → β a → Bo
   rw [List.keys_filter h.ordered.distinctKeys]
   simp only [List.filter_map, Function.comp_def, List.unattach, List.map_map]
 
-private theorem _root_.List.unattach_filter_eq_if {p : α → Prop} {l : List { x // p x }}
+private theorem List.unattach_filter_eq_if {p : α → Prop} {l : List { x // p x }}
     {f : { x // p x } → Bool} :
     open scoped Classical in
     (l.filter f).unattach = l.unattach.filter (fun x => if h : p x then f ⟨x, h⟩ else false) := by
   apply List.unattach_filter
   simp +contextual
 
-private theorem _root_.Array.unattach_filter_eq_if {p : α → Prop} {xs : Array { x // p x }}
+private theorem Array.unattach_filter_eq_if {p : α → Prop} {xs : Array { x // p x }}
     {f : { x // p x } → Bool} :
     open scoped Classical in
     (xs.filter f).unattach = xs.unattach.filter (fun x => if h : p x then f ⟨x, h⟩ else false) := by

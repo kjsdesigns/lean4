@@ -1560,7 +1560,7 @@ theorem min!_eq_head!_toList [TransCmp cmp] [Inhabited α] (h : t.WF) :
   TreeMap.Raw.minKey!_eq_head!_keys h
 
 @[grind =_]
-theorem min!_eq_getElem!_toArray_zero [TransCmp cmp] [Inhabited α] (h : t.WF) :
+theorem min!_eq_getElem!_toArray [TransCmp cmp] [Inhabited α] (h : t.WF) :
     t.min! = t.toArray[0]! :=
   TreeMap.Raw.minKey!_eq_getElem!_keysArray h
 

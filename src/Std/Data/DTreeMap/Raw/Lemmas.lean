@@ -1167,6 +1167,7 @@ theorem mem_keys [LawfulEqCmp cmp] [TransCmp cmp] (h : t.WF) {k : α} :
     k ∈ t.keys ↔ k ∈ t :=
   Impl.mem_keys h
 
+@[simp, grind =]
 theorem mem_keysArray [LawfulEqCmp cmp] [TransCmp cmp] (h : t.WF) {k : α} :
     k ∈ t.keysArray ↔ k ∈ t :=
   Impl.mem_keysArray h
