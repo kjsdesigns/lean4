@@ -17,6 +17,9 @@ public section
 
 This module provides the `Request` type, which represents an HTTP request. It also defines ways
 to build a `Request` using functions that make it easier.
+
+References:
+* https://httpwg.org/specs/rfc9112.html#request.line
 -/
 
 namespace Std.Http
@@ -25,22 +28,28 @@ set_option linter.all true
 
 /--
 The main parts of a request containing the HTTP method, version, and request target URI.
+
+Reference: https://httpwg.org/specs/rfc9112.html#request.line
 -/
 structure Request.Head where
   /--
   The HTTP method (GET, POST, PUT, DELETE, etc.) for the request
+
+  Reference: https://httpwg.org/specs/rfc9112.html#rfc.section.3.1
   -/
-  method : Method := .get
+  method : Method
 
   /--
   The HTTP protocol version for the request (e.g. HTTP/1.1, HTTP/2.0, HTTP/3.0).
+
+  Reference: https://httpwg.org/specs/rfc9112.html#http.version
   -/
-  version : Version := .v11
+  version : Version
 
   /--
   The raw request-target string (commonly origin-form path/query, `"*"`, or authority-form).
   -/
-  uri : String := "*"
+  uri : String
 deriving Inhabited, Repr
 
 /--
@@ -70,7 +79,7 @@ structure Request.Builder where
   /--
   The head of the request
   -/
-  head : Head := {}
+  head : Head := { method := .get, version := .v11, uri := "*" }
 
   /--
   Optional dynamic metadata attached to the request.

@@ -6,9 +6,8 @@ Authors: Sofia Rodrigues
 module
 
 prelude
-public import Init.Core
-public import Init.Data.String
 public import Init.Dynamic
+public import Init.Data.String
 public import Std.Data.TreeMap
 
 open Lean
@@ -45,32 +44,33 @@ private def compareString (s₁ s₂ : String) : Ordering :=
 /--
 An ordering for `Name` keys used by `Extensions`.
 -/
-def compareName : Name → Name → Ordering
+protected def Extensions.compareName : Name → Name → Ordering
   | .anonymous, .anonymous => .eq
   | .anonymous, _ => .lt
   | _, .anonymous => .gt
   | .str p₁ s₁, .str p₂ s₂ =>
-      match compareName p₁ p₂ with
+      match Extensions.compareName p₁ p₂ with
       | .eq => compareString s₁ s₂
       | ord => ord
   | .str _ _, .num _ _ => .lt
   | .num _ _, .str _ _ => .gt
   | .num p₁ n₁, .num p₂ n₂ =>
-      match compareName p₁ p₂ with
+      match Extensions.compareName p₁ p₂ with
       | .eq => compare n₁ n₂
       | ord => ord
 
 /--
 A dynamically typed map for optional metadata that can be attached to HTTP requests and responses.
-Extensions allow storing arbitrary typed data keyed by type name, useful for middleware-style
-metadata such as parsed socket information or custom processing data.
+Extensions allow storing arbitrary typed data keyed by type name, useful for metadata such as socket
+information or custom processing data.
 -/
 structure Extensions where
   private mk ::
+
   /--
-  The underlying tree map storing dynamic values keyed by their type name.
+  The underlying tree map storing dynamic values keyed by their type name.entao
   -/
-  private data : TreeMap Name Dynamic compareName := .empty
+  private data : TreeMap Name Dynamic Extensions.compareName := .empty
 deriving Inhabited
 
 namespace Extensions
@@ -90,8 +90,8 @@ def get (x : Extensions) (α : Type) [TypeName α] : Option α := do
   dyn.get? α
 
 /--
-Inserts a value into the extensions, keyed by its type name.
-If a value of the same type already exists, it is replaced.
+Inserts a value into the extensions, keyed by its type name. If a value of the same type already
+exists, it is replaced.
 -/
 @[inline]
 def insert (x : Extensions) [TypeName α] (data : α) : Extensions :=

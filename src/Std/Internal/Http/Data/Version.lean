@@ -16,7 +16,7 @@ public section
 
 This module defines `Version`, the set of HTTP protocol versions modeled by this library.
 
-* Reference: https://httpwg.org/specs/rfc9110.html#protocol.version
+Reference: https://httpwg.org/specs/rfc9110.html#protocol.version
 -/
 
 namespace Std.Http
@@ -26,7 +26,7 @@ set_option linter.all true
 /--
 HTTP protocol versions modeled by this library.
 
-* Reference: https://httpwg.org/specs/rfc9110.html#protocol.version
+Reference: https://httpwg.org/specs/rfc9110.html#protocol.version
 -/
 inductive Version
   /--
