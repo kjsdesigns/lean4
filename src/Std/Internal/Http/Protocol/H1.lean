@@ -226,7 +226,7 @@ private def responseMustNotHaveBody (status : Status) : Bool :=
 
 /--
 Checks that request-target form and method are compatible
-(`CONNECT` requires authority-form and other methods must not use it).
+(`CONNECT` requires authority-form and `*` is reserved for `OPTIONS`).
 -/
 @[inline]
 private def isValidRequestTargetForMethod (message : Message.Head .receiving) : Bool :=
@@ -234,34 +234,91 @@ private def isValidRequestTargetForMethod (message : Message.Head .receiving) : 
   | .connect, .authorityForm _ => true
   | .connect, _ => false
   | _, .authorityForm _ => false
+  | .options, .asteriskForm => true
+  | _, .asteriskForm => false
   | _, _ => true
 
 /--
 Validates the required `Host` header for HTTP/1.1 requests:
-exactly one value and syntactically valid host syntax.
+exactly one value, with absolute-form authority taking precedence over Host.
 -/
 @[inline]
-private def hasSingleValidHostHeader (message : Message.Head .receiving) : Bool :=
+private def hasSingleAcceptedHostHeader (message : Message.Head .receiving) : Bool :=
   match message.headers.getAll? Header.Name.host with
   | some headers =>
-      if headers.size = 1 then
-        let hostValue := headers[0]!
-        match (Std.Http.URI.Parser.parseHostHeader <* eof).run hostValue.value.toUTF8 with
-        | .ok _ => true
-        | .error _ => false
-      else
+      if headers.size != 1 then
         false
+      else
+        match headers[0]? with
+        | none => false
+        | some hostValue =>
+            match message.uri with
+            | .absoluteForm _ _ =>
+                -- RFC 9112 §3.2: absolute-form authority overrides Host.
+                true
+            | _ =>
+                if hostValue.value.isEmpty then
+                  -- RFC 9112 §3.2 allows an empty Host when authority is undefined.
+                  true
+                else
+                  match (Std.Http.URI.Parser.parseHostHeader <* eof).run hostValue.value.toUTF8 with
+                  | .ok _ => true
+                  | .error _ => false
   | none => false
+
+/--
+Computes the effective Host header value from request-target authority.
+-/
+@[inline]
+private def authorityHostHeaderValue (authority : URI.Authority) : Header.Value :=
+  let host := toString authority.host
+
+  let value := match authority.port with
+    | some port => s!"{host}:{port}"
+    | none => host
+
+  Header.Value.ofString! value
 
 /--
 Validates an incoming request head and selects the body framing mode.
 -/
-private def checkReceivingMessageHead (message : Message.Head .receiving) : Option BodyMode := do
-  guard (isValidRequestTargetForMethod message)
-  guard (hasSingleValidHostHeader message)
-  match (← message.getSize true) with
-  | .fixed n => return .fixed n
-  | .chunked => return .chunked
+@[inline]
+private def transferCodings? (message : Message.Head .receiving) : Option (Array String) :=
+  match message.headers.getAll? .transferEncoding with
+  | none => none
+  | some teHeaders =>
+      teHeaders.foldl (fun acc headerValue => do
+        let acc ← acc
+        let te ← Header.TransferEncoding.parse headerValue
+        pure (acc ++ te.codings)
+      ) (some #[])
+
+/--
+Validates an incoming request head and selects the body framing mode.
+-/
+private def checkReceivingMessageHead (message : Message.Head .receiving) : Except H1.Error BodyMode := do
+  if !isValidRequestTargetForMethod message then
+    throw .badMessage
+
+  if !hasSingleAcceptedHostHeader message then
+    throw .badMessage
+
+  match transferCodings? message with
+  | some codings =>
+      if !Header.TransferEncoding.Validate codings then
+        throw .badMessage
+      else if codings.back? == some "chunked" then
+        if message.headers.contains Header.Name.contentLength then
+          throw .badMessage
+        else
+          return .chunked
+      else
+        throw .unsupportedTransferEncoding
+  | none =>
+      match message.getSize true with
+      | some (.fixed n) => return .fixed n
+      | some .chunked => return .chunked
+      | none => throw .badMessage
 
 /--
 Validates an incoming response head and selects body framing mode.
@@ -269,25 +326,27 @@ Validates an incoming response head and selects body framing mode.
 For status codes that must not carry a response body, framing headers are still
 syntactically validated but the machine always uses `.fixed 0` framing.
 -/
-private def checkSendingMessageHead (message : Message.Head .sending) : Option BodyMode :=
+private def checkSendingMessageHead (message : Message.Head .sending) : Except H1.Error BodyMode :=
+
   let framingInHeaders :=
     message.headers.contains Header.Name.contentLength ∨
     message.headers.contains Header.Name.transferEncoding
+
   let parsedSize := message.getSize false
   if responseMustNotHaveBody message.status then
     match parsedSize with
-    | some _ => some (.fixed 0)
-    | none => if framingInHeaders then none else some (.fixed 0)
+    | some _ => pure (.fixed 0)
+    | none => if framingInHeaders then throw .badMessage else pure (.fixed 0)
   else
     match parsedSize with
-    | some (.fixed n) => some (.fixed n)
-    | some .chunked => some .chunked
-    | none => if framingInHeaders then none else some .eof
+    | some (.fixed n) => pure (.fixed n)
+    | some .chunked => pure .chunked
+    | none => if framingInHeaders then throw .badMessage else pure .eof
 
 /--
 Direction-dispatched message-head validation.
 -/
-private def checkMessageHead (message : Message.Head dir) : Option BodyMode := do
+private def checkMessageHead (message : Message.Head dir) : Except H1.Error BodyMode := do
   match dir, message with
   | .receiving, message => checkReceivingMessageHead message
   | .sending, message => checkSendingMessageHead message
@@ -463,10 +522,12 @@ state transitions.
 - On success, advances reader input.
 - On EOF with open input, emits `needMoreData`.
 - On EOF after `noMoreInput`, fails with `connectionClosed`.
-- On hard parse errors or size-limit breaches, fails with `badMessage`.
+- On hard parse errors or size-limit breaches, fails with `onHardError`.
 -/
 private def parseWith (machine : Machine dir) (parser : Parser α) (limit : Option Nat)
-    (expect : Option Nat := none) : Machine dir × Option α :=
+    (expect : Option Nat := none)
+    (onHardError : Std.Internal.Parsec.Error → H1.Error := fun _ => .badMessage) :
+    Machine dir × Option α :=
   let remaining := machine.reader.input.remainingBytes
   match parser machine.reader.input with
   | .success buffer result =>
@@ -488,8 +549,8 @@ private def parseWith (machine : Machine dir) (parser : Parser α) (limit : Opti
           else (machine.addEvent (.needMoreData expect), none)
       else
         (machine.addEvent (.needMoreData expect), none)
-  | .error _ _ =>
-      (machine.setFailure .badMessage, none)
+  | .error _ err =>
+      (machine.setFailure (onHardError err), none)
 
 -- Message Processing
 
@@ -572,6 +633,7 @@ private def advanceAfterHeaders (machine : Machine dir) (state : Reader.State di
   let nextState : Reader.State dir := if waitingContinue then Reader.State.«continue» state else state
   let machine := machine.addEvent (.endHeaders machine.reader.messageHead)
   let machine := if waitingContinue then machine.addEvent .continue else machine
+
   machine
   |>.setReaderState nextState
   |>.setWriterState .waitingHeaders
@@ -588,9 +650,13 @@ private def processHeaders (machine : Machine dir) : Machine dir :=
   let machine := machine.updateKeepAlive (machine.reader.messageCount + 1 < machine.config.maxMessages)
   let machine := machine.updateKeepAlive machine.reader.messageHead.shouldKeepAlive
 
+  let machine : Machine dir := match dir, machine with
+    | .receiving, machine => machine.modifyReader (Reader.setMessageHead machine.reader.messageHead)
+    | .sending, machine => machine
+
   match checkMessageHead machine.reader.messageHead with
-  | none => machine.setFailure .badMessage
-  | some mode =>
+  | .error err => machine.setFailure err
+  | .ok mode =>
       if exceedsBodyLimitForMode machine mode then
         machine.setFailure .entityTooLarge
       else
@@ -1024,7 +1090,9 @@ private def errorResponseStatus (error : H1.Error) : Status :=
   match error with
   | .unsupportedVersion => .httpVersionNotSupported
   | .entityTooLarge => .payloadTooLarge
+  | .uriTooLong => .uriTooLong
   | .unsupportedMethod => .notImplemented
+  | .unsupportedTransferEncoding => .notImplemented
   | _ => .badRequest
 
 /--
@@ -1210,6 +1278,14 @@ Converts raw parsed header name/value strings into typed header representations.
 private def typedHeader? (name : String) (value : String) : Option (Header.Name × Header.Value) :=
   Prod.mk <$> Header.Name.ofString? name <*> Header.Value.ofString? value
 
+/--
+Classifies hard request start-line parse failures into protocol-level errors.
+-/
+@[inline]
+private def classifyStartLineHardError : Std.Internal.Parsec.Error → H1.Error
+  | .other "uri too long" => .uriTooLong
+  | _ => .badMessage
+
 mutual
 
 /--
@@ -1222,6 +1298,7 @@ private partial def processReceivingStartLine (machine : Machine .receiving) : M
   let (machine, result) := parseWith machine
     (parseRequestLineRawVersion machine.config)
     (limit := some machine.config.maxStartLineLength)
+    (onHardError := classifyStartLineHardError)
 
   match result with
   | some (method?, uri, version) =>
