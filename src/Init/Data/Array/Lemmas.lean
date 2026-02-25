@@ -2854,7 +2854,7 @@ theorem getElem?_extract {xs : Array α} {start stop : Nat} :
 
 @[simp] theorem toList_extract {xs : Array α} {start stop : Nat} :
     (xs.extract start stop).toList = xs.toList.extract start stop := by
-  apply List.ext_getElem <;> simp
+  apply List.ext_getElem <;> simp [List.extract_eq_drop_take']
 
 @[simp] theorem extract_size {xs : Array α} : xs.extract 0 xs.size = xs := by
   apply ext
@@ -2918,7 +2918,7 @@ theorem getElem_shrink {xs : Array α} {i j : Nat} (h : j < (xs.shrink i).size) 
   ext <;> simp [size_shrink, getElem_shrink]
 
 theorem toList_shrink {xs : Array α} {i : Nat} : (xs.shrink i).toList = xs.toList.take i := by
-  simp
+  simp [List.extract_eq_drop_take']
 
 /-! ### foldlM and foldrM -/
 
@@ -4203,7 +4203,7 @@ theorem replace_append_right {xs ys : Array α} (h : ¬ a ∈ xs) :
 theorem replace_extract {xs : Array α} {i : Nat} :
     (xs.extract 0 i).replace a b = (xs.replace a b).extract 0 i := by
   rcases xs with ⟨xs⟩
-  simp [List.replace_take]
+  simp [List.replace_take, List.extract_eq_drop_take']
 
 @[simp] theorem replace_replicate_self {a : α} (h : 0 < n) :
     (replicate n a).replace a b = #[b] ++ replicate (n - 1) a := by
@@ -4551,7 +4551,7 @@ Our goal is to have `simp` "pull `List.toArray` outwards" as much as possible.
 theorem toListRev_toArray {l : List α} : l.toArray.toListRev = l.reverse := by simp
 
 @[grind =] theorem take_toArray {l : List α} {i : Nat} : l.toArray.take i = (l.take i).toArray := by
-  simp
+  simp [List.extract_eq_drop_take']
 
 @[simp, grind =] theorem mapM_toArray [Monad m] [LawfulMonad m] {f : α → m β} {l : List α} :
     l.toArray.mapM f = List.toArray <$> l.mapM f := by

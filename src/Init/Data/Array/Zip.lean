@@ -135,13 +135,13 @@ theorem map_zipWith {δ : Type _} {f : α → β} {g : γ → δ → α} {cs : A
 theorem take_zipWith : (zipWith f as bs).take i = zipWith f (as.take i) (bs.take i) := by
   cases as
   cases bs
-  simp [List.take_zipWith]
+  simp [List.take_zipWith, List.extract_eq_drop_take']
 
 @[grind =]
 theorem extract_zipWith : (zipWith f as bs).extract i j = zipWith f (as.extract i j) (bs.extract i j) := by
   cases as
   cases bs
-  simp [List.drop_zipWith, List.take_zipWith]
+  simp [List.drop_zipWith, List.take_zipWith, List.extract_eq_drop_take']
 
 @[grind =]
 theorem zipWith_append {f : α → β → γ} {as as' : Array α} {bs bs' : Array β}
@@ -195,7 +195,7 @@ theorem zipWith_eq_zipWith_take_min (as : Array α) (bs : Array β) :
     zipWith f as bs = zipWith f (as.take (min as.size bs.size)) (bs.take (min as.size bs.size)) := by
   cases as
   cases bs
-  simp
+  simp [List.extract_eq_drop_take']
   rw [List.zipWith_eq_zipWith_take_min]
 
 @[grind =]

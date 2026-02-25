@@ -479,7 +479,7 @@ theorem false_of_mem_extract_findIdx {xs : Array α} {p : α → Bool} (h : x �
 @[simp, grind =] theorem findIdx_extract {xs : Array α} {i : Nat} {p : α → Bool} :
     (xs.extract 0 i).findIdx p = min i (xs.findIdx p) := by
   cases xs
-  simp
+  simp [List.extract_eq_drop_take']
 
 @[simp] theorem min_findIdx_findIdx {xs : Array α} {p q : α → Bool} :
     min (xs.findIdx p) (xs.findIdx q) = xs.findIdx (fun a => p a || q a) := by
@@ -573,7 +573,7 @@ theorem findIdx?_flatten {xss : Array (Array α)} {p : α → Bool} :
         fun i => ((xss.take i).map Array.size).sum +
           (xss[i]?.map fun xs => xs.findIdx p).getD 0 := by
   cases xss using array₂_induction
-  simp [List.findIdx?_flatten, Function.comp_def]
+  simp [List.findIdx?_flatten, Function.comp_def, List.extract_eq_drop_take']
 
 @[simp, grind =] theorem findIdx?_replicate :
     (replicate n a).findIdx? p = if 0 < n ∧ p a then some 0 else none := by
@@ -617,7 +617,7 @@ theorem findIdx?_eq_some_le_of_findIdx?_eq_some {xs : Array α} {p q : α → Bo
 @[simp, grind =] theorem findIdx?_take {xs : Array α} {i : Nat} {p : α → Bool} :
     (xs.take i).findIdx? p = (xs.findIdx? p).bind (Option.guard (fun j => j < i)) := by
   cases xs
-  simp
+  simp [List.extract_eq_drop_take']
 
 /-! ### findFinIdx? -/
 

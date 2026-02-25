@@ -303,7 +303,7 @@ public theorem toList_mkSlice_rco {xs : ListSlice α} {lo hi : Nat} :
 @[simp, grind =]
 public theorem toArray_mkSlice_rco {xs : ListSlice α} {lo hi : Nat} :
     xs[lo...hi].toArray = xs.toArray.extract lo hi := by
-  simp [← toArray_toList, List.drop_take]
+  simp [← toArray_toList, List.extract_eq_drop_take']
 
 @[simp, grind =]
 public theorem size_mkSlice_rco {xs : ListSlice α} {lo hi : Nat} :
@@ -322,7 +322,7 @@ public theorem toList_mkSlice_rcc {xs : ListSlice α} {lo hi : Nat} :
 @[simp, grind =]
 public theorem toArray_mkSlice_rcc {xs : ListSlice α} {lo hi : Nat} :
     xs[lo...=hi].toArray = xs.toArray.extract lo (hi + 1) := by
-  simp [← ListSlice.toArray_toList, List.drop_take]
+  simp [← ListSlice.toArray_toList, List.extract_eq_drop_take']
 
 @[simp, grind =]
 public theorem size_mkSlice_rcc {xs : ListSlice α} {lo hi : Nat} :
@@ -371,7 +371,7 @@ public theorem toList_mkSlice_roo {xs : ListSlice α} {lo hi : Nat} :
 @[simp, grind =]
 public theorem toArray_mkSlice_roo {xs : ListSlice α} {lo hi : Nat} :
     xs[lo<...hi].toArray = xs.toArray.extract (lo + 1) hi := by
-  simp [← toArray_toList, List.drop_take]
+  simp [← toArray_toList, List.extract_eq_drop_take']
 
 @[simp, grind =]
 public theorem size_mkSlice_roo {xs : ListSlice α} {lo hi : Nat} :
@@ -399,7 +399,7 @@ public theorem toList_mkSlice_roc {xs : ListSlice α} {lo hi : Nat} :
 @[simp, grind =]
 public theorem toArray_mkSlice_roc {xs : ListSlice α} {lo hi : Nat} :
     xs[lo<...=hi].toArray = xs.toArray.extract (lo + 1) (hi + 1) := by
-  simp [← toArray_toList, List.drop_take]
+  simp [← toArray_toList, List.extract_eq_drop_take']
 
 @[simp, grind =]
 public theorem size_mkSlice_roc {xs : ListSlice α} {lo hi : Nat} :
@@ -456,7 +456,7 @@ public theorem toList_mkSlice_rio {xs : ListSlice α} {hi : Nat} :
 @[simp, grind =]
 public theorem toArray_mkSlice_rio {xs : ListSlice α} {hi : Nat} :
     xs[*...hi].toArray = xs.toArray.extract 0 hi := by
-  simp [← toArray_toList]
+  simp [← toArray_toList, List.extract_eq_drop_take']
 
 @[simp, grind =]
 public theorem size_mkSlice_rio {xs : ListSlice α} {hi : Nat} :
@@ -483,7 +483,7 @@ public theorem toList_mkSlice_ric {xs : ListSlice α} {hi : Nat} :
 @[simp, grind =]
 public theorem toArray_mkSlice_ric {xs : ListSlice α} {hi : Nat} :
     xs[*...=hi].toArray = xs.toArray.extract 0 (hi + 1) := by
-  simp [← toArray_toList]
+  simp [← toArray_toList, List.extract_eq_drop_take']
 
 @[simp, grind =]
 public theorem size_mkSlice_ric {xs : ListSlice α} {hi : Nat} :

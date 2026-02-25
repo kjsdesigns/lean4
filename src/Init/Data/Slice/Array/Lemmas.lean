@@ -231,7 +231,7 @@ public theorem Subarray.toList_eq {xs : Subarray α} :
       simp [Subarray.start, Subarray.stop, *, Subarray.array]
     · intros
       simp [Subarray.array, Subarray.start, Subarray.stop]
-  simp [this, ListSlice.toList_eq, lslice, List.drop_take]
+  simp [this, ListSlice.toList_eq, lslice, List.extract_eq_take_drop]
 
 public theorem Subarray.toList_eq_drop_take {xs : Subarray α} :
     xs.toList = (xs.array.toList.take xs.stop).drop xs.start := by
@@ -290,7 +290,7 @@ public theorem Subarray.length_toList {xs : Subarray α} :
     xs.toList.length = xs.size := by
   have : xs.start ≤ xs.stop := xs.internalRepresentation.start_le_stop
   have : xs.stop ≤ xs.array.size := xs.internalRepresentation.stop_le_array_size
-  simp [Subarray.toList_eq, Subarray.size_eq]; omega
+  simp [Subarray.toList_eq, Subarray.size_eq, List.extract_eq_drop_take']; omega
 
 @[simp, grind =]
 public theorem Subarray.size_toArray {xs : Subarray α} :
@@ -322,7 +322,7 @@ public theorem mkSlice_rco_eq_mkSlice_rco_min {xs : Array α} {lo hi : Nat} :
 public theorem toList_mkSlice_rco {xs : Array α} {lo hi : Nat} :
     xs[lo...hi].toList = (xs.toList.take hi).drop lo := by
   rw [List.take_eq_take_min, List.drop_eq_drop_min]
-  simp [Std.Rco.Sliceable.mkSlice, Subarray.toList_eq]
+  simp [Std.Rco.Sliceable.mkSlice, Subarray.toList_eq, List.extract_eq_drop_take']
 
 @[simp, grind =]
 public theorem toArray_mkSlice_rco {xs : Array α} {lo hi : Nat} :
