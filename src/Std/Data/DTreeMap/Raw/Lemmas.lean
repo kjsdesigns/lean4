@@ -6010,6 +6010,10 @@ theorem equiv_iff_toList_eq [TransCmp cmp] (h₁ : t₁.WF) (h₂ : t₂.WF) :
     t₁ ~m t₂ ↔ t₁.toList = t₂.toList :=
   equiv_iff.trans (Impl.equiv_iff_toList_eq h₁.1 h₂.1)
 
+theorem equiv_iff_toArray_eq [TransCmp cmp] (h₁ : t₁.WF) (h₂ : t₂.WF) :
+    t₁ ~m t₂ ↔ t₁.toArray = t₂.toArray :=
+  equiv_iff.trans (Impl.equiv_iff_toArray_eq h₁.1 h₂.1)
+
 theorem insertMany_list_equiv_foldl {l : List ((a : α) × β a)} :
     t₁.insertMany l ~m l.foldl (init := t₁) fun acc p => acc.insert p.1 p.2 := by
   constructor
@@ -6035,6 +6039,10 @@ theorem Const.equiv_iff_toArray_perm : t₁ ~m t₂ ↔ (Const.toArray t₁).Per
 theorem Const.equiv_iff_toList_eq [TransCmp cmp] (h₁ : t₁.WF) (h₂ : t₂.WF) :
     t₁ ~m t₂ ↔ Const.toList t₁ = Const.toList t₂ :=
   equiv_iff.trans (Impl.Const.equiv_iff_toList_eq h₁.1 h₂.1)
+
+theorem Const.equiv_iff_toArray_eq [TransCmp cmp] (h₁ : t₁.WF) (h₂ : t₂.WF) :
+    t₁ ~m t₂ ↔ Const.toArray t₁ = Const.toArray t₂ :=
+  equiv_iff.trans (Impl.Const.equiv_iff_toArray_eq h₁.1 h₂.1)
 
 theorem Const.equiv_iff_keys_unit_perm {t₁ t₂ : Raw α Unit cmp} :
     t₁ ~m t₂ ↔ t₁.keys.Perm t₂.keys :=

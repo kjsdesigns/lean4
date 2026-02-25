@@ -4508,6 +4508,10 @@ theorem equiv_iff_toList_eq [TransCmp cmp] :
     t₁ ~m t₂ ↔ t₁.toList = t₂.toList :=
   equiv_iff_equiv.trans DTreeMap.Const.equiv_iff_toList_eq
 
+theorem equiv_iff_toArray_eq [TransCmp cmp] :
+    t₁ ~m t₂ ↔ t₁.toArray = t₂.toArray :=
+  equiv_iff_equiv.trans DTreeMap.Const.equiv_iff_toArray_eq
+
 theorem equiv_iff_keys_unit_perm {t₁ t₂ : TreeMap α Unit cmp} :
     t₁ ~m t₂ ↔ t₁.keys.Perm t₂.keys :=
   equiv_iff_equiv.trans DTreeMap.Const.equiv_iff_keys_unit_perm

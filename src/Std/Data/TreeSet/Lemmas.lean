@@ -8,6 +8,7 @@ module
 prelude
 import Std.Data.TreeMap.Lemmas
 import Std.Data.DTreeMap.Lemmas
+public import Init.Data.Array.Perm
 public import Std.Data.TreeSet.AdditionalOperations
 
 @[expose] public section
@@ -2386,6 +2387,9 @@ theorem empty_equiv_iff_isEmpty : empty ~m t ↔ t.isEmpty :=
 theorem equiv_iff_toList_perm : t₁ ~m t₂ ↔ t₁.toList.Perm t₂.toList :=
   equiv_iff_equiv.trans TreeMap.equiv_iff_keys_unit_perm
 
+theorem equiv_iff_toArray_perm : t₁ ~m t₂ ↔ t₁.toArray.Perm t₂.toArray :=
+  equiv_iff_equiv.trans TreeMap.equiv_iff_keysArray_unit_perm
+
 theorem equiv_iff_forall_mem_iff [TransCmp cmp] [LawfulEqCmp cmp] :
     t₁ ~m t₂ ↔ (∀ k, k ∈ t₁ ↔ k ∈ t₂) :=
   ⟨fun h _ => h.mem_iff, Equiv.of_forall_mem_iff⟩
@@ -2393,9 +2397,16 @@ theorem equiv_iff_forall_mem_iff [TransCmp cmp] [LawfulEqCmp cmp] :
 theorem Equiv.of_toList_perm (h : t₁.toList.Perm t₂.toList) : t₁ ~m t₂ :=
   ⟨.of_keys_unit_perm h⟩
 
+theorem Equiv.of_toArray_perm (h : t₁.toArray.Perm t₂.toArray) : t₁ ~m t₂ :=
+  ⟨.of_keysArray_unit_perm h⟩
+
 theorem equiv_iff_toList_eq [TransCmp cmp] :
     t₁ ~m t₂ ↔ t₁.toList = t₂.toList :=
   equiv_iff_equiv.trans TreeMap.equiv_iff_keys_unit_eq
+
+theorem equiv_iff_toArray_eq [TransCmp cmp] :
+    t₁ ~m t₂ ↔ t₁.toArray = t₂.toArray :=
+  equiv_iff_equiv.trans TreeMap.equiv_iff_keysArray_unit_eq
 
 theorem insertMany_list_equiv_foldl {l : List α} :
     insertMany t₁ l ~m l.foldl (init := t₁) fun acc a => acc.insert a := by

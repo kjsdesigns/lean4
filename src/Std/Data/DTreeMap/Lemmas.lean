@@ -6142,6 +6142,10 @@ theorem equiv_iff_toList_eq [TransCmp cmp] :
     t₁ ~m t₂ ↔ t₁.toList = t₂.toList :=
   equiv_iff_equiv.trans (Impl.equiv_iff_toList_eq t₁.2 t₂.2)
 
+theorem equiv_iff_toArray_eq [TransCmp cmp] :
+    t₁ ~m t₂ ↔ t₁.toArray = t₂.toArray :=
+  equiv_iff_equiv.trans (Impl.equiv_iff_toArray_eq t₁.2 t₂.2)
+
 theorem insertMany_list_equiv_foldl {l : List ((a : α) × β a)} :
     t₁.insertMany l ~m l.foldl (init := t₁) fun acc p => acc.insert p.1 p.2 := by
   constructor
@@ -6174,6 +6178,9 @@ theorem Const.equiv_iff_toArray_perm : t₁ ~m t₂ ↔ (Const.toArray t₁).Per
 
 theorem Const.equiv_iff_toList_eq [TransCmp cmp] : t₁ ~m t₂ ↔ Const.toList t₁ = Const.toList t₂ :=
   equiv_iff_equiv.trans (Impl.Const.equiv_iff_toList_eq t₁.2 t₂.2)
+
+theorem Const.equiv_iff_toArray_eq [TransCmp cmp] : t₁ ~m t₂ ↔ Const.toArray t₁ = Const.toArray t₂ :=
+  equiv_iff_equiv.trans (Impl.Const.equiv_iff_toArray_eq t₁.2 t₂.2)
 
 theorem Const.equiv_iff_keys_unit_perm {t₁ t₂ : DTreeMap α Unit cmp} : t₁ ~m t₂ ↔ t₁.keys.Perm t₂.keys :=
   equiv_iff_equiv.trans Impl.Const.equiv_iff_keys_perm
