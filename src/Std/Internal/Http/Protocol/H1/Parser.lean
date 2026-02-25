@@ -99,9 +99,13 @@ https://httpwg.org/specs/rfc9112.html#rfc.section.2.2:
 "In the interest of robustness, a server that is expecting to receive and parse a request-line SHOULD
 ignore at least one empty line (CRLF) received prior to the request-line."
 -/
-def skipLeadingRequestEmptyLines : Parser Unit := do
+def skipLeadingRequestEmptyLines (limits : H1.Config) : Parser Unit := do
+  let mut count := 0
   while (← peekWhen? (· == '\r'.toUInt8)).isSome do
+    if count >= limits.maxLeadingEmptyLines then
+      fail "too many leading empty lines"
     crlf
+    count := count + 1
 
 /--
 Parses a single space (SP, 0x20).
@@ -207,7 +211,7 @@ Parses a request line and returns a fully-typed `Request.Head`.
 `request-line = method SP request-target SP HTTP-version`
 -/
 public def parseRequestLine (limits : H1.Config) : Parser Request.Head := do
-  skipLeadingRequestEmptyLines
+  skipLeadingRequestEmptyLines limits
   let method ← parseMethod <* sp
   let uri ← parseURI limits <* sp
 
@@ -227,7 +231,7 @@ Parses a request line and returns the recognized HTTP method and version when av
 request-line = method SP request-target SP HTTP-version
 -/
 public def parseRequestLineRawVersion (limits : H1.Config) : Parser (Option Method × RequestTarget × Option Version) := do
-  skipLeadingRequestEmptyLines
+  skipLeadingRequestEmptyLines limits
   let methodToken ← parseMethodToken limits <* sp
   let uri ← parseURI limits <* sp
 
