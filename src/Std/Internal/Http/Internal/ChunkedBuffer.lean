@@ -31,7 +31,7 @@ maintaining the total size. This allows building large buffers without repeated 
 -/
 structure ChunkedBuffer where
   /--
-  The accumulated byte arrays, stored in FIFO order.
+  The accumulated byte arrays.
   -/
   data : Array ByteArray
 
