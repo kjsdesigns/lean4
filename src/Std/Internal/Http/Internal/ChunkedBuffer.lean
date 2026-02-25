@@ -10,7 +10,6 @@ import Init.Data.ToString
 import Init.Data.Array.Lemmas
 public import Init.Data.String
 public import Init.Data.ByteArray
-public import Init.Data.Queue
 
 public section
 
@@ -27,14 +26,14 @@ namespace Std.Http.Internal
 set_option linter.all true
 
 /--
-A structure that accumulates multiple `ByteArray`s efficiently by tracking them in a queue and
+A structure that accumulates multiple `ByteArray`s efficiently by tracking them in an array and
 maintaining the total size. This allows building large buffers without repeated allocations and copies.
 -/
 structure ChunkedBuffer where
   /--
-  The accumulated byte arrays
+  The accumulated byte arrays, stored in FIFO order.
   -/
-  data : Queue ByteArray
+  data : Array ByteArray
 
   /--
   The total size in bytes of all accumulated arrays
@@ -48,14 +47,14 @@ An empty `ChunkedBuffer`.
 -/
 @[inline]
 def empty : ChunkedBuffer :=
-  { data := .empty, size := 0 }
+  { data := #[], size := 0 }
 
 /--
 Append a single `ByteArray` to the `ChunkedBuffer`.
 -/
 @[inline]
 def push (c : ChunkedBuffer) (b : ByteArray) : ChunkedBuffer :=
-  { data := c.data.enqueue b, size := c.size + b.size }
+  { data := c.data.push b, size := c.size + b.size }
 
 /--
 Writes a `ByteArray` to the `ChunkedBuffer`.
@@ -69,8 +68,7 @@ Writes a `ChunkedBuffer` to the `ChunkedBuffer`.
 -/
 @[inline]
 def append (buffer : ChunkedBuffer) (data : ChunkedBuffer) : ChunkedBuffer :=
-  -- Queue.enqueueAll prepends to eList, so reverse to maintain FIFO order
-  { data := buffer.data.enqueueAll data.data.toArray.toList.reverse, size := buffer.size + data.size }
+  { data := buffer.data ++ data.data, size := buffer.size + data.size }
 
 /--
 Writes a `Char` to the `ChunkedBuffer`. Only the low byte is written (`Char.toUInt8`),
@@ -92,35 +90,24 @@ Turn the combined structure into a single contiguous ByteArray.
 -/
 @[inline]
 def toByteArray (cb : ChunkedBuffer) : ByteArray :=
-  let arr := cb.data.toArray
-  if h : 1 = arr.size then
-    arr[0]'(Nat.le_of_eq h)
+  if h : 1 = cb.data.size then
+    cb.data[0]'(Nat.le_of_eq h)
   else
-    arr.foldl (· ++ ·) (.emptyWithCapacity cb.size)
+    cb.data.foldl (· ++ ·) (.emptyWithCapacity cb.size)
 
 /--
 Build from a ByteArray directly.
 -/
 @[inline]
 def ofByteArray (bs : ByteArray) : ChunkedBuffer :=
-  { data := .empty |>.enqueue bs, size := bs.size }
+  { data := #[bs], size := bs.size }
 
 /--
 Build from an array of ByteArrays directly.
 -/
 @[inline]
 def ofArray (bs : Array ByteArray) : ChunkedBuffer :=
-  { data := .empty |>.enqueueAll bs.reverse.toList, size := bs.foldl (· + ·.size) 0 }
-
-/--
-Dequeue the first `ByteArray` from the `ChunkedBuffer`, returning it along with the remaining buffer.
-Returns `none` if the buffer is empty.
--/
-@[inline]
-def dequeue? (c : ChunkedBuffer) : Option (ByteArray × ChunkedBuffer) :=
-  match c.data.dequeue? with
-  | some (b, rest) => some (b, { data := rest, size := c.size - b.size })
-  | none => none
+  { data := bs, size := bs.foldl (· + ·.size) 0 }
 
 /--
 Checks whether the buffer is empty.

@@ -6,7 +6,6 @@ Authors: Sofia Rodrigues
 module
 
 prelude
-public import Std.Internal.Async
 public import Std.Internal.Http.Data.Extensions
 public import Std.Internal.Http.Data.Status
 public import Std.Internal.Http.Data.Version
@@ -23,8 +22,6 @@ builder functions for constructing responses and selecting common HTTP status co
 namespace Std.Http
 
 set_option linter.all true
-
-open Std.Internal.IO.Async
 
 /--
 The main parts of a response.
