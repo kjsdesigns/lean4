@@ -371,9 +371,29 @@ public def parseChunkSizedData (size : Nat) : Parser TakeResult := do
   | .incomplete data res => return .incomplete data res
 
 /--
-Parses a trailer header (used after a chunked body).
+Returns `true` if `name` (compared case-insensitively) is a field that MUST NOT appear in HTTP/1.1
+trailer sections per RFC 9112 §6.5. Forbidden fields are those required for message framing
+(`content-length`, `transfer-encoding`), routing (`host`), or connection management (`connection`).
 -/
-def parseTrailerHeader (limits : H1.Config) : Parser (Option (String × String)) := parseSingleHeader limits
+private def isForbiddenTrailerField (name : String) : Bool :=
+  let n := name.toLower
+  n == "content-length" || n == "transfer-encoding" || n == "host" ||
+  n == "connection" || n == "expect" || n == "te" ||
+  n == "authorization" || n == "max-forwards" || n == "cache-control" ||
+  n == "content-encoding" || n == "upgrade" || n == "trailer"
+
+/--
+Parses a trailer header (used after a chunked body), rejecting forbidden field names per RFC 9112
+§6.5. Fields used for message framing (`content-length`, `transfer-encoding`), routing (`host`),
+or connection management (`connection`, `te`, `upgrade`) are rejected to prevent trailer injection
+attacks where a downstream proxy might re-interpret them.
+-/
+def parseTrailerHeader (limits : H1.Config) : Parser (Option (String × String)) := do
+  let result ← parseSingleHeader limits
+  if let some (name, _) := result then
+    if isForbiddenTrailerField name then
+      fail s!"forbidden trailer field: {name}"
+  return result
 
 /--
 Parses trailer headers after a chunked body and returns them as an array of name-value pairs.
