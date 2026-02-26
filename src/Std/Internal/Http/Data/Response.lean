@@ -39,7 +39,7 @@ structure Response.Head where
 deriving Inhabited, Repr
 
 /--
-HTTP response structure parameterized by body type
+HTTP response structure parameterized by body type.
 -/
 structure Response (t : Type) where
   /--
@@ -103,7 +103,7 @@ Creates a new HTTP Response builder with default head (status: 200 OK, version: 
 def empty : Builder := { }
 
 /--
-Sets the HTTP status code for the response being built
+Sets the HTTP status code for the response being built.
 -/
 def status (builder : Builder) (status : Status) : Builder :=
   { builder with head := { builder.head with status := status } }
@@ -115,7 +115,7 @@ def extension (builder : Builder) [TypeName α] (data : α) : Builder :=
   { builder with extensions := builder.extensions.insert data }
 
 /--
-Builds and returns the final HTTP Response with the specified body
+Builds and returns the final HTTP Response with the specified body.
 -/
 def body (builder : Builder) (body : t) : Response t :=
   { head := builder.head, body := body, extensions := builder.extensions }

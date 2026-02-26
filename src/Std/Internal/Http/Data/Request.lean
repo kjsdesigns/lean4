@@ -53,7 +53,7 @@ structure Request.Head where
 deriving Inhabited, Repr
 
 /--
-HTTP request structure parameterized by body type
+HTTP request structure parameterized by body type.
 -/
 structure Request (t : Type) where
   /--
@@ -62,7 +62,7 @@ structure Request (t : Type) where
   head : Request.Head
 
   /--
-  The request body content of type t
+  The request body content of type t.
   -/
   body : t
 
@@ -73,11 +73,11 @@ structure Request (t : Type) where
 deriving Inhabited
 
 /--
-Builds an HTTP Request
+Builds an HTTP Request.
 -/
 structure Request.Builder where
   /--
-  The head of the request
+  The head of the request.
   -/
   head : Head := { method := .get, version := .v11, uri := "*" }
 
@@ -120,19 +120,19 @@ Creates a new HTTP request builder with the default head
 def empty : Builder := { }
 
 /--
-Sets the HTTP method for the request being built
+Sets the HTTP method for the request being built.
 -/
 def method (builder : Builder) (method : Method) : Builder :=
   { builder with head := { builder.head with method := method } }
 
 /--
-Sets the HTTP version for the request being built
+Sets the HTTP version for the request being built.
 -/
 def version (builder : Builder) (version : Version) : Builder :=
   { builder with head := { builder.head with version := version } }
 
 /--
-Sets the request target/URI for the request being built
+Sets the request target/URI for the request being built.
 -/
 def uri (builder : Builder) (uri : String) : Builder :=
   { builder with head := { builder.head with uri := uri } }
@@ -144,7 +144,7 @@ def extension (builder : Builder) [TypeName α] (data : α) : Builder :=
   { builder with extensions := builder.extensions.insert data }
 
 /--
-Builds and returns the final HTTP Request with the specified body
+Builds and returns the final HTTP Request with the specified body.
 -/
 def body (builder : Builder) (body : t) : Request t :=
   { head := builder.head, body := body, extensions := builder.extensions }
@@ -152,7 +152,7 @@ def body (builder : Builder) (body : t) : Request t :=
 end Builder
 
 /--
-Creates a new HTTP GET Request with the specified URI
+Creates a new HTTP GET Request with the specified URI.
 -/
 def get (uri : String) : Builder :=
   new
@@ -176,7 +176,7 @@ def put (uri : String) : Builder :=
   |>.uri uri
 
 /--
-Creates a new HTTP DELETE Request builder with the specified URI
+Creates a new HTTP DELETE Request builder with the specified URI.
 -/
 def delete (uri : String) : Builder :=
   new
@@ -184,7 +184,7 @@ def delete (uri : String) : Builder :=
   |>.uri uri
 
 /--
-Creates a new HTTP PATCH Request builder with the specified URI
+Creates a new HTTP PATCH Request builder with the specified URI.
 -/
 def patch (uri : String) : Builder :=
   new
@@ -219,7 +219,7 @@ def connect (uri : String) : Builder :=
   |>.uri uri
 
 /--
-Creates a new HTTP TRACE Request builder with the specified URI
+Creates a new HTTP TRACE Request builder with the specified URI.
 -/
 def trace (uri : String) : Builder :=
   new
