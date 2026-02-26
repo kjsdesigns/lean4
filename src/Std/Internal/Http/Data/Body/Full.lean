@@ -86,10 +86,8 @@ def tryRecv (full : Full) : Async (Option Chunk) :=
 /--
 Receives the body data. Returns the full byte array on the first call as a single chunk,
 then `none` on all subsequent calls.
-
-The `count` hint is ignored; the entire content is always returned in one chunk.
 -/
-def recv (full : Full) (_count : Option UInt64) : Async (Option Chunk) :=
+def recv (full : Full) : Async (Option Chunk) :=
   full.tryRecv
 
 /--

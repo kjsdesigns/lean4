@@ -6,9 +6,6 @@ Authors: Sofia Rodrigues
 module
 
 prelude
-public import Init.Data.String
-public import Std.Data.HashMap
-public import Std.Internal.Http.Internal
 public import Std.Internal.Http.Data.Headers.Basic
 public import Std.Internal.Http.Data.Headers.Name
 public import Std.Internal.Http.Data.Headers.Value
@@ -19,6 +16,8 @@ public section
 # Headers
 
 This module defines the `Headers` type, which represents a collection of HTTP header name-value pairs.
+
+Reference: https://www.rfc-editor.org/rfc/rfc9110.html#section-5
 -/
 
 namespace Std.Http
@@ -29,6 +28,8 @@ open Internal
 
 /--
 A structure for managing HTTP headers as key-value pairs.
+
+Reference: https://www.rfc-editor.org/rfc/rfc9110.html#section-5
 -/
 structure Headers where
 
@@ -39,7 +40,7 @@ structure Headers where
 deriving Inhabited, Repr
 
 instance : Membership Header.Name Headers where
-  mem s h := h ∈ s.map
+  mem headers name := name ∈ headers.map
 
 instance (name : Header.Name) (h : Headers) : Decidable (name ∈ h) :=
   inferInstanceAs (Decidable (name ∈ h.map))
@@ -61,7 +62,7 @@ def getAll (headers : Headers) (name : Header.Name) (h : name ∈ headers) : Arr
   headers.map.getAll name h
 
 /--
-Retrieves all `Header.Value` entries for the given key.
+Like `getAll`, but returns `none` instead of requiring a membership proof.
 Returns `none` if the header is absent.
 -/
 @[inline]
@@ -133,8 +134,8 @@ def insert? (headers : Headers) (name : String) (value : String) : Option Header
 Inserts a new key with an array of values.
 -/
 @[inline]
-def insertMany (headers : Headers) (key : Header.Name) (value : Array Header.Value) (p : value.size > 0) : Headers :=
-  { map := headers.map.insertMany key value p }
+def insertMany (headers : Headers) (key : Header.Name) (values : Array Header.Value) : Headers :=
+  { map := headers.map.insertMany key values }
 
 /--
 Creates empty headers.
@@ -226,16 +227,22 @@ def filter (headers : Headers) (f : Header.Name → Header.Value → Bool) : Hea
   headers.filterMap (fun k v => if f k v then some v else none)
 
 /--
-Updates the first value of a header if it exists, or inserts if it doesn't. Replaces all existing values
-for that header with the new value.
+Updates all the values of a header if it exists.
 -/
-def update (headers : Headers) (name : Header.Name) (f : Option Header.Value → Header.Value) : Headers :=
-  let newValue := f (headers.get? name)
-  { map := headers.map.erase name |>.insert name newValue }
+def update (headers : Headers) (name : Header.Name) (f : Header.Value → Header.Value) : Headers :=
+  { map := headers.map.update name f }
+
+/--
+Replaces the last value for the given header name.
+If the header is absent, returns the headers unchanged.
+-/
+@[inline]
+def replaceLast (headers : Headers) (name : Header.Name) (value : Header.Value) : Headers :=
+  { map := headers.map.replaceLast name value }
 
 instance : ToString Headers where
   toString headers :=
-    let pairs := headers.map.toArray.map (fun (k, v) => s!"{k}: {v.value}")
+    let pairs := headers.map.toArray.map (fun (k, v) => s!"{k}: {v}")
     String.intercalate "\r\n" pairs.toList
 
 instance : Encode .v11 Headers where
@@ -254,5 +261,8 @@ instance : Insert (Header.Name × Header.Value) Headers :=
 
 instance : Union Headers :=
   ⟨merge⟩
+
+instance [Monad m] : ForIn m Headers (Header.Name × Header.Value) where
+  forIn headers b f := forIn headers.map.entries b f
 
 end Std.Http.Headers

@@ -8,7 +8,6 @@ module
 prelude
 public import Std.Internal.Http.Data.Headers.Name
 public import Std.Internal.Http.Data.Headers.Value
-public import Std.Internal.Http.Internal
 
 public section
 
@@ -16,6 +15,8 @@ public section
 # Header Typeclass and Common Headers
 
 This module defines the `Header` typeclass for typed HTTP headers and some common header parsers.
+
+Reference: https://www.rfc-editor.org/rfc/rfc9110.html#name-representation-data-and-met
 -/
 
 namespace Std.Http
@@ -39,10 +40,6 @@ class Header (α : Type) where
   -/
   serialize : α → Header.Name × Header.Value
 
-/--
-An `Encode` instance can be derived from any `Header` instance by serializing to the wire format
-`Name: Value\r\n`.
--/
 instance [h : Header α] : Encode .v11 α where
   encode buffer a :=
     let (name, value) := h.serialize a
@@ -50,21 +47,14 @@ instance [h : Header α] : Encode .v11 α where
 
 namespace Header
 
-/--
-Checks whether a string is a valid non-empty HTTP token.
--/
-def isToken (s : String) : Bool :=
-  !s.isEmpty && s.toList.all Char.token
-
-/--
-Parses a comma-separated token list with OWS trimming and lowercase normalization.
--/
-def parseTokenList (v : Value) : Array String :=
+private def parseTokenList (v : Value) : Array String :=
   v.value.split (· == ',') |>.toArray.map (·.trimAscii.toString.toLower)
 
 /--
 The `Content-Length` header, representing the size of the message body in bytes.
 Parses only valid natural number values.
+
+Reference: https://www.rfc-editor.org/rfc/rfc9110.html#section-8.6-2
 -/
 structure ContentLength where
 
@@ -93,7 +83,10 @@ instance : Header ContentLength := ⟨parse, serialize⟩
 end ContentLength
 
 /--
-Validates the chunked placement rules. Returns `none` if the encoding list violates the constraints.
+Validates the chunked placement rules for the Transfer Encoding header. Returns `false` if the
+encoding list violates the constraints.
+
+Reference: https://www.rfc-editor.org/rfc/rfc9112#section-6.1
 -/
 @[expose]
 def TransferEncoding.Validate (codings : Array String) : Bool :=
@@ -101,7 +94,10 @@ def TransferEncoding.Validate (codings : Array String) : Bool :=
     false
   else
     let chunkedCount := codings.filter (· == "chunked") |>.size
+
+    -- the sender MUST either apply chunked as the final transfer coding
     let lastIsChunked := codings.back? == some "chunked"
+
     if chunkedCount > 1 then
       false
     else if chunkedCount == 1 && !lastIsChunked then
@@ -115,6 +111,8 @@ The `Transfer-Encoding` header, representing the list of transfer codings applie
 Validation rules (RFC 9112 Section 6.1):
 - "chunked" may appear at most once.
 - If "chunked" is present, it must be the last encoding in the list.
+
+Reference: https://www.rfc-editor.org/rfc/rfc9112#section-6.1
 -/
 structure TransferEncoding where
 
@@ -124,7 +122,7 @@ structure TransferEncoding where
   codings : Array String
 
   /--
-  Valid encodings.
+  Proof that the transfer codings satisfy the chunked placement rules.
   -/
   valid : TransferEncoding.Validate codings = true
 
@@ -161,6 +159,8 @@ end TransferEncoding
 
 /--
 The `Connection` header, represented as a list of connection option tokens.
+
+Reference: https://www.rfc-editor.org/rfc/rfc9110.html#name-connection
 -/
 structure Connection where
   /--
@@ -169,9 +169,9 @@ structure Connection where
   tokens : Array String
 
   /--
-  Valid connection-option tokens.
+  Proof that all tokens satisfy `isToken`.
   -/
-  valid : tokens.size > 0 ∧ tokens.all isToken = true
+  valid : tokens.all isToken = true
 deriving Repr
 
 namespace Connection
@@ -194,7 +194,7 @@ Parses a `Connection` header value into normalized tokens.
 -/
 def parse (v : Value) : Option Connection :=
   let tokens := parseTokenList v
-  if h : tokens.size > 0 ∧ tokens.all isToken = true then
+  if h : tokens.all isToken = true then
     some ⟨tokens, h⟩
   else
     none
@@ -208,6 +208,4 @@ def serialize (connection : Connection) : Header.Name × Header.Value :=
 
 instance : Header Connection := ⟨parse, serialize⟩
 
-end Connection
-
-end Std.Http.Header
+end Std.Http.Header.Connection

@@ -17,6 +17,10 @@ public section
 This module defines the `URI` and `RequestTarget` types that represent and manipulate components of
 URIs as defined by RFC 3986. It provides parsing, rendering, and normalization utilities for working
 with URIs and request targets in HTTP messages.
+
+References:
+* https://www.rfc-editor.org/rfc/rfc3986.html
+* https://www.rfc-editor.org/rfc/rfc9112.html#section-3.3
 -/
 
 namespace Std.Http.RequestTarget

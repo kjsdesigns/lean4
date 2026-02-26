@@ -18,16 +18,24 @@ public section
 /-!
 # URI Parser
 
-This module provides parsers for URIs and request targets according to RFC 3986.
+This module provides parsers for HTTP request targets and HTTP-oriented URIs aligned with RFC 3986.
 It handles parsing of schemes, authorities, paths, queries, and fragments.
+
+Notable intentional constraints:
+* hosts are limited to IPv4, bracketed IPv6, and DNS-style domain names
+* IPvFuture (`v...`) inside `IP-literal` is currently rejected
+
+References:
+* https://www.rfc-editor.org/rfc/rfc3986.html
+* https://www.rfc-editor.org/rfc/rfc9110.html#name-uri-references
+* https://www.rfc-editor.org/rfc/rfc9112.html#section-3.3
 -/
 
 namespace Std.Http.URI.Parser
 
-open Internal Char
-
 set_option linter.all true
 
+open Internal Char
 open Std Internal Parsec ByteArray
 
 @[inline]
@@ -35,25 +43,8 @@ private def tryOpt (p : Parser α) : Parser (Option α) :=
   optional (attempt p)
 
 @[inline]
-private def ofExcept (p : Except String α) : Parser α :=
-  match p with
-  | .ok res => pure res
-  | .error err => fail err
-
-@[inline]
 private def peekIs (p : UInt8 → Bool) : Parser Bool := do
   return (← peekWhen? p).isSome
-
-private def hexToByte (digit : UInt8) : UInt8 :=
-  if digit <= '9'.toUInt8 then digit - '0'.toUInt8
-  else if digit <= 'F'.toUInt8 then digit - 'A'.toUInt8 + 10
-  else digit - 'a'.toUInt8 + 10
-
-private def parsePctEncoded : Parser UInt8 := do
-  skipByte '%'.toUInt8
-  let hi ← hexToByte <$> satisfy isHexDigitByte
-  let lo ← hexToByte <$> satisfy isHexDigitByte
-  return (hi <<< 4) ||| lo
 
 -- scheme = ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )
 private def parseScheme (config : URI.Config) : Parser URI.Scheme := do
@@ -66,8 +57,8 @@ private def parseScheme (config : URI.Config) : Parser URI.Scheme := do
   let schemeBytes := ByteArray.empty.push first ++ rest.toByteArray
   let str := String.fromUTF8! schemeBytes |>.toLower
 
-  if h: str.toList.all isValidSchemeChar ∧ ¬str.isEmpty then
-    return ⟨str, ⟨.isLowerCase_toLower, h⟩⟩
+  if h : URI.IsValidScheme str then
+    return ⟨str, h⟩
   else
     fail "invalid scheme"
 
@@ -93,34 +84,33 @@ private def parseUserInfo (config : URI.Config) : Parser URI.UserInfo := do
       (isUserInfoChar x ∨ x = '%'.toUInt8))
     config.maxUserInfoLength
 
-  let some userName := URI.EncodedUserInfo.ofByteArray? userBytesName.toByteArray
+  let some userNameEncoded := URI.EncodedUserInfo.ofByteArray? userBytesName.toByteArray
     | fail "invalid percent encoding in user info"
 
-  let userPass ← if ← peekIs (· == ':'.toUInt8) then
+  let userPassEncoded ← if ← peekIs (· == ':'.toUInt8) then
       skip
 
       let userBytesPass ← takeWhileAtMost
         (fun x => isUserInfoChar x ∨ x = '%'.toUInt8)
         config.maxUserInfoLength
 
-      let some userStrPass := URI.EncodedUserInfo.ofByteArray? userBytesPass.toByteArray >>= URI.EncodedUserInfo.decode
+      let some userPassEncoded := URI.EncodedUserInfo.ofByteArray? userBytesPass.toByteArray
         | fail "invalid percent encoding in user info"
 
-      pure <| some userStrPass
+      pure <| some userPassEncoded
     else
       pure none
 
-  let some userName := userName.decode
-    | fail "invalid username"
+  return ⟨userNameEncoded, userPassEncoded⟩
 
-  return ⟨userName, userPass⟩
-
--- IP-literal = "[" ( IPv6address / IPvFuture  ) "]"
+-- Parses bracketed IPv6 literals.
+-- Note: RFC 3986 also allows IPvFuture inside `IP-literal`; this parser
+-- currently rejects IPvFuture.
 private def parseIPv6 : Parser Net.IPv6Addr := do
   skipByte '['.toUInt8
 
   let result ← takeWhile1AtMost
-    (fun x => x = ':'.toUInt8 ∨ isHexDigitByte x)
+    (fun x => x = ':'.toUInt8 ∨ x = '.'.toUInt8 ∨ isHexDigitByte x)
     256
 
   skipByte ']'.toUInt8
@@ -129,7 +119,7 @@ private def parseIPv6 : Parser Net.IPv6Addr := do
   let some ipv6Addr := Std.Net.IPv6Addr.ofString ipv6Str
     | fail s!"invalid IPv6 address: {ipv6Str}"
 
-  return  ipv6Addr
+  return ipv6Addr
 
 -- IPv4address = dec-octet "." dec-octet "." dec-octet "." dec-octet
 private def parseIPv4 : Parser Net.IPv4Addr := do
@@ -138,10 +128,10 @@ private def parseIPv4 : Parser Net.IPv4Addr := do
     256
 
   let ipv4Str := String.fromUTF8! result.toByteArray
-  let some ipv4Str := Std.Net.IPv4Addr.ofString ipv4Str
+  let some ipv4Addr := Std.Net.IPv4Addr.ofString ipv4Str
     | fail s!"invalid IPv4 address: {ipv4Str}"
 
-  return ipv4Str
+  return ipv4Addr
 
 -- host = IP-literal / IPv4address / reg-name
 -- Note: RFC 1123 allows domain labels to start with digits, so we must try IPv4
@@ -203,6 +193,7 @@ path-empty    = 0<pchar>
 Parses a URI path with combined parsing and validation.
 -/
 def parsePath (config : URI.Config) (forceAbsolute : Bool) (allowEmpty : Bool) : Parser URI.Path := do
+  let isPathDelimiter : UInt8 → Bool := fun c => c = '?'.toUInt8 ∨ c = '#'.toUInt8
   let mut isAbsolute := false
   let mut segments : Array _ := #[]
   let mut totalLength := 0
@@ -228,6 +219,13 @@ def parsePath (config : URI.Config) (forceAbsolute : Bool) (allowEmpty : Bool) :
 
   -- Parse segments
   while (← peek?).isSome do
+    let some next := (← peek?) | break
+    if isPathDelimiter next then
+      break
+
+    if ¬(next = '/'.toUInt8 ∨ isPChar next ∨ next = '%'.toUInt8) then
+      break
+
     if segments.size >= config.maxPathSegments then
       fail s!"too many path segments (limit: {config.maxPathSegments})"
 
@@ -247,7 +245,10 @@ def parsePath (config : URI.Config) (forceAbsolute : Bool) (allowEmpty : Bool) :
         fail s!"path too long (limit: {config.maxTotalPathLength} bytes)"
       skip
       -- If path ends with '/', add empty segment
-      if (← peek?).isNone then
+      let next ← peek?
+      if next.isNone || next.any isPathDelimiter then
+        if segments.size >= config.maxPathSegments then
+          fail s!"too many path segments (limit: {config.maxPathSegments})"
         segments := segments.push (URI.EncodedString.empty)
     else
       break
@@ -261,6 +262,9 @@ private def parseQuery (config : URI.Config) : Parser URI.Query := do
 
   let some queryStr := String.fromUTF8? queryBytes.toByteArray
     | fail "invalid query string"
+
+  if queryStr.isEmpty then
+    return URI.Query.empty
 
   let rawPairs := queryStr.splitOn "&"
 
@@ -276,7 +280,7 @@ private def parseQuery (config : URI.Config) : Parser URI.Query := do
       let key ← URI.EncodedQueryParam.fromString? key
       let value ← URI.EncodedQueryParam.fromString? (String.intercalate "=" value)
       pure (acc.insertEncoded key (some value))
-    | [] => pure acc
+    | [] => pure acc  -- unreachable: splitOn always returns at least one element
 
   if let some pairs := pairs then
     return pairs
@@ -330,7 +334,7 @@ public def parseURI (config : URI.Config := {}) : Parser URI := do
 Parses a request target with combined parsing and validation.
 -/
 public def parseRequestTarget (config : URI.Config := {}) : Parser RequestTarget :=
-  asterisk <|> origin <|> authority <|> absolute
+  asterisk <|> origin <|> absoluteHttp <|> authority <|> absolute
 where
   -- The asterisk form
   asterisk : Parser RequestTarget := do
@@ -348,15 +352,33 @@ where
     else
       fail "not origin"
 
-  -- absolute-URI  = scheme ":" hier-part [ "?" query ]
-  absolute : Parser RequestTarget := attempt do
-    let scheme ← parseScheme config
+  absoluteFromScheme (scheme : URI.Scheme) : Parser RequestTarget := do
     skipByte ':'.toUInt8
     let (auth, path) ← parseHierPart config
     let query ← optional (skipByteChar '?' *> parseQuery config)
     let query := query.getD URI.Query.empty
 
     return .absoluteForm { path, scheme, authority := auth, query, fragment := none } (by simp)
+
+  -- Prefer absolute-form for explicit HTTP(S) scheme targets.
+  -- This avoids misclassifying full URIs like `http://host/path` as authority-form.
+  absoluteHttp : Parser RequestTarget := attempt do
+    let uri ← parseURI config
+    let schemeStr : String := uri.scheme
+    if h : (schemeStr = "http" || schemeStr = "https") && uri.fragment.isNone then
+      have hEqNone : uri.fragment = none := by
+        simp at h
+        exact h.right
+      have hNoFrag : uri.fragment.isNone = true := by
+        simp [hEqNone]
+      return .absoluteForm uri hNoFrag
+    else
+      fail "not http absolute uri"
+
+  -- absolute-URI  = scheme ":" hier-part [ "?" query ]
+  absolute : Parser RequestTarget := attempt do
+    let scheme ← parseScheme config
+    absoluteFromScheme scheme
 
   -- authority-form = host ":" port
   authority : Parser RequestTarget := attempt do

@@ -13,7 +13,7 @@ public import Std.Internal.Http.Data.Body.Length
 public section
 
 /-!
-# Body
+# Body.Basic
 
 This module defines shared types for HTTP body handling.
 -/
@@ -28,7 +28,7 @@ Typeclass for types that can be converted to a `ByteArray`.
 class ToByteArray (α : Type) where
 
   /--
-  Transforms into a `ByteArray`
+  Transforms into a `ByteArray`.
   -/
   toByteArray : α → ByteArray
 
