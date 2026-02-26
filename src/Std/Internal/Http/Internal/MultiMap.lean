@@ -102,7 +102,7 @@ Returns `none` if the key is absent.
 @[inline]
 def getLast? (map : MultiMap α β) (key : α) : Option β :=
   map.data.get? key
-  |>.bind (fun x => x.val[x.val.size - 1]?)
+  |>.bind (fun x => x.val.back?)
 
 /--
 Like `get?`, but returns a default value if absent.
