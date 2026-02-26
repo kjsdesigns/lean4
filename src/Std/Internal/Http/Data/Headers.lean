@@ -6,10 +6,6 @@ Authors: Sofia Rodrigues
 module
 
 prelude
-public import Init.Data.String
-public import Std.Data.HashMap
-public import Std.Internal.Http.Internal
-public import Std.Internal.Http.Data.Headers.Basic
 public import Std.Internal.Http.Data.Headers.Name
 public import Std.Internal.Http.Data.Headers.Value
 
