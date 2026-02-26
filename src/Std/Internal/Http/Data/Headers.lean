@@ -134,8 +134,8 @@ def insert? (headers : Headers) (name : String) (value : String) : Option Header
 Inserts a new key with an array of values.
 -/
 @[inline]
-def insertMany (headers : Headers) (key : Header.Name) (values : Array Header.Value) (p : values.size > 0) : Headers :=
-  { map := headers.map.insertMany key values p }
+def insertMany (headers : Headers) (key : Header.Name) (values : Array Header.Value) : Headers :=
+  { map := headers.map.insertMany key values }
 
 /--
 Creates empty headers.
@@ -179,8 +179,6 @@ def isEmpty (headers : Headers) : Bool :=
 
 /--
 Merges two headers, accumulating values for duplicate keys from both.
-
-Reference: https://www.rfc-editor.org/rfc/rfc9110.html#name-field-order
 -/
 def merge (headers1 headers2 : Headers) : Headers :=
   { map := headers1.map ∪ headers2.map }
@@ -229,12 +227,10 @@ def filter (headers : Headers) (f : Header.Name → Header.Value → Bool) : Hea
   headers.filterMap (fun k v => if f k v then some v else none)
 
 /--
-Updates the first value of a header if it exists, or inserts if it doesn't. Replaces all existing values
-for that header with the new value.
+Updates all the values of a header if it exists.
 -/
-def update (headers : Headers) (name : Header.Name) (f : Option Header.Value → Header.Value) : Headers :=
-  let newValue := f (headers.get? name)
-  { map := headers.map.erase name |>.insert name newValue }
+def update (headers : Headers) (name : Header.Name) (f : Header.Value → Header.Value) : Headers :=
+  { map := headers.map.update name f }
 
 instance : ToString Headers where
   toString headers :=
