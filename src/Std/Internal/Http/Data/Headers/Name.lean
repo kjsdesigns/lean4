@@ -42,6 +42,7 @@ case-insensitive according to HTTP specifications.
 
 Reference: https://www.rfc-editor.org/rfc/rfc9110.html#name-field-names
 -/
+@[ext]
 structure Name where
   /--
   The lowercased normalized header name string.
@@ -57,12 +58,25 @@ structure Name where
   The proof that we stored the header name in normal form
   -/
   normalForm : IsLowerCase value := by decide
-deriving Repr, DecidableEq, BEq
+deriving Repr, DecidableEq
 
 namespace Name
 
+instance : BEq Name where
+  beq a b := a.value = b.value
+
 instance : Hashable Name where
   hash x := Hashable.hash x.value
+
+@[simp]
+theorem Name.beq_eq {x y : Name} : (x == y) = (x.value == y.value) :=
+  rfl
+
+instance : LawfulBEq Name where
+  rfl {x} := by simp
+  eq_of_beq {x y} := by grind [Name.beq_eq, Name.ext]
+
+instance : LawfulHashable Name := inferInstance
 
 instance : Inhabited Name where
   default := ⟨"_", by decide, by decide⟩

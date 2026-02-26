@@ -134,8 +134,8 @@ def insert? (headers : Headers) (name : String) (value : String) : Option Header
 Inserts a new key with an array of values.
 -/
 @[inline]
-def insertMany (headers : Headers) (key : Header.Name) (values : Array Header.Value) (p : values.size > 0) : Headers :=
-  { map := headers.map.insertMany key values p }
+def insertMany (headers : Headers) (key : Header.Name) (values : Array Header.Value) : Headers :=
+  { map := headers.map.insertMany key values }
 
 /--
 Creates empty headers.
@@ -179,8 +179,6 @@ def isEmpty (headers : Headers) : Bool :=
 
 /--
 Merges two headers, accumulating values for duplicate keys from both.
-
-Reference: https://www.rfc-editor.org/rfc/rfc9110.html#name-field-order
 -/
 def merge (headers1 headers2 : Headers) : Headers :=
   { map := headers1.map ∪ headers2.map }
