@@ -86,7 +86,7 @@ structure Request.Builder where
   /--
   The head of the request.
   -/
-  head : Head := { method := .get, version := .v11, uri := "*" }
+  head : Head := { method := .get, version := .v11, uri := .asteriskForm }
 
   /--
   Optional dynamic metadata attached to the request.
