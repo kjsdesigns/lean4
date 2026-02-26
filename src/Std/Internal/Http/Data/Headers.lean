@@ -6,6 +6,7 @@ Authors: Sofia Rodrigues
 module
 
 prelude
+public import Std.Internal.Http.Data.Headers.Basic
 public import Std.Internal.Http.Data.Headers.Name
 public import Std.Internal.Http.Data.Headers.Value
 
@@ -61,7 +62,7 @@ def getAll (headers : Headers) (name : Header.Name) (h : name ∈ headers) : Arr
   headers.map.getAll name h
 
 /--
-Retrieves all `Header.Value` entries for the given key.
+Like `getAll`, but returns `none` instead of requiring a membership proof.
 Returns `none` if the header is absent.
 -/
 @[inline]

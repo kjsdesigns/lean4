@@ -92,7 +92,7 @@ instance : Header ContentLength := ⟨parse, serialize⟩
 end ContentLength
 
 /--
-Validates the chunked placement rules for the Transfer Encoding header. Returns `none` if the
+Validates the chunked placement rules for the Transfer Encoding header. Returns `false` if the
 encoding list violates the constraints.
 -/
 @[expose]
@@ -126,7 +126,7 @@ structure TransferEncoding where
   codings : Array String
 
   /--
-  Valid encodings.
+  Proof that the transfer codings satisfy the chunked placement rules.
   -/
   valid : TransferEncoding.Validate codings = true
 
@@ -173,7 +173,7 @@ structure Connection where
   tokens : Array String
 
   /--
-  Valid connection-option tokens.
+  Proof that all tokens satisfy `isToken`.
   -/
   valid : tokens.all isToken = true
 deriving Repr
