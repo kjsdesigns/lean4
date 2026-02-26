@@ -21,6 +21,8 @@ paths, queries, fragments, and request targets.
 
 All text components use the encoding types from `Std.Http.URI.Encoding` to ensure proper
 percent-encoding is maintained throughout.
+
+Reference: https://www.rfc-editor.org/rfc/rfc3986.html
 -/
 
 namespace Std.Http
@@ -31,7 +33,6 @@ open Internal Char
 
 namespace URI
 
-
 /--
 Checks if a character is valid after the first character of a URI scheme.
 Valid characters are ASCII alphanumeric, `+`, `-`, and `.`.
@@ -40,9 +41,22 @@ def isValidSchemeChar (c : Char) : Bool :=
   Internal.Char.isValidSchemeChar c
 
 /--
+Proposition that `s` is a valid URI scheme per RFC 3986:
+`scheme = ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )`.
+
+The scheme value stored in this module is normalized to lowercase.
+
+Reference: https://www.rfc-editor.org/rfc/rfc3986.html#section-3.1
+-/
+abbrev IsValidScheme (s : String) : Prop :=
+  IsLowerCase s ∧
+  s.toList.all isValidSchemeChar ∧
+  (s.toList.head?.map Internal.Char.isAlphaChar |>.getD false)
+
+/--
 URI scheme identifier (e.g., "http", "https", "ftp").
 -/
-abbrev Scheme := { s : String // IsLowerCase s ∧ s.toList.all isValidSchemeChar ∧ ¬s.isEmpty }
+abbrev Scheme := { s : String // IsValidScheme s }
 
 instance : Inhabited Scheme where
   default := ⟨"a", ⟨by decide, by decide, by decide⟩⟩
@@ -50,6 +64,8 @@ instance : Inhabited Scheme where
 /--
 User information component containing the username and optional password. Both fields store decoded
 (unescaped) values.
+
+Reference: https://www.rfc-editor.org/rfc/rfc3986.html#section-3.2.1
 -/
 structure UserInfo where
   /--
@@ -71,20 +87,49 @@ def isValidDomainNameChar (c : Char) : Bool :=
   Internal.Char.isValidDomainNameChar c
 
 /--
-Proposition that asserts all characters in a string are valid domain name characters.
+Checks whether a single domain label is valid.
+A label must be non-empty, contain only ASCII alphanumeric characters and `-`,
+cannot start or end with `-`, and must be at most 63 characters.
+
+References:
+* https://www.rfc-editor.org/rfc/rfc1034.html#section-3.5
+* https://www.rfc-editor.org/rfc/rfc1123.html#section-2.1
+-/
+def isValidDomainLabel (s : String) : Bool :=
+  let chars := s.toList
+  decide (chars.length ≤ 63) &&
+    chars.all (fun c => Internal.Char.isAsciiAlphaNumChar c ∨ c = '-') &&
+    (chars.head?.map Internal.Char.isAsciiAlphaNumChar |>.getD false) &&
+    (chars.getLast?.map Internal.Char.isAsciiAlphaNumChar |>.getD false)
+
+/--
+Proposition that asserts a domain label is valid.
+-/
+abbrev IsValidDomainLabel (s : String) : Prop :=
+  isValidDomainLabel s
+
+/--
+Proposition that asserts `s` is a valid dot-separated domain name.
+Each label must satisfy `IsValidDomainLabel`.
 -/
 abbrev IsValidDomainName (s : String) : Prop :=
-  s.toList.all isValidDomainNameChar
+  let labels := s.splitOn "."
+  ¬labels.isEmpty ∧ labels.all isValidDomainLabel
 
 /--
 A domain name represented as a validated, lowercase-normalized string.
 Only ASCII alphanumeric characters, hyphens, and dots are allowed.
+Each label cannot start or end with `-` and is limited to 63 characters.
 Internationalized domain names must be converted to punycode before use.
+
+Reference: https://www.rfc-editor.org/rfc/rfc3986.html#section-3.2.2
 -/
 abbrev DomainName := { s : String // IsLowerCase s ∧ IsValidDomainName s ∧ ¬s.isEmpty }
 
 /--
 Host component of a URI, supporting domain names and IP addresses.
+
+Reference: https://www.rfc-editor.org/rfc/rfc3986.html#section-3.2.2
 -/
 inductive Host
   /--
@@ -124,6 +169,8 @@ instance : ToString Host where
 
 /--
 TCP port number.
+
+Reference: https://www.rfc-editor.org/rfc/rfc3986.html#section-3.2.3
 -/
 abbrev Port := UInt16
 
@@ -161,12 +208,11 @@ instance : ToString Authority where
       | some p => s!":{p}"
     s!"{userPart}{hostPart}{portPart}"
 
-namespace Authority
-end Authority
-
 /--
 Hierarchical path component of a URI. Each segment is stored as an `EncodedSegment` to maintain
 proper percent-encoding.
+
+Reference: https://www.rfc-editor.org/rfc/rfc3986.html#section-3.3
 -/
 structure Path where
   /--
@@ -254,6 +300,8 @@ end Path
 Query string represented as an array of key-value pairs. Both keys and values are stored as
 `EncodedQueryParam` for proper application/x-www-form-urlencoded encoding. Values are optional to
 support parameters without values (e.g., "?flag"). Order is preserved based on insertion order.
+
+Reference: https://www.rfc-editor.org/rfc/rfc3986.html#section-3.4
 -/
 @[expose]
 def Query := Array (EncodedQueryParam × Option EncodedQueryParam)
@@ -352,7 +400,6 @@ Removes all occurrences of a query parameter by key name.
 -/
 def erase (query : Query) (key : String) : Query :=
   let encodedKey : EncodedQueryParam := EncodedQueryParam.encode key
-  -- Filter out matching keys
   query.filter (fun x => x.fst.toByteArray ≠ encodedKey.toByteArray)
 
 /--
@@ -504,11 +551,14 @@ def empty : Builder := {}
 /--
 Attempts to set the URI scheme (e.g., "http", "https").
 Returns `none` if the scheme is not a valid RFC 3986 scheme.
-A scheme must start with an ASCII letter followed by alphanumeric, `+`, `-`, or `.` characters.
+The stored scheme is normalized to lowercase.
 -/
 def setScheme? (b : Builder) (scheme : String) : Option Builder :=
-  if h : IsLowerCase scheme ∧ scheme.toList.all isValidSchemeChar ∧ ¬scheme.isEmpty then some { b with scheme := some ⟨scheme, h⟩ }
-  else none
+  let lower := scheme.toLower
+  if h : IsValidScheme lower then
+    some { b with scheme := some ⟨lower, h⟩ }
+  else
+    none
 
 /--
 Sets the URI scheme (e.g., "http", "https"). Panics if the scheme is invalid.
@@ -534,6 +584,7 @@ def setUserInfo (b : Builder) (username : String) (password : Option String := n
 Sets the host as a domain name, returning `none` if the name contains invalid characters.
 The domain name will be automatically lowercased.
 Only ASCII alphanumeric characters, hyphens, and dots are allowed.
+Each label cannot start or end with `-` and is limited to 63 characters.
 Internationalized domain names must be converted to punycode before use.
 -/
 def setHost? (b : Builder) (name : String) : Option Builder :=
@@ -549,6 +600,7 @@ def setHost? (b : Builder) (name : String) : Option Builder :=
 Sets the host as a domain name, panicking if the name contains invalid characters.
 The domain name will be automatically lowercased.
 Only ASCII alphanumeric characters, hyphens, and dots are allowed.
+Each label cannot start or end with `-` and is limited to 63 characters.
 Internationalized domain names must be converted to punycode before use.
 -/
 def setHost! (b : Builder) (name : String) : Builder :=
@@ -658,8 +710,8 @@ Returns a new URI with the scheme replaced.
 -/
 def withScheme! (uri : URI) (scheme : String) : URI :=
   let lower := scheme.toLower
-  if h : IsLowerCase lower ∧ lower.toList.all isValidSchemeChar ∧ ¬lower.isEmpty then
-    { uri with scheme := ⟨lower, h.1, h.2.1, h.2.2⟩ }
+  if h : IsValidScheme lower then
+    { uri with scheme := ⟨lower, h⟩ }
   else
     panic! s!"invalid URI scheme: {scheme.quote}"
 
@@ -688,7 +740,11 @@ def withFragment (uri : URI) (fragment : Option String) : URI :=
   { uri with fragment }
 
 /--
-Normalizes a URI according to RFC 3986 Section 6.
+Partially normalizes a URI by removing dot-segments from the path (`.` and `..`)
+according to RFC 3986 Section 5.2.4.
+
+This does not apply the full normalization set from RFC 3986 Section 6
+(e.g. case normalization, percent-encoding normalization, or default-port normalization).
 -/
 def normalize (uri : URI) : URI :=
   { uri with
@@ -700,9 +756,9 @@ def normalize (uri : URI) : URI :=
 end URI
 
 /--
-HTTP request target forms as defined in RFC 7230 Section 5.3.
+HTTP request target forms as defined in RFC 9112 Section 3.3.
 
-Reference: https://www.rfc-editor.org/rfc/rfc7230.html#section-5.3
+Reference: https://www.rfc-editor.org/rfc/rfc9112.html#section-3.3
 -/
 inductive RequestTarget where
   /--

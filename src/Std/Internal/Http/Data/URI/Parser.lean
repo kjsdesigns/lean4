@@ -20,14 +20,17 @@ public section
 
 This module provides parsers for URIs and request targets according to RFC 3986.
 It handles parsing of schemes, authorities, paths, queries, and fragments.
+
+References:
+* https://www.rfc-editor.org/rfc/rfc3986.html
+* https://www.rfc-editor.org/rfc/rfc9112.html#section-3.3
 -/
 
 namespace Std.Http.URI.Parser
 
-open Internal Char
-
 set_option linter.all true
 
+open Internal Char
 open Std Internal Parsec ByteArray
 
 @[inline]
@@ -35,28 +38,14 @@ private def tryOpt (p : Parser α) : Parser (Option α) :=
   optional (attempt p)
 
 @[inline]
-private def ofExcept (p : Except String α) : Parser α :=
-  match p with
-  | .ok res => pure res
-  | .error err => fail err
-
-@[inline]
 private def peekIs (p : UInt8 → Bool) : Parser Bool := do
   return (← peekWhen? p).isSome
 
-private def hexToByte (digit : UInt8) : UInt8 :=
-  if digit <= '9'.toUInt8 then digit - '0'.toUInt8
-  else if digit <= 'F'.toUInt8 then digit - 'A'.toUInt8 + 10
-  else digit - 'a'.toUInt8 + 10
-
-private def parsePctEncoded : Parser UInt8 := do
-  skipByte '%'.toUInt8
-  let hi ← hexToByte <$> satisfy isHexDigitByte
-  let lo ← hexToByte <$> satisfy isHexDigitByte
-  return (hi <<< 4) ||| lo
-
 -- scheme = ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )
 private def parseScheme (config : URI.Config) : Parser URI.Scheme := do
+  if config.maxSchemeLength = 0 then
+    fail s!"scheme too long (limit: {config.maxSchemeLength})"
+
   let first ← takeWhileUpTo1 isAlpha 1
   let rest ← takeWhileUpTo
     (fun c =>
@@ -66,8 +55,8 @@ private def parseScheme (config : URI.Config) : Parser URI.Scheme := do
   let schemeBytes := first.toByteArray ++ rest.toByteArray
   let str := String.fromUTF8! schemeBytes |>.toLower
 
-  if h: str.toList.all isValidSchemeChar ∧ ¬str.isEmpty then
-    return ⟨str, ⟨.isLowerCase_toLower, h⟩⟩
+  if h : URI.IsValidScheme str then
+    return ⟨str, h⟩
   else
     fail "invalid scheme"
 
@@ -115,12 +104,14 @@ private def parseUserInfo (config : URI.Config) : Parser URI.UserInfo := do
 
   return ⟨userName, userPass⟩
 
--- IP-literal = "[" ( IPv6address / IPvFuture  ) "]"
+-- Parses bracketed IPv6 literals.
+-- Note: RFC 3986 also allows IPvFuture inside `IP-literal`; this parser
+-- currently rejects IPvFuture.
 private def parseIPv6 : Parser Net.IPv6Addr := do
   skipByte '['.toUInt8
 
   let result ← takeWhileUpTo1
-    (fun x => x = ':'.toUInt8 ∨ isHexDigitByte x)
+    (fun x => x = ':'.toUInt8 ∨ x = '.'.toUInt8 ∨ isHexDigitByte x)
     256
 
   skipByte ']'.toUInt8
@@ -154,7 +145,7 @@ private def parseHost (config : URI.Config) : Parser URI.Host := do
       if let some ipv4 ← tryOpt parseIPv4 then
         return .ipv4 ipv4
 
-    -- It needs to be a legal DNS label, so it differs from reg-name.
+    -- We intentionally parse DNS names here (not full RFC 3986 reg-name).
     let some str := String.fromUTF8? (← takeWhileUpTo1
       (fun x => isAlphaNum x ∨ x = '-'.toUInt8 ∨ x = '.'.toUInt8)
       config.maxHostLength).toByteArray
