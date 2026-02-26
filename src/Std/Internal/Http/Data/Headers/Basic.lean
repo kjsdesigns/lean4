@@ -8,7 +8,6 @@ module
 prelude
 public import Std.Internal.Http.Data.Headers.Name
 public import Std.Internal.Http.Data.Headers.Value
-public import Std.Internal.Http.Internal
 
 public section
 
@@ -41,10 +40,6 @@ class Header (α : Type) where
   -/
   serialize : α → Header.Name × Header.Value
 
-/--
-An `Encode` instance can be derived from any `Header` instance by serializing to the wire format
-`Name: Value\r\n`.
--/
 instance [h : Header α] : Encode .v11 α where
   encode buffer a :=
     let (name, value) := h.serialize a
@@ -97,7 +92,8 @@ instance : Header ContentLength := ⟨parse, serialize⟩
 end ContentLength
 
 /--
-Validates the chunked placement rules. Returns `none` if the encoding list violates the constraints.
+Validates the chunked placement rules for the Transfer Encoding header. Returns `none` if the
+encoding list violates the constraints.
 -/
 @[expose]
 def TransferEncoding.Validate (codings : Array String) : Bool :=
@@ -216,6 +212,4 @@ def serialize (connection : Connection) : Header.Name × Header.Value :=
 
 instance : Header Connection := ⟨parse, serialize⟩
 
-end Connection
-
-end Std.Http.Header
+end Std.Http.Header.Connection
