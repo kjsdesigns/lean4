@@ -16,13 +16,18 @@ public section
 /-!
 # URI Structure
 
-This module defines the complete URI structure following RFC 3986, including schemes, authorities,
-paths, queries, fragments, and request targets.
+This module defines an HTTP-oriented URI structure aligned with RFC 3986 and RFC 9110, including
+schemes, authorities, paths, queries, fragments, and request targets.
+
+Host handling is intentionally strict: this module accepts IPv4, bracketed IPv6, and DNS-style
+domain names (LDH labels). RFC 3986 `reg-name` forms that are not DNS-compatible are rejected.
 
 All text components use the encoding types from `Std.Http.URI.Encoding` to ensure proper
 percent-encoding is maintained throughout.
 
-Reference: https://www.rfc-editor.org/rfc/rfc3986.html
+References:
+* https://www.rfc-editor.org/rfc/rfc3986.html
+* https://www.rfc-editor.org/rfc/rfc9110.html#name-uri-references
 -/
 
 namespace Std.Http
@@ -60,6 +65,29 @@ abbrev Scheme := { s : String // IsValidScheme s }
 
 instance : Inhabited Scheme where
   default := ⟨"a", ⟨by decide, by decide, by decide⟩⟩
+
+namespace Scheme
+
+/--
+Attempts to create a `Scheme` from a string, normalizing to lowercase.
+Returns `none` if the scheme is invalid per RFC 3986 Section 3.1.
+-/
+def ofString? (s : String) : Option Scheme :=
+  let lower := s.toLower
+  if h : IsValidScheme lower then
+    some ⟨lower, h⟩
+  else
+    none
+
+/--
+Creates a `Scheme` from a string, panicking if invalid.
+-/
+def ofString! (s : String) : Scheme :=
+  match ofString? s with
+  | some scheme => scheme
+  | none => panic! s!"invalid URI scheme: {s.quote}"
+
+end Scheme
 
 /--
 User information component containing the username and optional password. Both fields store decoded
@@ -125,6 +153,23 @@ Internationalized domain names must be converted to punycode before use.
 Reference: https://www.rfc-editor.org/rfc/rfc3986.html#section-3.2.2
 -/
 abbrev DomainName := { s : String // IsLowerCase s ∧ IsValidDomainName s ∧ ¬s.isEmpty }
+
+namespace DomainName
+
+/--
+Attempts to create a normalized domain name from a string.
+Returns `none` if the name is empty or any label violates DNS label constraints.
+-/
+def ofString? (s : String) : Option DomainName :=
+  let lower := s.toLower
+  if h₁ : lower.isEmpty then
+    none
+  else if h₂ : IsValidDomainName lower then
+    some ⟨lower, IsLowerCase.isLowerCase_toLower, h₂, h₁⟩
+  else
+    none
+
+end DomainName
 
 /--
 Host component of a URI, supporting domain names and IP addresses.
@@ -554,11 +599,7 @@ Returns `none` if the scheme is not a valid RFC 3986 scheme.
 The stored scheme is normalized to lowercase.
 -/
 def setScheme? (b : Builder) (scheme : String) : Option Builder :=
-  let lower := scheme.toLower
-  if h : IsValidScheme lower then
-    some { b with scheme := some ⟨lower, h⟩ }
-  else
-    none
+  URI.Scheme.ofString? scheme |>.map (fun scheme => { b with scheme := some scheme })
 
 /--
 Sets the URI scheme (e.g., "http", "https"). Panics if the scheme is invalid.
@@ -588,13 +629,7 @@ Each label cannot start or end with `-` and is limited to 63 characters.
 Internationalized domain names must be converted to punycode before use.
 -/
 def setHost? (b : Builder) (name : String) : Option Builder :=
-  let lower := name.toLower
-  if h₁: lower.isEmpty then
-    none
-  else if h : IsValidDomainName lower then
-    some { b with host := some (Host.name ⟨lower, IsLowerCase.isLowerCase_toLower, h, h₁⟩) }
-  else
-    none
+  URI.DomainName.ofString? name |>.map (fun name => { b with host := some (Host.name name) })
 
 /--
 Sets the host as a domain name, panicking if the name contains invalid characters.
@@ -709,11 +744,7 @@ namespace URI
 Returns a new URI with the scheme replaced.
 -/
 def withScheme! (uri : URI) (scheme : String) : URI :=
-  let lower := scheme.toLower
-  if h : IsValidScheme lower then
-    { uri with scheme := ⟨lower, h⟩ }
-  else
-    panic! s!"invalid URI scheme: {scheme.quote}"
+  { uri with scheme := URI.Scheme.ofString! scheme }
 
 /--
 Returns a new URI with the authority replaced.

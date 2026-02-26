@@ -18,11 +18,16 @@ public section
 /-!
 # URI Parser
 
-This module provides parsers for URIs and request targets according to RFC 3986.
+This module provides parsers for HTTP request targets and HTTP-oriented URIs aligned with RFC 3986.
 It handles parsing of schemes, authorities, paths, queries, and fragments.
+
+Notable intentional constraints:
+* hosts are limited to IPv4, bracketed IPv6, and DNS-style domain names
+* IPvFuture (`v...`) inside `IP-literal` is currently rejected
 
 References:
 * https://www.rfc-editor.org/rfc/rfc3986.html
+* https://www.rfc-editor.org/rfc/rfc9110.html#name-uri-references
 * https://www.rfc-editor.org/rfc/rfc9112.html#section-3.3
 -/
 
@@ -194,6 +199,7 @@ path-empty    = 0<pchar>
 Parses a URI path with combined parsing and validation.
 -/
 def parsePath (config : URI.Config) (forceAbsolute : Bool) (allowEmpty : Bool) : Parser URI.Path := do
+  let isPathDelimiter : UInt8 → Bool := fun c => c = '?'.toUInt8 ∨ c = '#'.toUInt8
   let mut isAbsolute := false
   let mut segments : Array _ := #[]
   let mut totalLength := 0
@@ -219,6 +225,13 @@ def parsePath (config : URI.Config) (forceAbsolute : Bool) (allowEmpty : Bool) :
 
   -- Parse segments
   while (← peek?).isSome do
+    let some next := (← peek?) | break
+    if isPathDelimiter next then
+      break
+
+    if ¬(next = '/'.toUInt8 ∨ isPChar next ∨ next = '%'.toUInt8) then
+      break
+
     if segments.size >= config.maxPathSegments then
       fail s!"too many path segments (limit: {config.maxPathSegments})"
 
@@ -238,7 +251,8 @@ def parsePath (config : URI.Config) (forceAbsolute : Bool) (allowEmpty : Bool) :
         fail s!"path too long (limit: {config.maxTotalPathLength} bytes)"
       skip
       -- If path ends with '/', add empty segment
-      if (← peek?).isNone then
+      let next ← peek?
+      if next.isNone || next.any isPathDelimiter then
         segments := segments.push (URI.EncodedString.empty)
     else
       break
@@ -252,6 +266,9 @@ private def parseQuery (config : URI.Config) : Parser URI.Query := do
 
   let some queryStr := String.fromUTF8? queryBytes.toByteArray
     | fail "invalid query string"
+
+  if queryStr.isEmpty then
+    return URI.Query.empty
 
   let rawPairs := queryStr.splitOn "&"
 
