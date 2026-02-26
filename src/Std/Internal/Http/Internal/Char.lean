@@ -326,27 +326,58 @@ theorem isAlphaNum_eq_isAlphaNumSpec_on_ascii :
 
 
 /--
-Checks if a character is an ASCII alphanumeric character.
+Checks if `c` is valid after `\` in an HTTP `quoted-pair` (ASCII-only).
 -/
 @[inline, expose]
-def isAsciiAlphaNumChar (c : Char) : Bool :=
+def isAsciiAlphaNumCharSpec (c : Char) : Bool :=
   isAscii c && isAlphaNum (UInt8.ofNat c.toNat)
+
+/--
+Checks if `c` is valid after `\` in an HTTP `quoted-pair` (ASCII-only).
+-/
+def isAsciiAlphaNumChar (c : Char) : Bool :=
+  isAscii c ∧ Nat.testBit 0x07fffffe07fffffe03ff000000000000 c.toNat
+
+theorem isAsciiAlphaNumChar_eq_isAsciiAlphaNumCharSpec_on_ascii :
+    EqOnAscii isAsciiAlphaNumChar isAsciiAlphaNumCharSpec := by
+  decide
 
 /--
 Checks if a character is valid after the first character of a URI scheme.
 Valid characters are ASCII alphanumeric, `+`, `-`, and `.`.
 -/
 @[expose]
+def isValidSchemeCharSpec (c : Char) : Bool :=
+  isAsciiAlphaNumCharSpec c || c == '+' || c == '-' || c == '.'
+
+/--
+Checks if a character is valid after the first character of a URI scheme.
+Valid characters are ASCII alphanumeric, `+`, `-`, and `.`.
+-/
 def isValidSchemeChar (c : Char) : Bool :=
-  isAsciiAlphaNumChar c || c == '+' || c == '-' || c == '.'
+  isAscii c ∧ Nat.testBit 0x07fffffe07fffffe03ff680000000000 c.toNat
+
+theorem isValidSchemeCharChar_eq_isValidSchemeCharCharSpec_on_ascii :
+    EqOnAscii isValidSchemeChar isValidSchemeCharSpec := by
+  decide
 
 /--
 Checks if a character is valid for use in a domain name.
 Valid characters are ASCII alphanumeric, hyphens, and dots.
 -/
 @[expose]
+def isValidDomainNameCharSpec (c : Char) : Bool :=
+  isAsciiAlphaNumCharSpec c || c == '-' || c == '.'
+
+/--
+Checks if a character is valid for use in a domain name.
+-/
 def isValidDomainNameChar (c : Char) : Bool :=
-  isAsciiAlphaNumChar c || c == '-' || c == '.'
+  isAscii c ∧ Nat.testBit 0x07fffffe07fffffe03ff600000000000 c.toNat
+
+theorem isValidDomainNameChar_eq_isValidDomainNameCharSpec_on_ascii :
+    EqOnAscii isValidDomainNameChar isValidDomainNameCharSpec := by
+  decide
 
 /--
 Checks if a byte is an unreserved character according to RFC 3986. Unreserved characters are:
@@ -450,7 +481,10 @@ theorem isFragmentChar_eq_isFragmentCharSpec_on_ascii :
 
 /--
 Checks if a byte is a valid character in a URI userinfo component according to RFC 3986.
-`userinfo = *( unreserved / pct-encoded / sub-delims / ":" )`
+`userinfo = *( unreserved/ sub-delims / ":" )`
+
+Note: It avoids the pct-encoded of the original grammar because it is used with `Encoding.lean`
+that provides it.
 -/
 def isUserInfoCharSpec (c : UInt8) : Bool :=
   isUnreservedSpec c || isSubDelimsSpec c || c = ':'.toUInt8

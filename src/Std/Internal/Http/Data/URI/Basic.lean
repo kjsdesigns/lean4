@@ -39,13 +39,6 @@ open Internal Char
 namespace URI
 
 /--
-Checks if a character is valid after the first character of a URI scheme.
-Valid characters are ASCII alphanumeric, `+`, `-`, and `.`.
--/
-def isValidSchemeChar (c : Char) : Bool :=
-  Internal.Char.isValidSchemeChar c
-
-/--
 Proposition that `s` is a valid URI scheme per RFC 3986:
 `scheme = ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )`.
 
@@ -56,7 +49,8 @@ Reference: https://www.rfc-editor.org/rfc/rfc3986.html#section-3.1
 abbrev IsValidScheme (s : String) : Prop :=
   IsLowerCase s ∧
   s.toList.all isValidSchemeChar ∧
-  (s.toList.head?.map Internal.Char.isAlphaChar |>.getD false)
+  (s.toList.head?.map isAlphaChar |>.getD false) ∧ -- ALPHA
+  IsLowerCase s -- An implementation should accept uppercase letters as equivalent to lowercase in scheme names
 
 /--
 URI scheme identifier (e.g., "http", "https", "ftp").
@@ -64,7 +58,7 @@ URI scheme identifier (e.g., "http", "https", "ftp").
 abbrev Scheme := { s : String // IsValidScheme s }
 
 instance : Inhabited Scheme where
-  default := ⟨"a", ⟨by decide, by decide, by decide⟩⟩
+  default := ⟨"http", ⟨by decide, by decide, by decide⟩⟩
 
 namespace Scheme
 
@@ -74,13 +68,14 @@ Returns `none` if the scheme is invalid per RFC 3986 Section 3.1.
 -/
 def ofString? (s : String) : Option Scheme :=
   let lower := s.toLower
+
   if h : IsValidScheme lower then
     some ⟨lower, h⟩
   else
     none
 
 /--
-Creates a `Scheme` from a string, panicking if invalid.
+Creates a `Scheme` from a string, normalizing to lowercase. Panicks if invalid.
 -/
 def ofString! (s : String) : Scheme :=
   match ofString? s with
@@ -141,16 +136,8 @@ def password? (ui : UserInfo) : Option String :=
 end UserInfo
 
 /--
-Checks if a character is valid for use in a domain name.
-Valid characters are ASCII alphanumeric, hyphens, and dots.
--/
-def isValidDomainNameChar (c : Char) : Bool :=
-  Internal.Char.isValidDomainNameChar c
-
-/--
-Checks whether a single domain label is valid.
-A label must be non-empty, contain only ASCII alphanumeric characters and `-`,
-cannot start or end with `-`, and must be at most 63 characters.
+Checks whether a single domain label is valid. A label must be non-empty, contain only ASCII
+alphanumeric characters and `-`, cannot start or end with `-`, and must be at most 63 characters.
 
 References:
 * https://www.rfc-editor.org/rfc/rfc1034.html#section-3.5
@@ -159,15 +146,9 @@ References:
 def isValidDomainLabel (s : String) : Bool :=
   let chars := s.toList
   decide (chars.length ≤ 63) &&
-    chars.all (fun c => Internal.Char.isAsciiAlphaNumChar c ∨ c = '-') &&
-    (chars.head?.map Internal.Char.isAsciiAlphaNumChar |>.getD false) &&
-    (chars.getLast?.map Internal.Char.isAsciiAlphaNumChar |>.getD false)
-
-/--
-Proposition that asserts a domain label is valid.
--/
-abbrev IsValidDomainLabel (s : String) : Prop :=
-  isValidDomainLabel s
+    chars.all (fun c => isAsciiAlphaNumChar c ∨ c = '-') &&
+    (chars.head?.map isAsciiAlphaNumChar |>.getD false) &&
+    (chars.getLast?.map isAsciiAlphaNumChar |>.getD false)
 
 /--
 Proposition that asserts `s` is a valid dot-separated domain name.
@@ -175,7 +156,7 @@ Each label must satisfy `IsValidDomainLabel`, and the full name must be at most 
 -/
 abbrev IsValidDomainName (s : String) : Prop :=
   let labels := s.splitOn "."
-  ¬labels.isEmpty ∧ labels.all isValidDomainLabel ∧ s.toList.length ≤ 253
+  ¬labels.isEmpty ∧ labels.all isValidDomainLabel ∧ s.length ≤ 255
 
 /--
 A domain name represented as a validated, lowercase-normalized string.
@@ -191,18 +172,15 @@ namespace DomainName
 
 /--
 Attempts to create a normalized domain name from a string.
-Returns `none` if the name is empty, longer than 253 characters, or any label violates DNS label
+Returns `none` if the name is empty, longer than 255 characters, or any label violates DNS label
 constraints.
 -/
 def ofString? (s : String) : Option DomainName :=
   let lower := s.toLower
   if h₁ : lower.isEmpty then
     none
-  else if lower.toList.length ≤ 253 then
-    if h₃ : IsValidDomainName lower then
-      some ⟨lower, IsLowerCase.isLowerCase_toLower, h₃, h₁⟩
-    else
-      none
+  else if h₃ : IsValidDomainName lower then
+    some ⟨lower, IsLowerCase.isLowerCase_toLower, h₃, h₁⟩
   else
     none
 
