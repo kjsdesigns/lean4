@@ -12,6 +12,8 @@ public import Init.Data.Range.Polymorphic.Basic
 import Init.Data.Option.Lemmas
 import Init.Omega
 import Init.Data.Nat.Lemmas
+import Init.ByCases
+import Init.Data.Array.Lemmas
 
 public section
 
@@ -44,9 +46,12 @@ theorem extract_extract :
     (as.extract i j).extract i' j' = as.extract (i + i') (min (i + j') j) := by
   simp [extract_eq_drop_take', take_drop, take_take]
 
-@[simp]
+grind_pattern extract_extract => (as.extract i j).extract i' j' where
+  as =/= []
+
+@[simp, grind =]
 theorem length_extract :
-    (as.extract i j).length = (min j as.length) - i := by
+    (as.extract i j).length = min j as.length - i := by
   simp [extract_eq_drop_take']
 
 theorem length_extract_le_stop_sub_start :
@@ -55,9 +60,13 @@ theorem length_extract_le_stop_sub_start :
   omega
 
 theorem length_extract_le_length_sub_start :
-    (as.extract i j).length ≤ j - i := by
+    (as.extract i j).length ≤ as.length - i := by
   simp [extract_eq_drop_take']
   omega
+
+theorem length_extract_of_le (h : j ≤ as.length) :
+    (as.extract i j).length = j - i := by
+  simp; omega
 
 theorem length_extract_le_stop :
     (as.extract i j).length ≤ j := by
@@ -78,6 +87,15 @@ theorem extract_eq_nil_of_length_le_start (h : as.length ≤ i) :
   simp [eq_nil_iff_length_eq_zero]; omega
 
 @[simp]
+theorem extract_eq_nil_iff :
+    as.extract i j = [] ↔ min j as.length ≤ i := by
+  simp [extract_eq_drop_take']
+
+theorem lt_of_extract_ne_nil (h : as.extract i j ≠ []) :
+    i < min j as.length := by
+  simpa using h
+
+@[simp]
 theorem extract_length_left :
     as.extract as.length j = [] := by
   apply extract_eq_nil_of_length_le_start
@@ -88,10 +106,23 @@ theorem extract_nil :
     ([] : List α).extract i j = [] := by
   simp [extract_eq_drop_take']
 
+theorem extract_eq_nil_of_eq_nil (h : as = []) :
+    as.extract i j = [] := by
+  simp [h, List.extract_eq_drop_take']
+
+theorem ne_nil_of_extract_ne_nil (h : as.extract i j ≠ []) :
+    as ≠ [] :=
+  mt extract_eq_nil_of_eq_nil h
+
+@[simp]
 theorem getElem?_extract_of_lt (h : i + k < j) :
     (as.extract i j)[k]? = as[i + k]? := by
   simp only [extract_eq_drop_take', getElem?_drop]
   rw [getElem?_take_of_lt h]
+
+theorem getElem?_extract_of_succ :
+    (as.extract 0 (j + 1))[j]? = as[j]? := by
+  simp
 
 @[simp]
 theorem getElem?_extract_eq_some_of_lt (h : i + k < min j as.length) :
@@ -103,26 +134,31 @@ theorem getElem?_extract_eq_none_iff :
    (as.extract i j)[k]? = none ↔ min j as.length ≤ i + k := by
   simp [extract_eq_drop_take']
 
-theorem getElem?_extract_eq_dif :
+theorem getElem?_extract_eq_dite :
     (as.extract i j)[k]? =
       if _ : i + k < min j as.length then some as[i + k] else none := by
   split <;> rename_i h
   · apply getElem?_extract_eq_some_of_lt h
   · simp; omega
 
-theorem getElem?_extract_eq_if :
+theorem getElem?_extract_eq_ite :
     (as.extract i j)[k]? =
       if i + k < j then as[i + k]? else none := by
   simp [extract_eq_drop_take', getElem?_drop, getElem?_take]
 
-theorem head?_extract_eq_dif :
+theorem getElem?_extract :
+    (as.extract i j)[k]? = if k < min j as.length - i then as[i + k]? else none := by
+  simp [getElem?_extract_eq_dite, getElem_eq_getElem?_get, - get_getElem?, Nat.lt_sub_iff_add_lt',
+    dite_eq_ite]
+
+theorem head?_extract_eq_dite :
     (as.extract i j).head? =
       if _ : i < min j as.length then some as[i] else none := by
-  simp [head?_eq_getElem?, getElem?_extract_eq_dif]
+  simp [head?_eq_getElem?, getElem?_extract_eq_dite]
 
-theorem head?_extract_eq_if :
+theorem head?_extract_eq_ite :
     (as.extract i j).head? = if i < j then as[i]? else none := by
-  simp [head?_eq_getElem?, getElem?_extract_eq_if]
+  simp [head?_eq_getElem?, getElem?_extract_eq_ite]
 
 theorem getElem_extract_aux (h : k < (as.extract i j).length) :
     i + k < as.length := by
@@ -139,7 +175,7 @@ theorem getElem_extract :
 
 theorem head_extract_aux (h : (as.extract i j) ≠ []) :
     i < as.length := by
-  simp [ne_nil_iff_length_pos] at h
+  simp only [ne_eq, extract_eq_nil_iff, Nat.not_le] at h
   omega
 
 @[simp]
@@ -176,6 +212,18 @@ theorem extract_eq_extract_min :
     as.extract i j = as.extract (min i (min j as.length)) (min j as.length) := by
   apply extract_eq_extract_self_of_eq <;> simp
 
+theorem extract_eq_extract_min_left :
+    as.extract i j = as.extract (min i (min j as.length)) j := by
+  apply extract_eq_extract_self_of_eq <;> simp
+
+theorem extract_eq_extract_min_right :
+    as.extract i j = as.extract i (min j as.length) := by
+  apply extract_eq_extract_self_of_eq <;> simp
+
+theorem extract_of_length_lt (h : as.length < j) :
+    as.extract i j = as.extract i as.length := by
+  rw [extract_eq_extract_min_right, Nat.min_eq_right (by omega)]
+
 @[simp]
 theorem extract_zero_length : as.extract 0 as.length = as := by
   apply List.ext_getElem <;> simp
@@ -197,6 +245,29 @@ theorem extract_zero_left :
 theorem extract_zero_right :
     as.extract i 0 = [] := by
   simp [extract_eq_drop_take']
+
+theorem extract_succ_right (w : i < j + 1) (h : j < as.length) :
+    as.extract i (j + 1) = (as.extract i j) ++ [as[j]] := by
+  apply ext_getElem
+  · simp
+    omega
+  · intro _ h₁ h₂
+    simp only [length_extract, length_append, length_singleton] at h₁ h₂
+    simp only [getElem_extract, getElem_append]
+    split
+    · rfl
+    · rename_i h₃
+      simp at h₃ ⊢
+      congr 1
+      omega
+
+theorem extract_sub_one (h : j < as.length) :
+    as.extract i (j - 1) = (as.extract i j).dropLast := by
+  apply ext_getElem
+  · simp; omega
+  · intro _ h₁ h₂
+    simp only [length_extract, length_dropLast] at h₁ h₂
+    simp only [getElem_extract, getElem_dropLast]
 
 theorem extract_set {a : α} :
     (as.set k a).extract i j =
@@ -244,6 +315,19 @@ theorem extract_append_right :
     (as ++ bs).extract as.length (as.length + i) = bs.extract 0 i := by
   simp
 
+@[simp, grind _=_]
+theorem extract_append_extract :
+    as.extract i j ++ as.extract j k = as.extract (min i j) (max j k) := by
+  apply ext_getElem
+  · simp only [length_append, length_extract]
+    omega
+  · intro p h₁ h₂
+    simp only [length_append, length_extract] at h₁ h₂
+    simp only [getElem_append, length_extract, getElem_extract]
+    split <;>
+    · congr 1
+      omega
+
 @[simp]
 theorem map_extract {f : α → β} :
     (as.extract i j).map f = (as.map f).extract i j := by
@@ -254,9 +338,89 @@ theorem extract_replicate {a : α} {n : Nat} :
     (replicate n a).extract i j = replicate (min j n - i) a := by
   apply ext_getElem <;> simp
 
-/-
-TODOS:
-* theorem toArray_extract
--/
+-- TODO: find a good place for these
+
+theorem extract_eq_extract_right :
+    as.extract i j = as.extract i j' ↔ min (j - i) (as.length - i) = min (j' - i) (as.length - i) := by
+  simp [List.extract_eq_take_drop]
+
+theorem extract_eq_extract_left :
+    as.extract i j = as.extract i' j ↔ min j as.length - i = min j as.length - i' := by
+  constructor
+  · intro h
+    replace h := congrArg List.length h
+    simpa using h
+  · intro h
+    apply ext_getElem
+    · simpa
+    · intro _ h₁ h₂
+      simp only [length_extract] at h₁ h₂
+      simp only [getElem_extract]
+      congr 1
+      omega
+
+@[simp]
+theorem extract_eq_self_iff :
+    as.extract i j = as ↔ as.length = 0 ∨ i = 0 ∧ as.length ≤ j := by
+  constructor
+  · intro h
+    replace h := congrArg List.length h
+    simp at h
+    omega
+  · intro h
+    apply ext_getElem
+    · simp; omega
+    · intro _ h₁ h₂
+      simp only [length_extract] at h₁
+      simp only [getElem_extract]
+      congr 1
+      omega
+
+theorem extract_eq_self_of_le (h : as.length ≤ j) :
+    as.extract 0 j = as :=
+  extract_eq_self_iff.2 (.inr ⟨rfl, h⟩)
+
+theorem le_of_extract_eq_self (h : as.extract i j = as) :
+    as.length ≤ j := by
+  replace h := congrArg List.length h
+  simp at h
+  omega
+
+theorem extract_add_left :
+    as.extract (i + j) k = (as.extract i k).extract j (k - i) := by
+  simp [extract_eq_extract_right]
+  omega
+
+theorem mem_extract_iff_getElem {a : α} :
+    a ∈ as.extract i j ↔ ∃ (k : Nat) (hm : k < min j as.length - i), as[i + k] = a := by
+  simp [extract_eq_drop_take', mem_drop_iff_getElem]
+  constructor <;>
+  · rintro ⟨k, h, rfl⟩
+    exact ⟨k, by omega, rfl⟩
+
+theorem extract_reverse :
+    as.reverse.extract i j = (as.extract (as.length - j) (as.length - i)).reverse := by
+  apply ext_getElem
+  · simp
+    omega
+  · intro _ h₁ h₂
+    simp only [length_extract, length_reverse] at h₁ h₂
+    simp only [getElem_extract, getElem_reverse, length_extract]
+    congr 1
+    omega
+
+theorem reverse_extract :
+    (as.extract i j).reverse = as.reverse.extract (as.length - j) (as.length - i) := by
+  rw [extract_reverse, reverse_inj]
+  simp +singlePass only [extract_eq_extract_min]
+  congr 1 <;> omega
+
+theorem extract_takeWhile {i : Nat} :
+    (as.takeWhile p).extract 0 i = (as.extract 0 i).takeWhile p := by
+  simp [take_takeWhile, List.extract_eq_drop_take']
+
+theorem takeWhile_eq_extract_findIdx_not {p : α → Bool} :
+    takeWhile p xs = xs.extract 0 (xs.findIdx (fun a => !p a)) := by
+  simp [takeWhile_eq_take_findIdx_not, extract_eq_drop_take']
 
 end List
