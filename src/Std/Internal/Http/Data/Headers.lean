@@ -232,6 +232,14 @@ Updates all the values of a header if it exists.
 def update (headers : Headers) (name : Header.Name) (f : Header.Value → Header.Value) : Headers :=
   { map := headers.map.update name f }
 
+/--
+Replaces the last value for the given header name.
+If the header is absent, returns the headers unchanged.
+-/
+@[inline]
+def replaceLast (headers : Headers) (name : Header.Name) (value : Header.Value) : Headers :=
+  { map := headers.map.replaceLast name value }
+
 instance : ToString Headers where
   toString headers :=
     let pairs := headers.map.toArray.map (fun (k, v) => s!"{k}: {v}")
@@ -253,5 +261,8 @@ instance : Insert (Header.Name × Header.Value) Headers :=
 
 instance : Union Headers :=
   ⟨merge⟩
+
+instance [Monad m] : ForIn m Headers (Header.Name × Header.Value) where
+  forIn headers b f := forIn headers.map.entries b f
 
 end Std.Http.Headers
