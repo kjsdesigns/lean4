@@ -185,32 +185,29 @@ def transform {m} [Monad m] [MonadLiftT MetaM m] [MonadControlT MetaM m]
   return e
 
 /--
-Zeta-reduces `let`/`have` expressions in `e` and zeta-delta reduces free variables.
+Zeta-reduces `let`/`have` expressions in `e`, and also zeta-delta reduces let-bound variables.
+Removes unused `let`/`have` expressions.
 
 Options:
-- If `zetaDelta` is true (default: true), then unfolds values of local let definitions.
+- If `zetaDelta` is true (default: true), then zeta-delta reduces (unfolds) let-bound variables.
 - If `zetaHave` is false (default: true), then does not zeta reduce `have` expressions.
 - If `beta` is true (default: true), then beta reduce applications of substituted values
 -/
 def zetaReduce (e : Expr) (zetaDelta := true) (zetaHave := true) (beta := true) : MetaM Expr := do
   let n := (← getLCtx).numIndices
-  let unfold? (fvarId : FVarId) : MetaM (Option (Bool × Expr)) := do
+  let unfold? (fvarId : FVarId) : MetaM (Option Expr) := do
     let some decl ← fvarId.findDecl? | return none
     if !zetaDelta && decl.index < n then return none
     -- Values for nondep ldecls created by `transform` are valid.
-    let some value := decl.value? (allowNondep := zetaHave && decl.index ≥ n) | return none
-    return some (decl.index < n, value)
+    return decl.value? (allowNondep := zetaHave && decl.index ≥ n)
   let pre (e : Expr) : MetaM TransformStep := do
     let .fvar fvarId := e | return .continue
-    let some (visit, val) ← unfold? fvarId | return .done e
-    if visit then
-      return .visit val
-    else
-      return .done val
+    let some value ← unfold? fvarId | return .done e
+    return .visit (← instantiateMVars value)
   let preBeta (e : Expr) : MetaM TransformStep := do
     let .fvar fvarId := e.getAppFn | return .continue
-    let some (_, val) ← unfold? fvarId | return .continue
-    return .visit <| (← instantiateMVars val).beta e.getAppArgs
+    let some value ← unfold? fvarId | return .continue
+    return .visit <| (← instantiateMVars value).beta e.getAppArgs
   transform e (pre := if beta then preBeta else pre) (usedLetOnly := true)
 
 /--
