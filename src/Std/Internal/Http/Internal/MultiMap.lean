@@ -276,5 +276,8 @@ instance [EquivBEq α] [LawfulHashable α] : Insert (α × β) (MultiMap α β) 
 instance [EquivBEq α] [LawfulHashable α] : Union (MultiMap α β) :=
   ⟨merge⟩
 
+instance [Monad m] : ForIn m (MultiMap α β) (α × β) where
+  forIn map b f := forIn map.entries b f
+
 end MultiMap
 end Std

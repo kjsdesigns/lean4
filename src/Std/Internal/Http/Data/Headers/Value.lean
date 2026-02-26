@@ -62,7 +62,7 @@ instance : Hashable Value where
   hash := Hashable.hash ∘ Value.value
 
 instance : Inhabited Value where
-  default := ⟨"_", by decide⟩
+  default := ⟨"", by decide⟩
 
 namespace Value
 

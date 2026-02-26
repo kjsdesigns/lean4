@@ -106,4 +106,11 @@ def unquoteHttpString? (s : String) : Option String :=
   else
     none
 
+/--
+Checks whether a string is a valid non-empty HTTP token.
+-/
+@[expose]
+def isToken (s : String) : Bool :=
+  ¬s.isEmpty ∧ s.toList.all Char.token
+
 end Std.Http.Internal
