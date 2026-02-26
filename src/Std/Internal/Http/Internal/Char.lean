@@ -25,21 +25,21 @@ namespace Std.Http.Internal.Char
 set_option linter.all true
 
 /--
-Checks if a byte represents an ASCII character (value < 128).
+Checks if a character is ASCII (Unicode code point < 128).
 -/
 @[expose]
 def isAscii (c : Char) : Bool :=
   c.toNat < 128
 
 /--
-Checks if a byte is a decimal digit (0-9).
+Checks if a character is a decimal digit (0-9).
 -/
 @[inline, expose]
 def isDigitChar (c : Char) : Bool :=
   c ≥ '0' ∧ c ≤ '9'
 
 /--
-Checks if a byte is an alphabetic character (a-z or A-Z).
+Checks if a character is an alphabetic character (a-z or A-Z).
 -/
 @[inline, expose]
 def isAlphaChar (c : Char) : Bool :=
@@ -260,7 +260,8 @@ def obsText (c : Char) : Bool :=
 
 /--
 reason-phrase character class:
-HTAB / SP / VCHAR / obs-text
+HTAB / SP / VCHAR
+; ASCII-only variant (no obs-text).
 
 Reference: https://httpwg.org/specs/rfc9110.html#reason.phrase
 -/
@@ -296,7 +297,7 @@ theorem isHexDigit_eq_isHexDigitSpec_on_ascii : EqOnAscii isHexDigit isHexDigitS
   decide
 
 /--
-Byte-level wrapper for parsers that operate on UTF-8 bytes.
+Checks if a byte is a hexadecimal digit (0-9, a-f, or A-F).
 -/
 @[expose]
 def isHexDigitByte (c : UInt8) : Bool :=
@@ -312,10 +313,7 @@ def isAlphaNumSpec (c : UInt8) : Bool :=
   (c ≥ 'a'.toUInt8 && c ≤ 'z'.toUInt8) ||
   (c ≥ 'A'.toUInt8 && c ≤ 'Z'.toUInt8)
 
-
-
-
- /--
+/--
 Checks if a byte is an alphanumeric digit (0-9, a-z, or A-Z) using a precomputed bitmask.
 -/
 @[expose]
@@ -358,7 +356,7 @@ def isUnreservedSpec (c : UInt8) : Bool :=
   isAlphaNumSpec c ||
   (c = '-'.toUInt8 || c = '.'.toUInt8 || c = '_'.toUInt8 || c = '~'.toUInt8)
 
- /--
+/--
 Checks if a byte is an unreserved character according to RFC 3986 using a precomputed bitmask.
 -/
 @[expose]
@@ -379,7 +377,7 @@ def isSubDelimsSpec (c : UInt8) : Bool :=
   c = '('.toUInt8 || c = ')'.toUInt8 || c = '*'.toUInt8 || c = '+'.toUInt8 ||
   c = ','.toUInt8 || c = ';'.toUInt8 || c = '='.toUInt8
 
- /--
+/--
 Checks if a byte is a sub-delimiter character according to RFC 3986 using a precomputed bitmask.
 -/
 @[expose]
@@ -401,7 +399,7 @@ so this predicate only covers the non-percent characters.
 def isPCharSpec (c : UInt8) : Bool :=
   isUnreservedSpec c || isSubDelimsSpec c || c = ':'.toUInt8 || c = '@'.toUInt8
 
- /--
+/--
 Checks if a byte is a valid path character (`pchar`) according to RFC 3986 using a precomputed bitmask.
 -/
 @[expose]
@@ -420,7 +418,7 @@ Checks if a byte is a valid character in a URI query component according to RFC 
 def isQueryCharSpec (c : UInt8) : Bool :=
   isPCharSpec c || c = '/'.toUInt8 || c = '?'.toUInt8
 
- /--
+/--
 Checks if a byte is a valid character in a URI query component according to RFC 3986 using a precomputed bitmask.
 -/
 @[expose]
@@ -439,7 +437,7 @@ Checks if a byte is a valid character in a URI fragment component according to R
 def isFragmentCharSpec (c : UInt8) : Bool :=
   isPCharSpec c || c = '/'.toUInt8 || c = '?'.toUInt8
 
- /--
+/--
 Checks if a byte is a valid character in a URI fragment component according to RFC 3986 using a precomputed bitmask.
 -/
 @[expose]
@@ -457,7 +455,7 @@ Checks if a byte is a valid character in a URI userinfo component according to R
 def isUserInfoCharSpec (c : UInt8) : Bool :=
   isUnreservedSpec c || isSubDelimsSpec c || c = ':'.toUInt8
 
- /--
+/--
 Checks if a byte is a valid character in a URI userinfo component according to RFC 3986 using a precomputed bitmask.
 -/
 @[expose]

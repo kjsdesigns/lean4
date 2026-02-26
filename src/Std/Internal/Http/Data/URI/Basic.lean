@@ -90,22 +90,55 @@ def ofString! (s : String) : Scheme :=
 end Scheme
 
 /--
-User information component containing the username and optional password. Both fields store decoded
-(unescaped) values.
+User information component containing an encoded username and optional encoded password.
+
+The stored strings use URI userinfo percent-encoding so parsed URIs can be rendered without
+losing percent-encoding choices (for example, `%3A` versus `:`).
+
+Note: embedding passwords in URIs is deprecated per RFC 9110 Section 4.2.4. Avoid using the
+password field in new code, and never include it in logs or error messages.
 
 Reference: https://www.rfc-editor.org/rfc/rfc3986.html#section-3.2.1
 -/
 structure UserInfo where
   /--
-  The username (decoded).
+  The encoded username.
   -/
-  username : String
+  username : EncodedUserInfo
 
   /--
-  The optional password (decoded).
+  The optional encoded password.
   -/
-  password : Option String
+  password : Option EncodedUserInfo
 deriving Inhabited, Repr
+
+namespace UserInfo
+
+/--
+Builds a `UserInfo` value from raw strings by applying userinfo percent-encoding.
+-/
+@[inline]
+def ofStrings (username : String) (password : Option String := none) : UserInfo :=
+  {
+    username := EncodedUserInfo.encode username
+    password := EncodedUserInfo.encode <$> password
+  }
+
+/--
+Returns the decoded username, or `none` if decoding fails UTF-8 validation.
+-/
+@[inline]
+def username? (ui : UserInfo) : Option String :=
+  ui.username.decode
+
+/--
+Returns the decoded password when present, or `none` if absent or decoding fails UTF-8 validation.
+-/
+@[inline]
+def password? (ui : UserInfo) : Option String :=
+  ui.password.bind EncodedUserInfo.decode
+
+end UserInfo
 
 /--
 Checks if a character is valid for use in a domain name.
@@ -138,11 +171,11 @@ abbrev IsValidDomainLabel (s : String) : Prop :=
 
 /--
 Proposition that asserts `s` is a valid dot-separated domain name.
-Each label must satisfy `IsValidDomainLabel`.
+Each label must satisfy `IsValidDomainLabel`, and the full name must be at most 253 characters.
 -/
 abbrev IsValidDomainName (s : String) : Prop :=
   let labels := s.splitOn "."
-  ¬labels.isEmpty ∧ labels.all isValidDomainLabel
+  ¬labels.isEmpty ∧ labels.all isValidDomainLabel ∧ s.toList.length ≤ 253
 
 /--
 A domain name represented as a validated, lowercase-normalized string.
@@ -158,14 +191,18 @@ namespace DomainName
 
 /--
 Attempts to create a normalized domain name from a string.
-Returns `none` if the name is empty or any label violates DNS label constraints.
+Returns `none` if the name is empty, longer than 253 characters, or any label violates DNS label
+constraints.
 -/
 def ofString? (s : String) : Option DomainName :=
   let lower := s.toLower
   if h₁ : lower.isEmpty then
     none
-  else if h₂ : IsValidDomainName lower then
-    some ⟨lower, IsLowerCase.isLowerCase_toLower, h₂, h₁⟩
+  else if lower.toList.length ≤ 253 then
+    if h₃ : IsValidDomainName lower then
+      some ⟨lower, IsLowerCase.isLowerCase_toLower, h₃, h₁⟩
+    else
+      none
   else
     none
 
@@ -245,8 +282,8 @@ instance : ToString Authority where
   toString auth :=
     let userPart := match auth.userInfo with
       | none => ""
-      | some ⟨name, some pass⟩ => s!"{toString (EncodedString.encode name (r := isUnreserved))}:{toString (EncodedString.encode pass (r := isUnreserved))}@"
-      | some ⟨name, none⟩ => s!"{toString (EncodedString.encode name (r := isUnreserved))}@"
+      | some ⟨name, some pass⟩ => s!"{name}:{pass}@"
+      | some ⟨name, none⟩ => s!"{name}@"
     let hostPart := toString auth.host
     let portPart := match auth.port with
       | none => ""
@@ -392,21 +429,33 @@ def formatQueryParam (key : EncodedQueryParam) (value : Option EncodedQueryParam
 Finds the first value of a query parameter by key name. Returns `none` if the key is not found.
 The value remains encoded as `EncodedQueryParam`.
 -/
-def find? (query : Query) (key : String) : Option (Option EncodedQueryParam) :=
-  let encodedKey : EncodedQueryParam := EncodedQueryParam.encode key
-  let matchingKey := Array.find? (fun x => x.fst.toByteArray = encodedKey.toByteArray) query
+def findEncoded? (query : Query) (key : EncodedQueryParam) : Option (Option EncodedQueryParam) :=
+  let matchingKey := Array.find? (fun x => x.fst.toByteArray = key.toByteArray) query
   matchingKey.map (fun x => x.snd)
+
+/--
+Finds the first value of a query parameter by raw key string. The key is percent-encoded before
+matching. This avoids aliasing between raw and pre-encoded spellings.
+-/
+def find? (query : Query) (key : String) : Option (Option EncodedQueryParam) :=
+  query.findEncoded? (EncodedQueryParam.encode key)
 
 /--
 Finds all values of a query parameter by key name. Returns an empty array if the key is not found.
 The values remain encoded as `EncodedQueryParam`.
 -/
-def findAll (query : Query) (key : String) : Array (Option EncodedQueryParam) :=
-  let encodedKey : EncodedQueryParam := EncodedQueryParam.encode key
+def findAllEncoded (query : Query) (key : EncodedQueryParam) : Array (Option EncodedQueryParam) :=
   query.filterMap (fun x =>
-    if x.fst.toByteArray = encodedKey.toByteArray then
-      some (x.snd)
-    else none)
+    if x.fst.toByteArray = key.toByteArray then
+      some x.snd
+    else
+      none)
+
+/--
+Finds all values of a query parameter by raw key string. The key is percent-encoded before matching.
+-/
+def findAll (query : Query) (key : String) : Array (Option EncodedQueryParam) :=
+  query.findAllEncoded (EncodedQueryParam.encode key)
 
 /--
 Adds a query parameter to the query string.
@@ -417,7 +466,7 @@ def insert (query : Query) (key : String) (value : String) : Query :=
   query.push (encodedKey, some encodedValue)
 
 /--
-Adds a query parameter to the query string.
+Adds an already-encoded key-value pair to the query string.
 -/
 def insertEncoded (query : Query) (key : EncodedQueryParam) (value : Option EncodedQueryParam) : Query :=
   query.push (key, value)
@@ -436,16 +485,28 @@ def ofList (pairs : List (EncodedQueryParam × Option EncodedQueryParam)) : Quer
 /--
 Checks if a query parameter exists.
 -/
+def containsEncoded (query : Query) (key : EncodedQueryParam) : Bool :=
+  query.any (fun x => x.fst.toByteArray = key.toByteArray)
+
+/--
+Checks if a query parameter exists by raw key string. The key is percent-encoded before matching.
+-/
 def contains (query : Query) (key : String) : Bool :=
-  let encodedKey : EncodedQueryParam := EncodedQueryParam.encode key
-  query.any (fun x => x.fst.toByteArray = encodedKey.toByteArray)
+  query.containsEncoded (EncodedQueryParam.encode key)
 
 /--
 Removes all occurrences of a query parameter by key name.
 -/
+def eraseEncoded (query : Query) (key : EncodedQueryParam) : Query :=
+  query.filter (fun x =>
+    x.fst.toByteArray ≠ key.toByteArray
+  )
+
+/--
+Removes all occurrences of a query parameter by raw key string. The key is percent-encoded before matching.
+-/
 def erase (query : Query) (key : String) : Query :=
-  let encodedKey : EncodedQueryParam := EncodedQueryParam.encode key
-  query.filter (fun x => x.fst.toByteArray ≠ encodedKey.toByteArray)
+  query.eraseEncoded (EncodedQueryParam.encode key)
 
 /--
 Gets the first value of a query parameter by key name, decoded as a string.
@@ -615,11 +676,7 @@ Sets the user information with username and optional password.
 The strings will be automatically percent-encoded.
 -/
 def setUserInfo (b : Builder) (username : String) (password : Option String := none) : Builder :=
-  { b with userInfo := some {
-      username := username
-      password := password
-    }
-  }
+  { b with userInfo := some (UserInfo.ofStrings username password) }
 
 /--
 Sets the host as a domain name, returning `none` if the name contains invalid characters.
@@ -774,15 +831,12 @@ def withFragment (uri : URI) (fragment : Option String) : URI :=
 Partially normalizes a URI by removing dot-segments from the path (`.` and `..`)
 according to RFC 3986 Section 5.2.4.
 
-This does not apply the full normalization set from RFC 3986 Section 6
-(e.g. case normalization, percent-encoding normalization, or default-port normalization).
+This does not apply the full normalization set from RFC 3986 Section 6 — for example,
+case normalization, percent-encoding normalization, and default-port normalization are
+not performed.
 -/
 def normalize (uri : URI) : URI :=
-  { uri with
-    scheme := uri.scheme
-    authority := uri.authority
-    path := uri.path.normalize
-  }
+  { uri with path := uri.path.normalize }
 
 end URI
 
