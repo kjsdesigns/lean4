@@ -27,7 +27,7 @@ namespace Std.Http.Internal
 set_option linter.all true
 
 /--
-Predicate asserting that a string is already in lowercase normal form.
+Predicate asserting that a string is in lowercase form.
 -/
 @[expose] def IsLowerCase (s : String) : Prop :=
   s.toLower = s

@@ -17,18 +17,21 @@ public import Std.Internal.Http.Internal.Char
 
 public section
 
-namespace Std.Http.URI
-open Internal Char
-
-set_option linter.all true
-
 /-!
 # URI Encoding
 
 This module provides utilities for percent-encoding URI components according to RFC 3986. It includes
 character validation, encoding/decoding functions, and types that maintain encoding invariants through
 Lean's dependent type system.
+
+Reference: https://www.rfc-editor.org/rfc/rfc3986.html#section-2.1
 -/
+
+namespace Std.Http.URI
+
+set_option linter.all true
+
+open Internal Char
 
 /--
 Checks if a byte is a valid character in a percent-encoded URI component. Valid characters are

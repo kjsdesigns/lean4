@@ -6,7 +6,6 @@ Authors: Sofia Rodrigues
 module
 
 prelude
-public import Init.Data.String
 public import Init.Data.ToString
 public import Std.Internal.Http.Internal
 
@@ -17,6 +16,8 @@ public section
 
 This module defines the `Name` type, which represents validated HTTP header names that conform to
 HTTP standards.
+
+Reference: https://www.rfc-editor.org/rfc/rfc9110.html#section-5
 -/
 
 namespace Std.Http.Header
@@ -26,19 +27,21 @@ set_option linter.all true
 open Internal Char
 
 /--
-Proposition that asserts all characters in a string are valid and that it is non-empty for HTTP header names.
+Proposition asserting that a string is a valid HTTP header name: all characters are valid token
+characters and the string is non-empty.
 
-  field-name     = token
-
-Reference: https://www.rfc-editor.org/rfc/rfc9110.html#section-5.1
+Reference: https://www.rfc-editor.org/rfc/rfc9110.html#name-field-names
 -/
 abbrev IsValidHeaderName (s : String) : Prop :=
-  s.toList.all Char.token ∧ ¬s.isEmpty
+  isToken s
 
 /--
 A validated HTTP header name that ensures all characters conform to HTTP standards. Header names are
 case-insensitive according to HTTP specifications.
+
+Reference: https://www.rfc-editor.org/rfc/rfc9110.html#name-field-names
 -/
+@[ext]
 structure Name where
   /--
   The lowercased normalized header name string.
@@ -54,12 +57,24 @@ structure Name where
   The proof that we stored the header name in normal form
   -/
   normalForm : IsLowerCase value := by decide
-deriving Repr, DecidableEq, BEq
+deriving Repr, DecidableEq
 
 namespace Name
 
+instance : BEq Name where
+  beq a b := a.value = b.value
+
 instance : Hashable Name where
   hash x := Hashable.hash x.value
+
+theorem Name.beq_eq {x y : Name} : (x == y) = (x.value == y.value) :=
+  rfl
+
+instance : LawfulBEq Name where
+  rfl {x} := by simp [Name.beq_eq]
+  eq_of_beq {x y} := by grind [Name.beq_eq, Name.ext]
+
+instance : LawfulHashable Name := inferInstance
 
 instance : Inhabited Name where
   default := ⟨"_", by decide, by decide⟩
@@ -68,7 +83,6 @@ instance : Inhabited Name where
 Attempts to create a `Name` from a `String`, returning `none` if the string contains invalid
 characters for HTTP header names or is empty.
 -/
-@[expose]
 def ofString? (s : String) : Option Name :=
   let val := s.trimAscii.toString.toLower
   if h : IsValidHeaderName val ∧ IsLowerCase val then
@@ -77,10 +91,9 @@ def ofString? (s : String) : Option Name :=
     none
 
 /--
-Creates a `Name` from a string, panicking with an error message if the
-string contains invalid characters for HTTP header names or is empty.
+Creates a `Name` from a string, panicking with an error message if the string contains invalid
+characters for HTTP header names or is empty.
 -/
-@[expose]
 def ofString! (s : String) : Name :=
   match ofString? s with
   | some res => res

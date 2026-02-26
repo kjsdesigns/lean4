@@ -183,22 +183,8 @@ info: "TEXT/HTML"
 #guard_msgs in
 #eval do
   let h := Headers.empty.insert! "content-type" "text/html"
-  let h' := h.update (Name.ofString! "content-type") (fun
-    | some v => Value.ofString! v.value.toUpper
-    | none => Value.ofString! "default")
+  let h' := h.update (Name.ofString! "content-type") (fun v => Value.ofString! v.value.toUpper)
   return (h'.get? (Name.ofString! "content-type")).get!.value
-
--- update missing (inserts)
-/--
-info: "default-value"
--/
-#guard_msgs in
-#eval do
-  let h := Headers.empty
-  let h' := h.update (Name.ofString! "x-new") (fun
-    | some v => v
-    | none => Value.ofString! "default-value")
-  return (h'.get? (Name.ofString! "x-new")).get!.value
 
 -- ofList
 #guard
@@ -254,6 +240,32 @@ info: "TEXT/HTML"
   let h := Headers.empty.insert! "content-type" "text/html"
   let h' := h.mapValues (fun _ v => Value.ofString! v.value.toUpper)
   return (h'.get? (Name.ofString! "content-type")).get!.value
+
+-- toArray preserves insertion order
+#guard
+  let h := Headers.empty
+    |>.insert! "content-type" "text/html"
+    |>.insert! "host" "example.com"
+    |>.insert! "accept" "application/json"
+  h.toArray.map (fun (n, v) => (n.value, v.value)) ==
+    #[("content-type", "text/html"), ("host", "example.com"), ("accept", "application/json")]
+
+-- toArray with duplicate keys: both values appear in insertion order
+#guard
+  let h := Headers.empty
+    |>.insert! "accept" "text/html"
+    |>.insert! "accept" "application/json"
+  h.toArray.map (fun (n, v) => (n.value, v.value)) ==
+    #[("accept", "text/html"), ("accept", "application/json")]
+
+-- toArray after erase preserves remaining insertion order
+#guard
+  let h := Headers.empty
+    |>.insert! "content-type" "text/html"
+    |>.insert! "host" "example.com"
+    |>.insert! "accept" "application/json"
+  (h.erase (Name.ofString! "host")).toArray.map (fun (n, v) => (n.value, v.value)) ==
+    #[("content-type", "text/html"), ("accept", "application/json")]
 
 /-! ## Header typeclass tests -/
 

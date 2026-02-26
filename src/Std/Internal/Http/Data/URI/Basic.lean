@@ -16,11 +16,18 @@ public section
 /-!
 # URI Structure
 
-This module defines the complete URI structure following RFC 3986, including schemes, authorities,
-paths, queries, fragments, and request targets.
+This module defines an HTTP-oriented URI structure aligned with RFC 3986 and RFC 9110, including
+schemes, authorities, paths, queries, fragments, and request targets.
+
+Host handling is intentionally strict: this module accepts IPv4, bracketed IPv6, and DNS-style
+domain names (LDH labels). RFC 3986 `reg-name` forms that are not DNS-compatible are rejected.
 
 All text components use the encoding types from `Std.Http.URI.Encoding` to ensure proper
 percent-encoding is maintained throughout.
+
+References:
+* https://www.rfc-editor.org/rfc/rfc3986.html
+* https://www.rfc-editor.org/rfc/rfc9110.html#name-uri-references
 -/
 
 namespace Std.Http
@@ -31,60 +38,158 @@ open Internal Char
 
 namespace URI
 
-
 /--
-Checks if a character is valid after the first character of a URI scheme.
-Valid characters are ASCII alphanumeric, `+`, `-`, and `.`.
+Proposition that `s` is a valid URI scheme per RFC 3986:
+`scheme = ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )`.
+
+The scheme value stored in this module is normalized to lowercase.
+
+Reference: https://www.rfc-editor.org/rfc/rfc3986.html#section-3.1
 -/
-def isValidSchemeChar (c : Char) : Bool :=
-  Internal.Char.isValidSchemeChar c
+abbrev IsValidScheme (s : String) : Prop :=
+  IsLowerCase s ∧
+  s.toList.all isValidSchemeChar ∧
+  (s.toList.head?.map isAlphaChar |>.getD false) ∧ -- ALPHA
+  IsLowerCase s -- An implementation should accept uppercase letters as equivalent to lowercase in scheme names
 
 /--
 URI scheme identifier (e.g., "http", "https", "ftp").
 -/
-abbrev Scheme := { s : String // IsLowerCase s ∧ s.toList.all isValidSchemeChar ∧ ¬s.isEmpty }
+abbrev Scheme := { s : String // IsValidScheme s }
 
 instance : Inhabited Scheme where
-  default := ⟨"a", ⟨by decide, by decide, by decide⟩⟩
+  default := ⟨"http", ⟨by decide, by decide, by decide⟩⟩
+
+namespace Scheme
 
 /--
-User information component containing the username and optional password. Both fields store decoded
-(unescaped) values.
+Attempts to create a `Scheme` from a string, normalizing to lowercase.
+Returns `none` if the scheme is invalid per RFC 3986 Section 3.1.
+-/
+def ofString? (s : String) : Option Scheme :=
+  let lower := s.toLower
+
+  if h : IsValidScheme lower then
+    some ⟨lower, h⟩
+  else
+    none
+
+/--
+Creates a `Scheme` from a string, normalizing to lowercase. Panicks if invalid.
+-/
+def ofString! (s : String) : Scheme :=
+  match ofString? s with
+  | some scheme => scheme
+  | none => panic! s!"invalid URI scheme: {s.quote}"
+
+end Scheme
+
+/--
+User information component containing an encoded username and optional encoded password.
+
+The stored strings use URI userinfo percent-encoding so parsed URIs can be rendered without
+losing percent-encoding choices (for example, `%3A` versus `:`).
+
+Note: embedding passwords in URIs is deprecated per RFC 9110 Section 4.2.4. Avoid using the
+password field in new code, and never include it in logs or error messages.
+
+Reference: https://www.rfc-editor.org/rfc/rfc3986.html#section-3.2.1
 -/
 structure UserInfo where
   /--
-  The username (decoded).
+  The encoded username.
   -/
-  username : String
+  username : EncodedUserInfo
 
   /--
-  The optional password (decoded).
+  The optional encoded password.
   -/
-  password : Option String
+  password : Option EncodedUserInfo
 deriving Inhabited, Repr
 
-/--
-Checks if a character is valid for use in a domain name.
-Valid characters are ASCII alphanumeric, hyphens, and dots.
--/
-def isValidDomainNameChar (c : Char) : Bool :=
-  Internal.Char.isValidDomainNameChar c
+namespace UserInfo
 
 /--
-Proposition that asserts all characters in a string are valid domain name characters.
+Builds a `UserInfo` value from raw strings by applying userinfo percent-encoding.
+-/
+@[inline]
+def ofStrings (username : String) (password : Option String := none) : UserInfo :=
+  {
+    username := EncodedUserInfo.encode username
+    password := EncodedUserInfo.encode <$> password
+  }
+
+/--
+Returns the decoded username, or `none` if decoding fails UTF-8 validation.
+-/
+@[inline]
+def username? (ui : UserInfo) : Option String :=
+  ui.username.decode
+
+/--
+Returns the decoded password when present, or `none` if absent or decoding fails UTF-8 validation.
+-/
+@[inline]
+def password? (ui : UserInfo) : Option String :=
+  ui.password.bind EncodedUserInfo.decode
+
+end UserInfo
+
+/--
+Checks whether a single domain label is valid. A label must be non-empty, contain only ASCII
+alphanumeric characters and `-`, cannot start or end with `-`, and must be at most 63 characters.
+
+References:
+* https://www.rfc-editor.org/rfc/rfc1034.html#section-3.5
+* https://www.rfc-editor.org/rfc/rfc1123.html#section-2.1
+-/
+def isValidDomainLabel (s : String) : Bool :=
+  let chars := s.toList
+  decide (chars.length ≤ 63) &&
+    chars.all (fun c => isAsciiAlphaNumChar c ∨ c = '-') &&
+    (chars.head?.map isAsciiAlphaNumChar |>.getD false) &&
+    (chars.getLast?.map isAsciiAlphaNumChar |>.getD false)
+
+/--
+Proposition that asserts `s` is a valid dot-separated domain name.
+Each label must satisfy `IsValidDomainLabel`, and the full name must be at most 253 characters.
 -/
 abbrev IsValidDomainName (s : String) : Prop :=
-  s.toList.all isValidDomainNameChar
+  let labels := s.splitOn "."
+  ¬labels.isEmpty ∧ labels.all isValidDomainLabel ∧ s.length ≤ 255
 
 /--
 A domain name represented as a validated, lowercase-normalized string.
 Only ASCII alphanumeric characters, hyphens, and dots are allowed.
+Each label cannot start or end with `-` and is limited to 63 characters.
 Internationalized domain names must be converted to punycode before use.
+
+Reference: https://www.rfc-editor.org/rfc/rfc3986.html#section-3.2.2
 -/
 abbrev DomainName := { s : String // IsLowerCase s ∧ IsValidDomainName s ∧ ¬s.isEmpty }
 
+namespace DomainName
+
+/--
+Attempts to create a normalized domain name from a string.
+Returns `none` if the name is empty, longer than 255 characters, or any label violates DNS label
+constraints.
+-/
+def ofString? (s : String) : Option DomainName :=
+  let lower := s.toLower
+  if h₁ : lower.isEmpty then
+    none
+  else if h₃ : IsValidDomainName lower then
+    some ⟨lower, IsLowerCase.isLowerCase_toLower, h₃, h₁⟩
+  else
+    none
+
+end DomainName
+
 /--
 Host component of a URI, supporting domain names and IP addresses.
+
+Reference: https://www.rfc-editor.org/rfc/rfc3986.html#section-3.2.2
 -/
 inductive Host
   /--
@@ -124,6 +229,8 @@ instance : ToString Host where
 
 /--
 TCP port number.
+
+Reference: https://www.rfc-editor.org/rfc/rfc3986.html#section-3.2.3
 -/
 abbrev Port := UInt16
 
@@ -153,20 +260,19 @@ instance : ToString Authority where
   toString auth :=
     let userPart := match auth.userInfo with
       | none => ""
-      | some ⟨name, some pass⟩ => s!"{toString (EncodedString.encode name (r := isUnreserved))}:{toString (EncodedString.encode pass (r := isUnreserved))}@"
-      | some ⟨name, none⟩ => s!"{toString (EncodedString.encode name (r := isUnreserved))}@"
+      | some ⟨name, some pass⟩ => s!"{name}:{pass}@"
+      | some ⟨name, none⟩ => s!"{name}@"
     let hostPart := toString auth.host
     let portPart := match auth.port with
       | none => ""
       | some p => s!":{p}"
     s!"{userPart}{hostPart}{portPart}"
 
-namespace Authority
-end Authority
-
 /--
 Hierarchical path component of a URI. Each segment is stored as an `EncodedSegment` to maintain
 proper percent-encoding.
+
+Reference: https://www.rfc-editor.org/rfc/rfc3986.html#section-3.3
 -/
 structure Path where
   /--
@@ -254,6 +360,8 @@ end Path
 Query string represented as an array of key-value pairs. Both keys and values are stored as
 `EncodedQueryParam` for proper application/x-www-form-urlencoded encoding. Values are optional to
 support parameters without values (e.g., "?flag"). Order is preserved based on insertion order.
+
+Reference: https://www.rfc-editor.org/rfc/rfc3986.html#section-3.4
 -/
 @[expose]
 def Query := Array (EncodedQueryParam × Option EncodedQueryParam)
@@ -299,21 +407,33 @@ def formatQueryParam (key : EncodedQueryParam) (value : Option EncodedQueryParam
 Finds the first value of a query parameter by key name. Returns `none` if the key is not found.
 The value remains encoded as `EncodedQueryParam`.
 -/
-def find? (query : Query) (key : String) : Option (Option EncodedQueryParam) :=
-  let encodedKey : EncodedQueryParam := EncodedQueryParam.encode key
-  let matchingKey := Array.find? (fun x => x.fst.toByteArray = encodedKey.toByteArray) query
+def findEncoded? (query : Query) (key : EncodedQueryParam) : Option (Option EncodedQueryParam) :=
+  let matchingKey := Array.find? (fun x => x.fst.toByteArray = key.toByteArray) query
   matchingKey.map (fun x => x.snd)
+
+/--
+Finds the first value of a query parameter by raw key string. The key is percent-encoded before
+matching. This avoids aliasing between raw and pre-encoded spellings.
+-/
+def find? (query : Query) (key : String) : Option (Option EncodedQueryParam) :=
+  query.findEncoded? (EncodedQueryParam.encode key)
 
 /--
 Finds all values of a query parameter by key name. Returns an empty array if the key is not found.
 The values remain encoded as `EncodedQueryParam`.
 -/
-def findAll (query : Query) (key : String) : Array (Option EncodedQueryParam) :=
-  let encodedKey : EncodedQueryParam := EncodedQueryParam.encode key
+def findAllEncoded (query : Query) (key : EncodedQueryParam) : Array (Option EncodedQueryParam) :=
   query.filterMap (fun x =>
-    if x.fst.toByteArray = encodedKey.toByteArray then
-      some (x.snd)
-    else none)
+    if x.fst.toByteArray = key.toByteArray then
+      some x.snd
+    else
+      none)
+
+/--
+Finds all values of a query parameter by raw key string. The key is percent-encoded before matching.
+-/
+def findAll (query : Query) (key : String) : Array (Option EncodedQueryParam) :=
+  query.findAllEncoded (EncodedQueryParam.encode key)
 
 /--
 Adds a query parameter to the query string.
@@ -324,7 +444,7 @@ def insert (query : Query) (key : String) (value : String) : Query :=
   query.push (encodedKey, some encodedValue)
 
 /--
-Adds a query parameter to the query string.
+Adds an already-encoded key-value pair to the query string.
 -/
 def insertEncoded (query : Query) (key : EncodedQueryParam) (value : Option EncodedQueryParam) : Query :=
   query.push (key, value)
@@ -343,17 +463,28 @@ def ofList (pairs : List (EncodedQueryParam × Option EncodedQueryParam)) : Quer
 /--
 Checks if a query parameter exists.
 -/
+def containsEncoded (query : Query) (key : EncodedQueryParam) : Bool :=
+  query.any (fun x => x.fst.toByteArray = key.toByteArray)
+
+/--
+Checks if a query parameter exists by raw key string. The key is percent-encoded before matching.
+-/
 def contains (query : Query) (key : String) : Bool :=
-  let encodedKey : EncodedQueryParam := EncodedQueryParam.encode key
-  query.any (fun x => x.fst.toByteArray = encodedKey.toByteArray)
+  query.containsEncoded (EncodedQueryParam.encode key)
 
 /--
 Removes all occurrences of a query parameter by key name.
 -/
+def eraseEncoded (query : Query) (key : EncodedQueryParam) : Query :=
+  query.filter (fun x =>
+    x.fst.toByteArray ≠ key.toByteArray
+  )
+
+/--
+Removes all occurrences of a query parameter by raw key string. The key is percent-encoded before matching.
+-/
 def erase (query : Query) (key : String) : Query :=
-  let encodedKey : EncodedQueryParam := EncodedQueryParam.encode key
-  -- Filter out matching keys
-  query.filter (fun x => x.fst.toByteArray ≠ encodedKey.toByteArray)
+  query.eraseEncoded (EncodedQueryParam.encode key)
 
 /--
 Gets the first value of a query parameter by key name, decoded as a string.
@@ -504,11 +635,10 @@ def empty : Builder := {}
 /--
 Attempts to set the URI scheme (e.g., "http", "https").
 Returns `none` if the scheme is not a valid RFC 3986 scheme.
-A scheme must start with an ASCII letter followed by alphanumeric, `+`, `-`, or `.` characters.
+The stored scheme is normalized to lowercase.
 -/
 def setScheme? (b : Builder) (scheme : String) : Option Builder :=
-  if h : IsLowerCase scheme ∧ scheme.toList.all isValidSchemeChar ∧ ¬scheme.isEmpty then some { b with scheme := some ⟨scheme, h⟩ }
-  else none
+  URI.Scheme.ofString? scheme |>.map (fun scheme => { b with scheme := some scheme })
 
 /--
 Sets the URI scheme (e.g., "http", "https"). Panics if the scheme is invalid.
@@ -524,31 +654,23 @@ Sets the user information with username and optional password.
 The strings will be automatically percent-encoded.
 -/
 def setUserInfo (b : Builder) (username : String) (password : Option String := none) : Builder :=
-  { b with userInfo := some {
-      username := username
-      password := password
-    }
-  }
+  { b with userInfo := some (UserInfo.ofStrings username password) }
 
 /--
 Sets the host as a domain name, returning `none` if the name contains invalid characters.
 The domain name will be automatically lowercased.
 Only ASCII alphanumeric characters, hyphens, and dots are allowed.
+Each label cannot start or end with `-` and is limited to 63 characters.
 Internationalized domain names must be converted to punycode before use.
 -/
 def setHost? (b : Builder) (name : String) : Option Builder :=
-  let lower := name.toLower
-  if h₁: lower.isEmpty then
-    none
-  else if h : IsValidDomainName lower then
-    some { b with host := some (Host.name ⟨lower, IsLowerCase.isLowerCase_toLower, h, h₁⟩) }
-  else
-    none
+  URI.DomainName.ofString? name |>.map (fun name => { b with host := some (Host.name name) })
 
 /--
 Sets the host as a domain name, panicking if the name contains invalid characters.
 The domain name will be automatically lowercased.
 Only ASCII alphanumeric characters, hyphens, and dots are allowed.
+Each label cannot start or end with `-` and is limited to 63 characters.
 Internationalized domain names must be converted to punycode before use.
 -/
 def setHost! (b : Builder) (name : String) : Builder :=
@@ -657,11 +779,7 @@ namespace URI
 Returns a new URI with the scheme replaced.
 -/
 def withScheme! (uri : URI) (scheme : String) : URI :=
-  let lower := scheme.toLower
-  if h : IsLowerCase lower ∧ lower.toList.all isValidSchemeChar ∧ ¬lower.isEmpty then
-    { uri with scheme := ⟨lower, h.1, h.2.1, h.2.2⟩ }
-  else
-    panic! s!"invalid URI scheme: {scheme.quote}"
+  { uri with scheme := URI.Scheme.ofString! scheme }
 
 /--
 Returns a new URI with the authority replaced.
@@ -688,21 +806,22 @@ def withFragment (uri : URI) (fragment : Option String) : URI :=
   { uri with fragment }
 
 /--
-Normalizes a URI according to RFC 3986 Section 6.
+Partially normalizes a URI by removing dot-segments from the path (`.` and `..`)
+according to RFC 3986 Section 5.2.4.
+
+This does not apply the full normalization set from RFC 3986 Section 6 — for example,
+case normalization, percent-encoding normalization, and default-port normalization are
+not performed.
 -/
 def normalize (uri : URI) : URI :=
-  { uri with
-    scheme := uri.scheme
-    authority := uri.authority
-    path := uri.path.normalize
-  }
+  { uri with path := uri.path.normalize }
 
 end URI
 
 /--
-HTTP request target forms as defined in RFC 7230 Section 5.3.
+HTTP request target forms as defined in RFC 9112 Section 3.3.
 
-Reference: https://www.rfc-editor.org/rfc/rfc7230.html#section-5.3
+Reference: https://www.rfc-editor.org/rfc/rfc9112.html#section-3.3
 -/
 inductive RequestTarget where
   /--

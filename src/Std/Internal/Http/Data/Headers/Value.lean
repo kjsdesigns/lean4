@@ -6,7 +6,6 @@ Authors: Sofia Rodrigues
 module
 
 prelude
-public import Init.Data.String
 public import Init.Data.ToString
 public import Std.Internal.Http.Internal
 
@@ -17,6 +16,8 @@ public section
 
 This module defines the `Value` type, which represents validated HTTP header values that conform to HTTP
 standards.
+
+Reference: https://www.rfc-editor.org/rfc/rfc9110.html#name-field-values
 -/
 
 namespace Std.Http.Header
@@ -26,20 +27,8 @@ set_option linter.all true
 open Internal
 
 /--
-Checks if a character is valid for use in an HTTP header value.
-
-field-content  = field-vchar
-                   [ 1*( SP / HTAB / field-vchar ) field-vchar ]
-field-vchar     = VCHAR ; We disallow obs-text
-
-Reference: https://www.rfc-editor.org/rfc/rfc9110.html#section-5.5
--/
-abbrev isValidHeaderChar (c : Char) : Bool :=
-  Char.fieldContent c
-
-/--
-Proposition that asserts all characters in a string are valid for HTTP header values.
-This adds a simple check for non-visible characters.
+Proposition that asserts all characters in a string are valid for HTTP header values,
+and that the first and last characters (if present) are `field-vchar` (not SP/HTAB).
 
   field-value    = *field-content
   field-content  = field-vchar
@@ -48,7 +37,11 @@ This adds a simple check for non-visible characters.
 Reference: https://www.rfc-editor.org/rfc/rfc9110.html#section-5.5
 -/
 abbrev IsValidHeaderValue (s : String) : Prop :=
-  s.toList.all isValidHeaderChar ∧ (s.toList.head?.map Char.fieldVchar |>.getD true)
+  let s := s.toList
+
+  s.all Char.fieldContent ∧
+  (s.head?.map Char.fieldVchar |>.getD true) ∧
+  (s.getLast?.map Char.fieldVchar |>.getD true)
 
 /--
 A validated HTTP header value that ensures all characters conform to HTTP standards.
@@ -69,7 +62,7 @@ instance : Hashable Value where
   hash := Hashable.hash ∘ Value.value
 
 instance : Inhabited Value where
-  default := ⟨"_", by decide⟩
+  default := ⟨"", by decide⟩
 
 namespace Value
 
@@ -81,6 +74,7 @@ for HTTP header values.
 def ofString? (s : String) : Option Value :=
   -- A field value does not include leading or trailing whitespace.
   let val := s.trimAscii.toString
+
   if h : IsValidHeaderValue val then
     some ⟨val, h⟩
   else
@@ -105,15 +99,5 @@ def is (s : Value) (h : String) : Bool :=
 
 instance : ToString Value where
   toString v := v.value
-
-/--
-Standard close header value.
--/
-def close : Header.Value := .mk "close"
-
-/--
-Standard chunked header value.
--/
-def chunked : Header.Value := .mk "chunked"
 
 end Std.Http.Header.Value
