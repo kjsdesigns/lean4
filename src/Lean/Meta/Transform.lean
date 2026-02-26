@@ -200,15 +200,16 @@ def zetaReduce (e : Expr) (zetaDelta := true) (zetaHave := true) (beta := true) 
     if !zetaDelta && decl.index < n then return none
     -- Values for nondep ldecls created by `transform` are valid.
     return decl.value? (allowNondep := zetaHave && decl.index ≥ n)
-  let pre (e : Expr) : MetaM TransformStep := do
-    let .fvar fvarId := e | return .continue
-    let some value ← unfold? fvarId | return .done e
-    return .visit (← instantiateMVars value)
-  let preBeta (e : Expr) : MetaM TransformStep := do
-    let .fvar fvarId := e.getAppFn | return .continue
-    let some value ← unfold? fvarId | return .continue
-    return .visit <| (← instantiateMVars value).beta e.getAppArgs
-  transform e (pre := if beta then preBeta else pre) (usedLetOnly := true)
+  if beta then
+    transform e (usedLetOnly := true) (pre := fun e => do
+      let .fvar fvarId := e.getAppFn | return .continue
+      let some value ← unfold? fvarId | return .continue
+      return .visit <| (← instantiateMVars value).beta e.getAppArgs)
+  else
+    transform e (usedLetOnly := true) (pre := fun e => do
+      let .fvar fvarId := e | return .continue
+      let some value ← unfold? fvarId | return .done e
+      return .visit (← instantiateMVars value))
 
 /--
 Zeta-reduces only the specified free variables, applying beta reduction after substitution.
