@@ -17,6 +17,8 @@ public section
 
 This module defines the `Name` type, which represents validated HTTP header names that conform to
 HTTP standards.
+
+Reference: https://www.rfc-editor.org/rfc/rfc9110.html#section-5
 -/
 
 namespace Std.Http.Header
@@ -28,16 +30,17 @@ open Internal Char
 /--
 Proposition that asserts all characters in a string are valid and that it is non-empty for HTTP header names.
 
-  field-name     = token
-
-Reference: https://www.rfc-editor.org/rfc/rfc9110.html#section-5.1
+Reference: https://www.rfc-editor.org/rfc/rfc9110.html#name-field-names
 -/
 abbrev IsValidHeaderName (s : String) : Prop :=
-  s.toList.all Char.token ∧ ¬s.isEmpty
+  let s := s.toList
+  s.all Char.token ∧ ¬s.isEmpty
 
 /--
 A validated HTTP header name that ensures all characters conform to HTTP standards. Header names are
 case-insensitive according to HTTP specifications.
+
+Reference: https://www.rfc-editor.org/rfc/rfc9110.html#name-field-names
 -/
 structure Name where
   /--
@@ -77,8 +80,8 @@ def ofString? (s : String) : Option Name :=
     none
 
 /--
-Creates a `Name` from a string, panicking with an error message if the
-string contains invalid characters for HTTP header names or is empty.
+Creates a `Name` from a string, panicking with an error message if the string contains invalid
+characters for HTTP header names or is empty.
 -/
 @[expose]
 def ofString! (s : String) : Name :=

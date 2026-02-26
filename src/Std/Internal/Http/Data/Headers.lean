@@ -19,6 +19,8 @@ public section
 # Headers
 
 This module defines the `Headers` type, which represents a collection of HTTP header name-value pairs.
+
+Reference: https://www.rfc-editor.org/rfc/rfc9110.html#section-5
 -/
 
 namespace Std.Http
@@ -29,6 +31,8 @@ open Internal
 
 /--
 A structure for managing HTTP headers as key-value pairs.
+
+Reference: https://www.rfc-editor.org/rfc/rfc9110.html#section-5
 -/
 structure Headers where
 
@@ -39,7 +43,7 @@ structure Headers where
 deriving Inhabited, Repr
 
 instance : Membership Header.Name Headers where
-  mem s h := h ∈ s.map
+  mem headers name := name ∈ headers.map
 
 instance (name : Header.Name) (h : Headers) : Decidable (name ∈ h) :=
   inferInstanceAs (Decidable (name ∈ h.map))
@@ -133,8 +137,8 @@ def insert? (headers : Headers) (name : String) (value : String) : Option Header
 Inserts a new key with an array of values.
 -/
 @[inline]
-def insertMany (headers : Headers) (key : Header.Name) (value : Array Header.Value) (p : value.size > 0) : Headers :=
-  { map := headers.map.insertMany key value p }
+def insertMany (headers : Headers) (key : Header.Name) (values : Array Header.Value) (p : values.size > 0) : Headers :=
+  { map := headers.map.insertMany key values p }
 
 /--
 Creates empty headers.
@@ -178,6 +182,8 @@ def isEmpty (headers : Headers) : Bool :=
 
 /--
 Merges two headers, accumulating values for duplicate keys from both.
+
+Reference: https://www.rfc-editor.org/rfc/rfc9110.html#name-field-order
 -/
 def merge (headers1 headers2 : Headers) : Headers :=
   { map := headers1.map ∪ headers2.map }
@@ -235,7 +241,7 @@ def update (headers : Headers) (name : Header.Name) (f : Option Header.Value →
 
 instance : ToString Headers where
   toString headers :=
-    let pairs := headers.map.toArray.map (fun (k, v) => s!"{k}: {v.value}")
+    let pairs := headers.map.toArray.map (fun (k, v) => s!"{k}: {v}")
     String.intercalate "\r\n" pairs.toList
 
 instance : Encode .v11 Headers where

@@ -23,7 +23,6 @@ intentionally exclude `obs-text` and all non-ASCII code points.
 namespace Std.Http.Internal.Char
 
 set_option linter.all true
-set_option maxRecDepth 2048
 
 /--
 Checks if a byte represents an ASCII character (value < 128).
@@ -37,14 +36,14 @@ Checks if a byte is a decimal digit (0-9).
 -/
 @[inline, expose]
 def isDigitChar (c : Char) : Bool :=
-  c >= '0' ∧ c <= '9'
+  c ≥ '0' ∧ c ≤ '9'
 
 /--
 Checks if a byte is an alphabetic character (a-z or A-Z).
 -/
 @[inline, expose]
 def isAlphaChar (c : Char) : Bool :=
-  (c >= 'A' ∧ c <= 'Z') ∨ (c >= 'a' ∧ c <= 'z')
+  (c ≥ 'A' ∧ c ≤ 'Z') ∨ (c ≥ 'a' ∧ c ≤ 'z')
 
 /--
 Checks if a byte represents an ASCII character (value < 128).
@@ -71,7 +70,7 @@ def isAlpha (c : UInt8) : Bool :=
 Two character predicates are equivalent on ASCII input (`0x00`-`0x7F`).
 -/
 abbrev EqOnAscii (x : Char → Bool) (y : Char → Bool) : Prop :=
-  ∀ n < 255, x (Char.ofNat n) ↔ y (Char.ofNat n) -- To make sure it's ASCII only.
+  ∀ n < 128, x (Char.ofNat n) ↔ y (Char.ofNat n)
 
 /--
 tchar = "!" / "#" / "$" / "%" / "&" / "'" / "*"
@@ -100,7 +99,7 @@ vchar = %x21-7E
 ; Visible (printing) ASCII characters.
 -/
 def vcharSpec (c : Char) : Bool :=
-  c >= '!' ∧ c <= '~'
+  c ≥ '!' ∧ c ≤ '~'
 
 /--
 Checks if `c` is a visible (printing) ASCII character.
@@ -119,8 +118,8 @@ def qdtextSpec (c : Char) : Bool :=
   c = '\t' ∨
   c = ' ' ∨
   c = '!' ∨
-  ('#' <= c ∧ c <= '[') ∨
-  (']' <= c ∧ c <= '~')
+  ('#' ≤ c ∧ c ≤ '[') ∨
+  (']' ≤ c ∧ c ≤ '~')
 
 /--
 Checks if `c` is valid `qdtext` in an HTTP `quoted-string` (ASCII-only).
@@ -206,9 +205,9 @@ ctext = HTAB / SP / %x21-27 / %x2A-5B / %x5D-7E
 def ctextSpec (c : Char) : Bool :=
   c = '\t' ∨
   c = ' ' ∨
-  ('!' <= c ∧ c <= '\'') ∨
-  ('*' <= c ∧ c <= '[') ∨
-  (']' <= c ∧ c <= '~')
+  ('!' ≤ c ∧ c ≤ '\'') ∨
+  ('*' ≤ c ∧ c ≤ '[') ∨
+  (']' ≤ c ∧ c ≤ '~')
 
 /--
 Checks if `c` is valid `ctext` in an HTTP comment (ASCII-only).
@@ -224,7 +223,7 @@ etagc = "!" / %x23-7E
 ; ASCII-only variant (no obs-text).
 -/
 def etagcSpec (c : Char) : Bool :=
-  c = '!' ∨ ('#' <= c ∧ c <= '~')
+  c = '!' ∨ ('#' ≤ c ∧ c ≤ '~')
 
 /--
 Checks if `c` is valid `etagc` inside an `opaque-tag` (ASCII-only).
@@ -252,6 +251,30 @@ RWS = 1*( SP / HTAB ) (character class is identical to `ows`)
 -/
 def rws (c : Char) : Bool :=
   ows c
+
+/--
+obs-text = %x80-FF (and higher Unicode scalar values in this library's `Char` model).
+-/
+def obsText (c : Char) : Bool :=
+  0x80 ≤ c.toNat
+
+/--
+reason-phrase character class:
+HTAB / SP / VCHAR / obs-text
+
+Reference: https://httpwg.org/specs/rfc9110.html#reason.phrase
+-/
+def reasonPhraseCharSpec (c : Char) : Bool :=
+  c = '\t' ∨ c = ' ' ∨ vchar c
+
+/--
+Checks if `c` is valid inside an HTTP `reason-phrase` per RFC 9110 §15.
+-/
+def reasonPhraseChar (c : Char) : Bool :=
+  isAscii c ∧ Nat.testBit 0x7fffffffffffffffffffffff00000200 c.toNat
+
+theorem reasonPhraseChar_eq_reasonPhraseCharSpec : EqOnAscii reasonPhraseChar reasonPhraseCharSpec := by
+  decide
 
 /--
 Checks if a byte is a hexadecimal digit (0-9, a-f, or A-F). Note: This accepts both lowercase and

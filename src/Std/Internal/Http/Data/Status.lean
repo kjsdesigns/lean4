@@ -17,7 +17,7 @@ This module defines the `Status` type, a representation of HTTP status codes. St
 three-digit integer codes that describe the result of an HTTP request. This implementation
 includes common named statuses and supports custom codes through `Status.other`.
 
-* Reference: https://httpwg.org/specs/rfc9110.html#status.codes
+Reference: https://httpwg.org/specs/rfc9110.html#status.codes
 -/
 
 namespace Std.Http
@@ -27,18 +27,64 @@ set_option linter.all true
 open Internal
 
 /--
-Returns `true` if `c` is a valid reason-phrase character.
+A proposition stating that `s` is a valid HTTP reason phrase: every character passes
+`Char.reasonPhraseChar` per RFC 9110 §15.
+
+Reference: https://httpwg.org/specs/rfc9110.html#reason.phrase
 -/
-def isValidReasonPhraseChar (c : Char) : Bool :=
-  let n := c.toNat
-  n == 0x09 || (0x20 ≤ n && n ≤ 0x7E) || 0x80 ≤ n
+abbrev IsValidReasonPhrase (s : String) : Prop :=
+  s.toList.all Char.reasonPhraseChar
+
+/--
+A custom HTTP status with a numeric code and a reason phrase. Used to represent status codes
+not enumerated as dedicated constructors in `Status`.
+
+Reference: https://httpwg.org/specs/rfc9110.html#status.codes
+-/
+structure CustomStatus where
+
+  /--
+  The numeric status code.
+  -/
+  code : UInt16
+
+  /--
+  The reason phrase associated with the status code.
+  -/
+  phrase : String
+
+  /--
+  Proof that the reason phrase contains only valid characters.
+  -/
+  validReasonPhrase : IsValidReasonPhrase phrase := by decide
+deriving Repr, BEq
+
+instance : Inhabited CustomStatus where
+  default := ⟨0, "Unknown", by decide⟩
+
+instance : ToString CustomStatus where
+  toString s := s.phrase
+
+namespace CustomStatus
+
+/--
+Attempts to create a `CustomStatus` from a numeric code and a reason phrase string, returning
+`none` if the phrase contains invalid characters.
+-/
+def ofCodeAndPhrase? (code : UInt16) (phrase : String) : Option CustomStatus :=
+  if h : IsValidReasonPhrase phrase then
+    some ⟨code, phrase, h⟩
+  else
+    none
+
+end CustomStatus
 
 /--
 HTTP Status codes. Status codes are three-digit integer codes that describe the result of an
 HTTP request. This implementation includes common named statuses and supports custom codes through
 `Status.other`.
 
-* Reference: https://httpwg.org/specs/rfc9110.html#status.codes
+Reference: https://httpwg.org/specs/rfc9110.html#status.codes
 -/
 inductive Status where
   /--
@@ -357,9 +403,9 @@ inductive Status where
   | networkAuthenticationRequired
 
   /--
-  Other
+  A custom status code not covered by the standard constructors above.
   -/
-  | other (number : UInt16) (s : { x : String // x.toList.all isValidReasonPhraseChar })
+  | other (status : CustomStatus)
 deriving Repr, Inhabited, BEq
 
 namespace Status
@@ -431,12 +477,12 @@ def toCode : Status → UInt16
   | loopDetected => 508
   | notExtended => 510
   | networkAuthenticationRequired => 511
-  | other n _ => n
+  | other c => c.code
 
 /--
 Converts a `UInt16` to `Status`.
 -/
-def ofCode (reasonPhrase : Option { x : String // x.toList.all isValidReasonPhraseChar }) : UInt16 → Status
+def ofCode (reasonPhrase : Option { x : String // IsValidReasonPhrase x }) : UInt16 → Status
   | 100 => .«continue»
   | 101 => .switchingProtocols
   | 102 => .processing
@@ -500,11 +546,15 @@ def ofCode (reasonPhrase : Option { x : String // x.toList.all isValidReasonPhra
   | 508 => .loopDetected
   | 510 => .notExtended
   | 511 => .networkAuthenticationRequired
-  | n => .other n (reasonPhrase.getD ⟨"Unknown", by decide⟩)
+  | n =>
+    let ph := reasonPhrase.getD ⟨"Unknown", by decide⟩
+    .other ⟨n, ph.val, ph.property⟩
 
 /--
 Checks if the type of the status code is informational, meaning that the request was received
 and the process is continuing.
+
+Reference: https://httpwg.org/specs/rfc9110.html#status.codes
 -/
 @[inline]
 def isInformational (c : Status) : Bool :=
@@ -514,7 +564,7 @@ def isInformational (c : Status) : Bool :=
 Checks if the status code is a success status, meaning that the request was successfully received,
 understood, and accepted.
 
-* Reference: https://httpwg.org/specs/rfc9110.html#status.codes
+Reference: https://httpwg.org/specs/rfc9110.html#status.codes
 -/
 @[inline]
 def isSuccess (c : Status) : Bool :=
@@ -524,7 +574,7 @@ def isSuccess (c : Status) : Bool :=
 Checks if the type of the status code is redirection, meaning that further action needs to be taken
 to complete the request.
 
-* Reference: https://httpwg.org/specs/rfc9110.html#status.codes
+Reference: https://httpwg.org/specs/rfc9110.html#status.codes
 -/
 @[inline]
 def isRedirection (c : Status) : Bool :=
@@ -534,7 +584,7 @@ def isRedirection (c : Status) : Bool :=
 Checks if the type of the status code is a client error, meaning that the request contains bad syntax
 or cannot be fulfilled.
 
-* Reference: https://httpwg.org/specs/rfc9110.html#status.codes
+Reference: https://httpwg.org/specs/rfc9110.html#status.codes
 -/
 @[inline]
 def isClientError (c : Status) : Bool :=
@@ -544,7 +594,7 @@ def isClientError (c : Status) : Bool :=
 Checks if the type of the status code is a server error, meaning that the server failed to fulfill
 an apparently valid request.
 
-* Reference: https://httpwg.org/specs/rfc9110.html#status.codes
+Reference: https://httpwg.org/specs/rfc9110.html#status.codes
 -/
 @[inline]
 def isServerError (c : Status) : Bool :=
@@ -553,7 +603,7 @@ def isServerError (c : Status) : Bool :=
 /--
 Checks if the status code indicates an error (either client error 4xx or server error 5xx).
 
-* Reference: https://httpwg.org/specs/rfc9110.html#status.codes
+Reference: https://httpwg.org/specs/rfc9110.html#status.codes
 -/
 @[inline]
 def isError (c : Status) : Bool :=
@@ -628,7 +678,7 @@ def reasonPhrase : Status → String
   | .loopDetected => "Loop Detected"
   | .notExtended => "Not Extended"
   | .networkAuthenticationRequired => "Network Authentication Required"
-  | .other _ s => s
+  | .other c => c.phrase
 
 instance : ToString Status where
   toString := reasonPhrase

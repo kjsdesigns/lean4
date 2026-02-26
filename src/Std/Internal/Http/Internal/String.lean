@@ -56,7 +56,7 @@ Returns `none` when any character in `s` cannot be represented by the grammar.
 -/
 @[expose]
 def quoteHttpString? (s : String) : Option String :=
-  if s.all token then
+  if s.all token ∧ ¬s.isEmpty then
     some s
   else if s.all quotedStringChar then
     some (.append

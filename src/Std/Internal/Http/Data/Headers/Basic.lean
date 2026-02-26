@@ -16,6 +16,8 @@ public section
 # Header Typeclass and Common Headers
 
 This module defines the `Header` typeclass for typed HTTP headers and some common header parsers.
+
+Reference: https://www.rfc-editor.org/rfc/rfc9110.html#name-representation-data-and-met
 -/
 
 namespace Std.Http
@@ -54,7 +56,7 @@ namespace Header
 Checks whether a string is a valid non-empty HTTP token.
 -/
 def isToken (s : String) : Bool :=
-  !s.isEmpty && s.toList.all Char.token
+  ¬s.isEmpty ∧ s.toList.all Char.token
 
 /--
 Parses a comma-separated token list with OWS trimming and lowercase normalization.
@@ -65,6 +67,8 @@ def parseTokenList (v : Value) : Array String :=
 /--
 The `Content-Length` header, representing the size of the message body in bytes.
 Parses only valid natural number values.
+
+Reference: https://www.rfc-editor.org/rfc/rfc9110.html#section-8.6-2
 -/
 structure ContentLength where
 
@@ -115,6 +119,8 @@ The `Transfer-Encoding` header, representing the list of transfer codings applie
 Validation rules (RFC 9112 Section 6.1):
 - "chunked" may appear at most once.
 - If "chunked" is present, it must be the last encoding in the list.
+
+Reference: https://www.rfc-editor.org/rfc/rfc9112#section-6.1
 -/
 structure TransferEncoding where
 
@@ -161,6 +167,8 @@ end TransferEncoding
 
 /--
 The `Connection` header, represented as a list of connection option tokens.
+
+Reference: https://www.rfc-editor.org/rfc/rfc9110.html#name-connection
 -/
 structure Connection where
   /--
@@ -171,7 +179,7 @@ structure Connection where
   /--
   Valid connection-option tokens.
   -/
-  valid : tokens.size > 0 ∧ tokens.all isToken = true
+  valid : tokens.all isToken = true
 deriving Repr
 
 namespace Connection
@@ -194,7 +202,7 @@ Parses a `Connection` header value into normalized tokens.
 -/
 def parse (v : Value) : Option Connection :=
   let tokens := parseTokenList v
-  if h : tokens.size > 0 ∧ tokens.all isToken = true then
+  if h : tokens.all isToken = true then
     some ⟨tokens, h⟩
   else
     none
