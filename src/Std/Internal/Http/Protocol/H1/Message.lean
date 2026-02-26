@@ -138,5 +138,5 @@ instance : Internal.Encode .v11 (Message.Head dir) :=
 instance : EmptyCollection (Message.Head dir) where
   emptyCollection :=
     match dir with
-    | .receiving => {}
+    | .receiving => { method := .get, version := .v11 }
     | .sending => {}

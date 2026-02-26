@@ -437,7 +437,7 @@ def parseStatusCode (limits : H1.Config) : Parser Status := do
   sp
   let phrase ← parseReasonPhrase limits <* crlf
 
-  if h : phrase.toList.all isValidReasonPhraseChar then
+  if h : IsValidReasonPhrase phrase then
     return Status.ofCode (some ⟨phrase, h⟩) code.toUInt16
   else
     fail "invalid status code"

@@ -347,9 +347,9 @@ private def checkSendingMessageHead (message : Message.Head .sending) : Except H
 Direction-dispatched message-head validation.
 -/
 private def checkMessageHead (message : Message.Head dir) : Except H1.Error BodyMode := do
-  match dir, message with
-  | .receiving, message => checkReceivingMessageHead message
-  | .sending, message => checkSendingMessageHead message
+  match dir with
+  | .receiving => checkReceivingMessageHead message
+  | .sending => checkSendingMessageHead message
 
 /--
 Returns `true` when an `Expect` header includes `100-continue`.
@@ -380,7 +380,7 @@ private def normalizeFramingHeaders (headers : Headers) (size : Body.Length) : H
   let headers := headers.erase Header.Name.contentLength |>.erase Header.Name.transferEncoding
   match size with
   | .fixed n => headers.insert Header.Name.contentLength (.ofString! <| toString n)
-  | .chunked => headers.insert Header.Name.transferEncoding Header.Value.chunked
+  | .chunked => headers.insert Header.Name.transferEncoding (.mk "chunked")
 
 /--
 Returns `true` when response status forbids framing headers entirely
@@ -699,8 +699,8 @@ private def writeHead (messageHead : Message.Head dir.swap) (machine : Machine d
 
   -- Add Connection: close if needed
   let headers :=
-    if !machine.keepAlive ∧ !headers.hasEntry Header.Name.connection Header.Value.close then
-      headers.insert Header.Name.connection Header.Value.close
+    if !machine.keepAlive ∧ !headers.hasEntry Header.Name.connection (.mk "close") then
+      headers.insert Header.Name.connection (.mk "close")
     else
       headers
 
@@ -828,8 +828,8 @@ Marks outgoing bodies as omitted when response semantics (or HEAD method) requir
 header-only responses.
 -/
 private def maybeSuppressOutgoingBody (machine : Machine dir) (message : Message.Head dir.swap) : Machine dir :=
-  match dir, machine, message with
-  | .receiving, machine, message =>
+  match dir with
+  | .receiving =>
       let suppressByStatus := responseMustNotHaveBody message.status
       let suppressByMethod := machine.reader.messageHead.method == .head
       let forceZero := responseForbidsFramingHeaders message.status
@@ -837,8 +837,7 @@ private def maybeSuppressOutgoingBody (machine : Machine dir) (message : Message
         machine.suppressOutgoingBody (forceZero := forceZero)
       else
         machine
-  | .sending, machine, _ =>
-      machine
+  | .sending => machine
 
 /--
 Send the head of a message to the machine.
@@ -1270,21 +1269,13 @@ private def parseCloseDelimitedBody (machine : Machine dir) :
 /--
 Dispatches body parsing according to current reader body-framing sub-state.
 -/
-private def parseBody (machine : Machine dir) (bodyState : Reader.BodyState) :
-    Machine dir × Option PulledChunk × Bool :=
-  match bodyState with
-  | .fixed 0 =>
-      parseFixedZeroBody machine
-  | .fixed size =>
-      parseFixedBody machine size
-  | .chunkedSize =>
-      parseChunkSizeBody machine
-  | .chunkedBody ext 0 =>
-      parseLastChunkBodyState machine ext
-  | .chunkedBody ext size =>
-      parseChunkedBodyState machine ext size
-  | .closeDelimited =>
-      parseCloseDelimitedBody machine
+private def parseBody (machine : Machine dir) : Reader.BodyState → Machine dir × Option PulledChunk × Bool
+  | .fixed 0 => parseFixedZeroBody machine
+  | .fixed size => parseFixedBody machine size
+  | .chunkedSize => parseChunkSizeBody machine
+  | .chunkedBody ext 0 => parseLastChunkBodyState machine ext
+  | .chunkedBody ext size => parseChunkedBodyState machine ext size
+  | .closeDelimited => parseCloseDelimitedBody machine
 
 /--
 Converts raw parsed header name/value strings into typed header representations.
