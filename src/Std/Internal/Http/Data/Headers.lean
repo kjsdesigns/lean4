@@ -227,12 +227,10 @@ def filter (headers : Headers) (f : Header.Name → Header.Value → Bool) : Hea
   headers.filterMap (fun k v => if f k v then some v else none)
 
 /--
-Updates the first value of a header if it exists, or inserts if it doesn't. Replaces all existing values
-for that header with the new value.
+Updates all the values of a header if it exists.
 -/
-def update (headers : Headers) (name : Header.Name) (f : Option Header.Value → Header.Value) : Headers :=
-  let newValue := f (headers.get? name)
-  { map := headers.map.erase name |>.insert name newValue }
+def update (headers : Headers) (name : Header.Name) (f : Header.Value → Header.Value) : Headers :=
+  { map := headers.map.update name f }
 
 instance : ToString Headers where
   toString headers :=
