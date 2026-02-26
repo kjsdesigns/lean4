@@ -79,11 +79,11 @@ def bodyStreamSends : Async Unit := do
   let incoming ← Body.stream fun outgoing => do
     outgoing.send (Chunk.ofByteArray "x".toUTF8)
 
-  let first ← incoming.recv none
+  let first ← incoming.recv
   assert! first.isSome
   assert! first.get!.data == "x".toUTF8
 
-  let done ← incoming.recv none
+  let done ← incoming.recv
   assert! done.isNone
 
 #eval bodyStreamSends.block
@@ -94,7 +94,7 @@ def bodyStreamThrowCloses : Async Unit := do
   let incoming ← Body.stream fun _ => do
     throw (.userError "boom")
 
-  let result ← incoming.recv none
+  let result ← incoming.recv
   assert! result.isNone
 
 #eval bodyStreamThrowCloses.block
@@ -150,7 +150,7 @@ def channelCollapseIncompleteChunks : Async Unit := do
   assert! noChunkYet.isNone
 
   let sendFinal ← async (t := AsyncTask) <| outgoing.send last
-  let result ← incoming.recv none
+  let result ← incoming.recv
 
   assert! result.isSome
   let merged := result.get!

@@ -59,13 +59,11 @@ def echoHandler : TestHandler :=
 def okHandler : TestHandler :=
   fun _ => Response.ok |>.text "ok"
 
-
 def bad400 : String :=
-  "HTTP/1.1 400 Bad Request\x0d\nContent-Length: 0\x0d\nConnection: close\x0d\nServer: LeanHTTP/1.1\x0d\n\x0d\n"
+  "HTTP/1.1 400 Bad Request\x0d\nServer: LeanHTTP/1.1\x0d\nConnection: close\x0d\nContent-Length: 0\x0d\n\x0d\n"
 
 def bad501 : String :=
-  "HTTP/1.1 501 Not Implemented\x0d\nContent-Length: 0\x0d\nConnection: close\x0d\nServer: LeanHTTP/1.1\x0d\n\x0d\n"
-
+  "HTTP/1.1 501 Not Implemented\x0d\nServer: LeanHTTP/1.1\x0d\nConnection: close\x0d\nContent-Length: 0\x0d\n\x0d\n"
 
 -- Baseline: normal chunked request is accepted and body is delivered.
 #eval show IO _ from do

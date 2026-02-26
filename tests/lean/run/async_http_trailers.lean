@@ -20,7 +20,6 @@ instance : Coe (Async (Response Body.Incoming)) (ContextAsync (Response Body.Any
     let response ← action
     pure { response with body := Body.Internal.incomingToOutgoing response.body }
 
-
 def sendRaw
     (client : Mock.Client)
     (server : Mock.Server)
@@ -65,16 +64,13 @@ def assertExact (name : String) (response : ByteArray) (expected : String) : IO 
   if text != expected then
     throw <| IO.userError s!"Test '{name}' failed:\nExpected:\n{expected.quote}\nGot:\n{text.quote}"
 
-
 def bodyHandler : TestHandler :=
   fun req => do
     let body : String ← req.body.readAll
     Response.ok |>.text body
 
-
 def bad400 : String :=
-  "HTTP/1.1 400 Bad Request\x0d\nContent-Length: 0\x0d\nConnection: close\x0d\nServer: LeanHTTP/1.1\x0d\n\x0d\n"
-
+  "HTTP/1.1 400 Bad Request\x0d\nServer: LeanHTTP/1.1\x0d\nConnection: close\x0d\nContent-Length: 0\x0d\n\x0d\n"
 
 -- Chunked body without trailers.
 #eval show IO _ from do

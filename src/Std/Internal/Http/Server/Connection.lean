@@ -139,7 +139,7 @@ private def processNeedMoreData
 
 private def handleError (machine : H1.Machine .receiving) (status : Status) (waitingResponse : Bool) : H1.Machine .receiving × Bool :=
   if machine.isWaitingMessage ∧ waitingResponse then
-    let machine := machine.send { status, headers := .empty |>.insert .connection .close }
+    let machine := machine.send { status, headers := .empty |>.insert .connection (.mk "close") }
       |>.userClosedBody
       |>.closeReader
       |>.noMoreInput

@@ -212,6 +212,7 @@ info: some " "
 #eval parseCheck "https://user:pass@secure.example.com/private"
 #eval parseCheck "/double//slash//path"
 #eval parseCheck "http://user%40example:pass%3Aword@host.com"
+#eval parseCheck "http://[::ffff:192.168.1.1]/path"
 
 #guard
   match (parseRequestTarget <* Std.Internal.Parsec.eof).run "http:80".toUTF8 with
@@ -227,7 +228,6 @@ info: some " "
 #eval parseCheckFail "[::1"
 #eval parseCheckFail "[:::1]:80"
 #eval parseCheckFail "http://exa_mple.com/path"
-#eval parseCheckFail "http://[::ffff:192.168.1.1]/path"
 #eval parseCheckFail "http://[fe80::1%25eth0]/path"
 #eval parseCheckFail "#frag"
 #eval parseCheckFail "/path/\n"

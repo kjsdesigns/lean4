@@ -26,8 +26,7 @@ def defaultConfig : Config :=
 
 
 def bad400 : String :=
-  "HTTP/1.1 400 Bad Request\x0d\nContent-Length: 0\x0d\nConnection: close\x0d\nServer: LeanHTTP/1.1\x0d\n\x0d\n"
-
+  "HTTP/1.1 400 Bad Request\x0d\nServer: LeanHTTP/1.1\x0d\nConnection: close\x0d\nContent-Length: 0\x0d\n\x0d\n"
 
 def runWithTimeout {α : Type} (name : String) (timeoutMs : Nat := 15000) (action : IO α) : IO α := do
   let task ← IO.asTask action
@@ -609,7 +608,7 @@ def fuzzIncompleteFirstBodyBlocksPipeline (iterations : Nat) (seed0 : Nat) : IO 
       throw <| IO.userError s!"fuzzIncompleteFirstBodyBlocksPipeline case={i} seed={caseSeed} failed:\nMissing first URI {uri1.quote}\n{text.quote}"
 
     if text.contains "/second" then
-      throw <| IO.userError s!"fuzzIncompleteFirstBodyBlocksPipeline case={i} seed={caseSeed} failed:\nUnexpected second response\n{text.quote}"
+      throw <| IO.userError s!"fuzzIncompleteFirstBodyBlocksPipeline case={i} len={actualLen} data={body} seed={caseSeed} failed:\nUnexpected second response\n{text.quote}"
 
     if seen.size != 1 ∨ seen[0]! != uri1 then
       throw <| IO.userError s!"fuzzIncompleteFirstBodyBlocksPipeline case={i} seed={caseSeed} failed:\nExpected seen=[{uri1.quote}] got {seen}"

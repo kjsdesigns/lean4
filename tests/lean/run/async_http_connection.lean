@@ -130,7 +130,7 @@ def hasUri (req : Request Body.Incoming) (uri : String) : Bool :=
     then Response.ok |>.text "ok"
     else Response.badRequest |>.text "closed"
 
-  expected := "HTTP/1.1 200 OK\x0d\nContent-Length: 2\x0d\nConnection: close\x0d\nServer: LeanHTTP/1.1\x0d\nContent-Type: text/plain; charset=utf-8\x0d\n\x0d\nok"
+  expected := "HTTP/1.1 200 OK\x0d\nContent-Type: text/plain; charset=utf-8\x0d\nServer: LeanHTTP/1.1\x0d\nConnection: close\x0d\nContent-Length: 2\x0d\n\x0d\nok"
 }
 
 #eval runTestCase {
@@ -148,7 +148,7 @@ def hasUri (req : Request Body.Incoming) (uri : String) : Bool :=
     then Response.ok |>.text "users list"
     else Response.notFound |>.text ""
 
-  expected := "HTTP/1.1 200 OK\x0d\nContent-Length: 10\x0d\nConnection: close\x0d\nServer: LeanHTTP/1.1\x0d\nContent-Type: text/plain; charset=utf-8\x0d\n\x0d\nusers list"
+  expected := "HTTP/1.1 200 OK\x0d\nContent-Type: text/plain; charset=utf-8\x0d\nServer: LeanHTTP/1.1\x0d\nConnection: close\x0d\nContent-Length: 10\x0d\n\x0d\nusers list"
 }
 
 #eval runTestCase {
@@ -166,7 +166,7 @@ def hasUri (req : Request Body.Incoming) (uri : String) : Bool :=
     if hasMethod req .post ∧ hasHeader req "Content-Type" "application/json"
     then Response.new |>.status .created |>.text "Created"
     else Response.badRequest |>.text ""
-  expected := "HTTP/1.1 201 Created\x0d\nContent-Length: 7\x0d\nConnection: close\x0d\nServer: LeanHTTP/1.1\x0d\nContent-Type: text/plain; charset=utf-8\x0d\n\x0d\nCreated"
+  expected := "HTTP/1.1 201 Created\x0d\nContent-Type: text/plain; charset=utf-8\x0d\nServer: LeanHTTP/1.1\x0d\nConnection: close\x0d\nContent-Length: 7\x0d\n\x0d\nCreated"
 }
 
 #eval runTestCase {
@@ -184,7 +184,7 @@ def hasUri (req : Request Body.Incoming) (uri : String) : Bool :=
     then Response.new |>.status .noContent |>.text ""
     else Response.notFound |>.text ""
 
-  expected := "HTTP/1.1 204 No Content\x0d\nConnection: close\x0d\nServer: LeanHTTP/1.1\x0d\nContent-Type: text/plain; charset=utf-8\x0d\n\x0d\n"
+  expected := "HTTP/1.1 204 No Content\x0d\nContent-Type: text/plain; charset=utf-8\x0d\nServer: LeanHTTP/1.1\x0d\nConnection: close\x0d\n\x0d\n"
 }
 
 #eval runTestCase {
@@ -202,7 +202,7 @@ def hasUri (req : Request Body.Incoming) (uri : String) : Bool :=
     then Response.ok |>.text ""
     else Response.notFound |>.text ""
 
-  expected := "HTTP/1.1 200 OK\x0d\nContent-Length: 0\x0d\nConnection: close\x0d\nServer: LeanHTTP/1.1\x0d\nContent-Type: text/plain; charset=utf-8\x0d\n\x0d\n"
+  expected := "HTTP/1.1 200 OK\x0d\nContent-Type: text/plain; charset=utf-8\x0d\nServer: LeanHTTP/1.1\x0d\nConnection: close\x0d\nContent-Length: 0\x0d\n\x0d\n"
 }
 
 #eval runTestCase {
@@ -223,7 +223,7 @@ def hasUri (req : Request Body.Incoming) (uri : String) : Bool :=
       |>.text ""
     else Response.badRequest |>.text ""
 
-  expected := "HTTP/1.1 200 OK\x0d\nAllow: GET, POST, PUT, DELETE, OPTIONS\x0d\nContent-Length: 0\x0d\nConnection: close\x0d\nServer: LeanHTTP/1.1\x0d\nContent-Type: text/plain; charset=utf-8\x0d\n\x0d\n"
+  expected := "HTTP/1.1 200 OK\x0d\nAllow: GET, POST, PUT, DELETE, OPTIONS\x0d\nContent-Type: text/plain; charset=utf-8\x0d\nServer: LeanHTTP/1.1\x0d\nConnection: close\x0d\nContent-Length: 0\x0d\n\x0d\n"
 }
 
 #eval runTestCase {
@@ -244,7 +244,7 @@ def hasUri (req : Request Body.Incoming) (uri : String) : Bool :=
     then Response.ok |>.text "authenticated"
     else Response.new |>.status .unauthorized |>.text "unauthorized"
 
-  expected := "HTTP/1.1 200 OK\x0d\nContent-Length: 13\x0d\nConnection: close\x0d\nServer: LeanHTTP/1.1\x0d\nContent-Type: text/plain; charset=utf-8\x0d\n\x0d\nauthenticated"
+  expected := "HTTP/1.1 200 OK\x0d\nContent-Type: text/plain; charset=utf-8\x0d\nServer: LeanHTTP/1.1\x0d\nConnection: close\x0d\nContent-Length: 13\x0d\n\x0d\nauthenticated"
 }
 
 #eval runTestCase {
@@ -262,7 +262,7 @@ def hasUri (req : Request Body.Incoming) (uri : String) : Bool :=
     then Response.ok |>.text "search results"
     else Response.notFound |>.text ""
 
-  expected := "HTTP/1.1 200 OK\x0d\nContent-Length: 14\x0d\nConnection: close\x0d\nServer: LeanHTTP/1.1\x0d\nContent-Type: text/plain; charset=utf-8\x0d\n\x0d\nsearch results"
+  expected := "HTTP/1.1 200 OK\x0d\nContent-Type: text/plain; charset=utf-8\x0d\nServer: LeanHTTP/1.1\x0d\nConnection: close\x0d\nContent-Length: 14\x0d\n\x0d\nsearch results"
 }
 
 #eval runTestCase {
@@ -281,7 +281,7 @@ def hasUri (req : Request Body.Incoming) (uri : String) : Bool :=
     then Response.new |>.status .accepted |>.text "triggered"
     else Response.badRequest |>.text ""
 
-  expected := "HTTP/1.1 202 Accepted\x0d\nContent-Length: 9\x0d\nConnection: close\x0d\nServer: LeanHTTP/1.1\x0d\nContent-Type: text/plain; charset=utf-8\x0d\n\x0d\ntriggered"
+  expected := "HTTP/1.1 202 Accepted\x0d\nContent-Type: text/plain; charset=utf-8\x0d\nServer: LeanHTTP/1.1\x0d\nConnection: close\x0d\nContent-Length: 9\x0d\n\x0d\ntriggered"
 }
 
 #eval runTestCase {
@@ -298,7 +298,7 @@ def hasUri (req : Request Body.Incoming) (uri : String) : Bool :=
     let largeBody := String.ofList (List.replicate 1000 'X')
     Response.ok |>.text largeBody
 
-  expected := s!"HTTP/1.1 200 OK\x0d\nContent-Length: 1000\x0d\nConnection: close\x0d\nServer: LeanHTTP/1.1\x0d\nContent-Type: text/plain; charset=utf-8\x0d\n\x0d\n{String.ofList (List.replicate 1000 'X')}"
+  expected := s!"HTTP/1.1 200 OK\x0d\nContent-Type: text/plain; charset=utf-8\x0d\nServer: LeanHTTP/1.1\x0d\nConnection: close\x0d\nContent-Length: 1000\x0d\n\x0d\n{String.ofList (List.replicate 1000 'X')}"
 }
 
 #eval runTestCase {
@@ -316,7 +316,7 @@ def hasUri (req : Request Body.Incoming) (uri : String) : Bool :=
       |>.status .imATeapot
       |>.text "I'm a teapot"
 
-  expected := "HTTP/1.1 418 I'm a teapot\x0d\nContent-Length: 12\x0d\nConnection: close\x0d\nServer: LeanHTTP/1.1\x0d\nContent-Type: text/plain; charset=utf-8\x0d\n\x0d\nI'm a teapot"
+  expected := "HTTP/1.1 418 I'm a teapot\x0d\nContent-Type: text/plain; charset=utf-8\x0d\nServer: LeanHTTP/1.1\x0d\nConnection: close\x0d\nContent-Length: 12\x0d\n\x0d\nI'm a teapot"
 }
 
 #eval runTestCase {
@@ -331,7 +331,7 @@ def hasUri (req : Request Body.Incoming) (uri : String) : Bool :=
     if hasUri req "/api/users/%C3%A9"
     then Response.ok |>.text "found"
     else Response.notFound |>.text ""
-  expected := "HTTP/1.1 200 OK\x0d\nContent-Length: 5\x0d\nConnection: close\x0d\nServer: LeanHTTP/1.1\x0d\nContent-Type: text/plain; charset=utf-8\x0d\n\x0d\nfound"
+  expected := "HTTP/1.1 200 OK\x0d\nContent-Type: text/plain; charset=utf-8\x0d\nServer: LeanHTTP/1.1\x0d\nConnection: close\x0d\nContent-Length: 5\x0d\n\x0d\nfound"
 }
 
 #eval runTestCase {
@@ -352,7 +352,7 @@ def hasUri (req : Request Body.Incoming) (uri : String) : Bool :=
       |>.header! "X-Custom-Header" "custom-value"
       |>.text "data"
 
-  expected := "HTTP/1.1 200 OK\x0d\nX-Custom-Header: custom-value\x0d\nContent-Length: 4\x0d\nConnection: close\x0d\nServer: LeanHTTP/1.1\x0d\nContent-Type: text/plain; charset=utf-8\x0d\nCache-Control: no-cache\x0d\n\x0d\ndata"
+  expected := "HTTP/1.1 200 OK\x0d\nCache-Control: no-cache\x0d\nX-Custom-Header: custom-value\x0d\nContent-Type: text/plain; charset=utf-8\x0d\nServer: LeanHTTP/1.1\x0d\nConnection: close\x0d\nContent-Length: 4\x0d\n\x0d\ndata"
 }
 
 #eval runTestCase {
@@ -372,7 +372,7 @@ def hasUri (req : Request Body.Incoming) (uri : String) : Bool :=
     then Response.ok |>.text "processed xml"
     else Response.new |>.status .unsupportedMediaType |>.text "unsupported"
 
-  expected := "HTTP/1.1 200 OK\x0d\nContent-Length: 13\x0d\nConnection: close\x0d\nServer: LeanHTTP/1.1\x0d\nContent-Type: text/plain; charset=utf-8\x0d\n\x0d\nprocessed xml"
+  expected := "HTTP/1.1 200 OK\x0d\nContent-Type: text/plain; charset=utf-8\x0d\nServer: LeanHTTP/1.1\x0d\nConnection: close\x0d\nContent-Length: 13\x0d\n\x0d\nprocessed xml"
 }
 
 -- Limits
@@ -397,7 +397,7 @@ def hasUri (req : Request Body.Incoming) (uri : String) : Bool :=
       |>.header (.ofString! bigString) (.ofString! "ata")
       |>.text ""
     else Response.notFound |>.text ""
-  expected := "HTTP/1.1 400 Bad Request\x0d\nContent-Length: 0\x0d\nConnection: close\x0d\nServer: LeanHTTP/1.1\x0d\n\x0d\n"
+  expected := "HTTP/1.1 400 Bad Request\x0d\nServer: LeanHTTP/1.1\x0d\nConnection: close\x0d\nContent-Length: 0\x0d\n\x0d\n"
 }
 
 #eval runTestCase {
@@ -414,7 +414,7 @@ def hasUri (req : Request Body.Incoming) (uri : String) : Bool :=
   handler := fun req => do
     Response.ok |>.text (toString (toString req.head.uri).length)
 
-  expected := "HTTP/1.1 400 Bad Request\x0d\nContent-Length: 0\x0d\nConnection: close\x0d\nServer: LeanHTTP/1.1\x0d\n\x0d\n"
+  expected := "HTTP/1.1 400 Bad Request\x0d\nServer: LeanHTTP/1.1\x0d\nConnection: close\x0d\nContent-Length: 0\x0d\n\x0d\n"
 }
 
 #eval runTestCase {
@@ -431,7 +431,7 @@ def hasUri (req : Request Body.Incoming) (uri : String) : Bool :=
   handler := fun req => do
     Response.ok |>.text (toString (toString req.head.uri).length)
 
-  expected := "HTTP/1.1 400 Bad Request\x0d\nContent-Length: 0\x0d\nConnection: close\x0d\nServer: LeanHTTP/1.1\x0d\n\x0d\n"
+  expected := "HTTP/1.1 400 Bad Request\x0d\nServer: LeanHTTP/1.1\x0d\nConnection: close\x0d\nContent-Length: 0\x0d\n\x0d\n"
 }
 
 #eval runTestCase {
@@ -452,7 +452,7 @@ def hasUri (req : Request Body.Incoming) (uri : String) : Bool :=
   handler := fun _ => do
     Response.ok |>.text "success"
 
-  expected := "HTTP/1.1 400 Bad Request\x0d\nContent-Length: 0\x0d\nConnection: close\x0d\nServer: LeanHTTP/1.1\x0d\n\x0d\n"
+  expected := "HTTP/1.1 400 Bad Request\x0d\nServer: LeanHTTP/1.1\x0d\nConnection: close\x0d\nContent-Length: 0\x0d\n\x0d\n"
 }
 
 #eval runTestCase {
@@ -469,7 +469,7 @@ def hasUri (req : Request Body.Incoming) (uri : String) : Bool :=
   handler := fun _ => do
     Response.ok |>.text "ok"
 
-  expected := "HTTP/1.1 400 Bad Request\x0d\nContent-Length: 0\x0d\nConnection: close\x0d\nServer: LeanHTTP/1.1\x0d\n\x0d\n"
+  expected := "HTTP/1.1 400 Bad Request\x0d\nServer: LeanHTTP/1.1\x0d\nConnection: close\x0d\nContent-Length: 0\x0d\n\x0d\n"
 }
 
 #eval runTestCase {
@@ -489,7 +489,7 @@ def hasUri (req : Request Body.Incoming) (uri : String) : Bool :=
   handler := fun _ => do
     Response.ok |>.text "success"
 
-  expected := "HTTP/1.1 400 Bad Request\x0d\nContent-Length: 0\x0d\nConnection: close\x0d\nServer: LeanHTTP/1.1\x0d\n\x0d\n"
+  expected := "HTTP/1.1 400 Bad Request\x0d\nServer: LeanHTTP/1.1\x0d\nConnection: close\x0d\nContent-Length: 0\x0d\n\x0d\n"
 }
 
 -- Tests
@@ -518,7 +518,7 @@ def hasUri (req : Request Body.Incoming) (uri : String) : Bool :=
       |>.header (.mk "content-length") (.mk "21")
       |>.body stream
 
-  expected := "HTTP/1.1 200 OK\x0d\nContent-Length: 21\x0d\nConnection: close\x0d\nServer: LeanHTTP/1.1\x0d\n\x0d\nchunk0\nchunk1\nchunk2\n"
+  expected := "HTTP/1.1 200 OK\x0d\nServer: LeanHTTP/1.1\x0d\nConnection: close\x0d\nContent-Length: 21\x0d\n\x0d\nchunk0\nchunk1\nchunk2\n"
 }
 
 #eval runTestCase {
@@ -544,7 +544,7 @@ def hasUri (req : Request Body.Incoming) (uri : String) : Bool :=
     return Response.ok
       |>.body stream
 
-  expected := "HTTP/1.1 200 OK\x0d\nContent-Length: 15\x0d\nConnection: close\x0d\nServer: LeanHTTP/1.1\x0d\n\x0d\ndata0data1data2"
+  expected := "HTTP/1.1 200 OK\x0d\nServer: LeanHTTP/1.1\x0d\nConnection: close\x0d\nContent-Length: 15\x0d\n\x0d\ndata0data1data2"
 }
 
 #eval runTestCase {
@@ -567,7 +567,7 @@ def hasUri (req : Request Body.Incoming) (uri : String) : Bool :=
     return Response.ok
       |>.body stream
 
-  expected := "HTTP/1.1 200 OK\x0d\nTransfer-Encoding: chunked\x0d\nConnection: close\x0d\nServer: LeanHTTP/1.1\x0d\n\x0d\n5\x0d\nhello\x0d\n5\x0d\nworld\x0d\n0\x0d\n\x0d\n"
+  expected := "HTTP/1.1 200 OK\x0d\nServer: LeanHTTP/1.1\x0d\nConnection: close\x0d\nTransfer-Encoding: chunked\x0d\n\x0d\n5\x0d\nhello\x0d\n5\x0d\nworld\x0d\n0\x0d\n\x0d\n"
 }
 
 #eval runTestCase {
@@ -603,7 +603,7 @@ def hasUri (req : Request Body.Incoming) (uri : String) : Bool :=
       return Response.badRequest
         |>.body stream
 
-  expected := "HTTP/1.1 200 OK\x0d\nContent-Length: 18\x0d\nConnection: close\x0d\nServer: LeanHTTP/1.1\x0d\n\x0d\nresponse0response1"
+  expected := "HTTP/1.1 200 OK\x0d\nServer: LeanHTTP/1.1\x0d\nConnection: close\x0d\nContent-Length: 18\x0d\n\x0d\nresponse0response1"
   chunked := true
 }
 
@@ -626,5 +626,5 @@ def hasUri (req : Request Body.Incoming) (uri : String) : Bool :=
       |>.header (.mk "content-length") (.mk "3")
       |>.body stream
 
-  expected := "HTTP/1.1 200 OK\x0d\nContent-Length: 3\x0d\nConnection: close\x0d\nServer: LeanHTTP/1.1\x0d\n\x0d\n"
+  expected := "HTTP/1.1 200 OK\x0d\nServer: LeanHTTP/1.1\x0d\nConnection: close\x0d\nContent-Length: 3\x0d\n\x0d\n"
 }

@@ -98,8 +98,8 @@ def assertStatusCount (name : String) (response : ByteArray) (expected : Nat) : 
 
 def onesChunked (n : Nat) : String := Id.run do
   let mut body := ""
-  for _ in [0:n] do
-    body := body ++ "1\x0d\na\x0d\n"
+  for i in [0:n] do
+    body := body ++ s!"{toString i |>.length}\x0d\n{toString i}\x0d\n"
   body ++ "0\x0d\n\x0d\n"
 
 def ignoreHandler : TestHandler := fun _ => Response.ok |>.text "ok"
@@ -113,7 +113,7 @@ def echoBodyHandler : TestHandler := fun req => do
   Response.ok |>.text (String.fromUTF8! body)
 
 def firstChunkHandler : TestHandler := fun req => do
-  let first ← req.body.recv none
+  let first ← req.body.recv
   let text :=
     match first with
     | some chunk => String.fromUTF8! chunk.data
@@ -286,6 +286,8 @@ def stressResponseHandler (n : Nat) : TestHandler := fun _ => do
     Response.ok |>.text (toString count))
   assertStatusPrefix "17_many_tiny_chunked_consumed" response "HTTP/1.1 200"
   assertEndsWith "17_many_tiny_chunked_consumed" response "25"
+
+  pure ()
 
 -- 18: Stress response streaming with many chunks and active client.
 #eval runWithTimeout "18_stress_streaming_active_client" 2000 do

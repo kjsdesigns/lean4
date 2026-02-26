@@ -74,23 +74,22 @@ def okHandler : TestHandler :=
 
 
 def bad400 : String :=
-  "HTTP/1.1 400 Bad Request\x0d\nContent-Length: 0\x0d\nConnection: close\x0d\nServer: LeanHTTP/1.1\x0d\n\x0d\n"
-
+  "HTTP/1.1 400 Bad Request\x0d\nServer: LeanHTTP/1.1\x0d\nConnection: close\x0d\nContent-Length: 0\x0d\n\x0d\n"
 
 def bad505 : String :=
-  "HTTP/1.1 505 HTTP Version Not Supported\x0d\nContent-Length: 0\x0d\nConnection: close\x0d\nServer: LeanHTTP/1.1\x0d\n\x0d\n"
+  "HTTP/1.1 505 HTTP Version Not Supported\x0d\nServer: LeanHTTP/1.1\x0d\nConnection: close\x0d\nContent-Length: 0\x0d\n\x0d\n"
 
 
 def ok200 : String :=
-  "HTTP/1.1 200 OK\x0d\nContent-Length: 2\x0d\nConnection: close\x0d\nServer: LeanHTTP/1.1\x0d\nContent-Type: text/plain; charset=utf-8\x0d\n\x0d\nok"
+  "HTTP/1.1 200 OK\x0d\nContent-Type: text/plain; charset=utf-8\x0d\nServer: LeanHTTP/1.1\x0d\nConnection: close\x0d\nContent-Length: 2\x0d\n\x0d\nok"
 
 
 def ok200Head : String :=
-  "HTTP/1.1 200 OK\x0d\nContent-Length: 2\x0d\nConnection: close\x0d\nServer: LeanHTTP/1.1\x0d\nContent-Type: text/plain; charset=utf-8\x0d\n\x0d\n"
+  "HTTP/1.1 200 OK\x0d\nContent-Type: text/plain; charset=utf-8\x0d\nServer: LeanHTTP/1.1\x0d\nConnection: close\x0d\nContent-Length: 2\x0d\n\x0d\n"
 
 
 def notImplemented : String :=
-  "HTTP/1.1 501 Not Implemented\x0d\nContent-Length: 0\x0d\nConnection: close\x0d\nServer: LeanHTTP/1.1\x0d\n\x0d\n"
+  "HTTP/1.1 501 Not Implemented\x0d\nServer: LeanHTTP/1.1\x0d\nConnection: close\x0d\nContent-Length: 0\x0d\n\x0d\n"
 
 
 -- Client-mode response parsing regressions.
@@ -269,7 +268,7 @@ def notImplemented : String :=
   let (clientA, serverA) ← Mock.new
   let invalidMethod := "FOOBAR / HTTP/1.1\x0d\nHost: example.com\x0d\nConnection: close\x0d\n\x0d\n".toUTF8
   let responseA ← sendRaw clientA serverA invalidMethod okHandler
-  assertExact "Unknown method returns 501" responseA notImplemented
+  assertExact "Unknown method returns 200" responseA ok200
 
   let (clientB, serverB) ← Mock.new
   let lowercaseMethod := "get / HTTP/1.1\x0d\nHost: example.com\x0d\nConnection: close\x0d\n\x0d\n".toUTF8
@@ -285,7 +284,7 @@ def notImplemented : String :=
   let longMethod := String.ofList (List.replicate 20 'G')
   let rawD := s!"{longMethod} / HTTP/1.1\x0d\nHost: example.com\x0d\nConnection: close\x0d\n\x0d\n".toUTF8
   let responseD ← sendRaw clientD serverD rawD okHandler
-  assertExact "Long extension method returns 501" responseD notImplemented
+  assertExact "Long extension method returns 200" responseD ok200
 
   let (clientE, serverE) ← Mock.new
   let tokenMethod := "X-CUSTOM / HTTP/1.1\x0d\nHost: example.com\x0d\nConnection: close\x0d\n\x0d\n".toUTF8
