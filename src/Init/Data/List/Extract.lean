@@ -91,6 +91,10 @@ theorem extract_eq_nil_iff :
     as.extract i j = [] ↔ min j as.length ≤ i := by
   simp [extract_eq_drop_take']
 
+theorem extract_eq_nil_of_le (h : min j as.length ≤ i) :
+    as.extract i j = [] :=
+  extract_eq_nil_iff.2 h
+
 theorem lt_of_extract_ne_nil (h : as.extract i j ≠ []) :
     i < min j as.length := by
   simpa using h
@@ -101,7 +105,7 @@ theorem extract_length_left :
   apply extract_eq_nil_of_length_le_start
   exact Nat.le_refl as.length
 
-@[simp]
+@[simp, grind =]
 theorem extract_nil :
     ([] : List α).extract i j = [] := by
   simp [extract_eq_drop_take']
@@ -115,7 +119,7 @@ theorem ne_nil_of_extract_ne_nil (h : as.extract i j ≠ []) :
   mt extract_eq_nil_of_eq_nil h
 
 @[simp]
-theorem getElem?_extract_of_lt (h : i + k < j) :
+theorem getElem?_extract_of_lt_stop (h : i + k < j) :
     (as.extract i j)[k]? = as[i + k]? := by
   simp only [extract_eq_drop_take', getElem?_drop]
   rw [getElem?_take_of_lt h]
@@ -127,7 +131,7 @@ theorem getElem?_extract_of_succ :
 @[simp]
 theorem getElem?_extract_eq_some_of_lt (h : i + k < min j as.length) :
     (as.extract i j)[k]? = some as[i + k] := by
-  rw [getElem?_extract_of_lt (by omega)]
+  rw [getElem?_extract_of_lt_stop (by omega)]
   simp
 
 theorem getElem?_extract_eq_none_iff :
@@ -165,13 +169,18 @@ theorem getElem_extract_aux (h : k < (as.extract i j).length) :
   simp at h
   omega
 
-@[simp]
+@[simp, grind =]
 theorem getElem_extract :
     (as.extract i j)[k]'h = as[i + k]'(getElem_extract_aux h) := by
   simp only [length_extract] at h
   simp [getElem_eq_getElem?_get, - get_getElem?, Option.get_inj]
-  rw [getElem?_extract_of_lt]
+  rw [getElem?_extract_of_lt_stop]
   omega
+
+@[simp]
+theorem getElem?_extract_of_lt (h : k < min j as.length - i) :
+    (as.extract i j)[k]? = some (as[i + k]'(by omega)) := by
+  simp [h]
 
 theorem head_extract_aux (h : (as.extract i j) ≠ []) :
     i < as.length := by
@@ -220,6 +229,7 @@ theorem extract_eq_extract_min_right :
     as.extract i j = as.extract i (min j as.length) := by
   apply extract_eq_extract_self_of_eq <;> simp
 
+@[simp]
 theorem extract_of_length_lt (h : as.length < j) :
     as.extract i j = as.extract i as.length := by
   rw [extract_eq_extract_min_right, Nat.min_eq_right (by omega)]
@@ -241,11 +251,14 @@ theorem extract_zero_left :
     as.extract 0 j = as.take j := by
   simp [extract_eq_drop_take']
 
-@[simp]
+@[simp, grind =]
 theorem extract_zero_right :
     as.extract i 0 = [] := by
   simp [extract_eq_drop_take']
 
+-- TODO: analogue of `Array.push_extract_getElem`?
+
+-- TODO: Should we use `concat` instead?
 theorem extract_succ_right (w : i < j + 1) (h : j < as.length) :
     as.extract i (j + 1) = (as.extract i j) ++ [as[j]] := by
   apply ext_getElem
@@ -269,6 +282,7 @@ theorem extract_sub_one (h : j < as.length) :
     simp only [length_extract, length_dropLast] at h₁ h₂
     simp only [getElem_extract, getElem_dropLast]
 
+@[grind =]
 theorem extract_set {a : α} :
     (as.set k a).extract i j =
       if k < i then
@@ -286,11 +300,14 @@ theorem extract_set {a : α} :
     · simp only [length_extract, length_set, getElem_extract]
       simp [getElem_set, Nat.sub_eq_iff_eq_add' (Nat.not_lt.mp ‹_›)]
 
+@[grind =]
 theorem set_extract {a : α} :
     (as.extract i j).set k a = (as.set (i + k) a).extract i j := by
   apply ext_getElem <;> simp [getElem_set]
 
-@[simp]
+-- TODO: analogue for `Array.set_eq_push_extract_append_extract`
+
+@[simp, grind =]
 theorem extract_append :
     (as ++ bs).extract i j = as.extract i j ++ bs.extract (i - as.length) (j - as.length) := by
   apply ext_getElem
@@ -328,15 +345,19 @@ theorem extract_append_extract :
     · congr 1
       omega
 
-@[simp]
+@[simp, grind =]
 theorem map_extract {f : α → β} :
     (as.extract i j).map f = (as.map f).extract i j := by
   apply ext_getElem <;> simp
 
-@[simp]
+@[simp, grind =]
 theorem extract_replicate {a : α} {n : Nat} :
     (replicate n a).extract i j = replicate (min j n - i) a := by
   apply ext_getElem <;> simp
+
+-- TODO: concat lemmas?
+
+-- TODO: pop lemmas?
 
 -- TODO: find a good place for these
 
@@ -398,6 +419,7 @@ theorem mem_extract_iff_getElem {a : α} :
   · rintro ⟨k, h, rfl⟩
     exact ⟨k, by omega, rfl⟩
 
+@[grind =]
 theorem extract_reverse :
     as.reverse.extract i j = (as.extract (as.length - j) (as.length - i)).reverse := by
   apply ext_getElem
@@ -409,6 +431,7 @@ theorem extract_reverse :
     congr 1
     omega
 
+@[grind =]
 theorem reverse_extract :
     (as.extract i j).reverse = as.reverse.extract (as.length - j) (as.length - i) := by
   rw [extract_reverse, reverse_inj]
