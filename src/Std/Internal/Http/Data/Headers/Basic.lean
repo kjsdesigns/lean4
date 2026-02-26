@@ -47,16 +47,7 @@ instance [h : Header α] : Encode .v11 α where
 
 namespace Header
 
-/--
-Checks whether a string is a valid non-empty HTTP token.
--/
-def isToken (s : String) : Bool :=
-  ¬s.isEmpty ∧ s.toList.all Char.token
-
-/--
-Parses a comma-separated token list with OWS trimming and lowercase normalization.
--/
-def parseTokenList (v : Value) : Array String :=
+private def parseTokenList (v : Value) : Array String :=
   v.value.split (· == ',') |>.toArray.map (·.trimAscii.toString.toLower)
 
 /--
@@ -94,6 +85,8 @@ end ContentLength
 /--
 Validates the chunked placement rules for the Transfer Encoding header. Returns `false` if the
 encoding list violates the constraints.
+
+Reference: https://www.rfc-editor.org/rfc/rfc9112#section-6.1
 -/
 @[expose]
 def TransferEncoding.Validate (codings : Array String) : Bool :=
@@ -101,7 +94,10 @@ def TransferEncoding.Validate (codings : Array String) : Bool :=
     false
   else
     let chunkedCount := codings.filter (· == "chunked") |>.size
+
+    -- the sender MUST either apply chunked as the final transfer coding
     let lastIsChunked := codings.back? == some "chunked"
+
     if chunkedCount > 1 then
       false
     else if chunkedCount == 1 && !lastIsChunked then

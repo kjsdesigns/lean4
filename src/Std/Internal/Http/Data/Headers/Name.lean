@@ -33,8 +33,7 @@ characters and the string is non-empty.
 Reference: https://www.rfc-editor.org/rfc/rfc9110.html#name-field-names
 -/
 abbrev IsValidHeaderName (s : String) : Prop :=
-  let s := s.toList
-  s.all Char.token ∧ ¬s.isEmpty
+  isToken s
 
 /--
 A validated HTTP header name that ensures all characters conform to HTTP standards. Header names are
@@ -68,12 +67,11 @@ instance : BEq Name where
 instance : Hashable Name where
   hash x := Hashable.hash x.value
 
-@[simp]
 theorem Name.beq_eq {x y : Name} : (x == y) = (x.value == y.value) :=
   rfl
 
 instance : LawfulBEq Name where
-  rfl {x} := by simp
+  rfl {x} := by simp [Name.beq_eq]
   eq_of_beq {x y} := by grind [Name.beq_eq, Name.ext]
 
 instance : LawfulHashable Name := inferInstance
@@ -85,7 +83,6 @@ instance : Inhabited Name where
 Attempts to create a `Name` from a `String`, returning `none` if the string contains invalid
 characters for HTTP header names or is empty.
 -/
-@[expose]
 def ofString? (s : String) : Option Name :=
   let val := s.trimAscii.toString.toLower
   if h : IsValidHeaderName val ∧ IsLowerCase val then
@@ -97,7 +94,6 @@ def ofString? (s : String) : Option Name :=
 Creates a `Name` from a string, panicking with an error message if the string contains invalid
 characters for HTTP header names or is empty.
 -/
-@[expose]
 def ofString! (s : String) : Name :=
   match ofString? s with
   | some res => res
