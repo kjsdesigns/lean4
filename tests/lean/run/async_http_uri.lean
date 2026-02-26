@@ -763,15 +763,15 @@ info: none
 -- URI Builder Tests
 -- ============================================================================
 
--- Domain names longer than 253 characters are rejected.
+-- Domain names longer than 255 characters are rejected.
 #guard
   let label := String.ofList (List.replicate 63 'a')
-  let longDomain := s!"{label}.{label}.{label}.{label}"
+  let longDomain := s!"{label}.{label}.{label}.{label}."
   (URI.DomainName.ofString? longDomain).isNone
 
 #guard
   let label := String.ofList (List.replicate 63 'a')
-  let longDomain := s!"{label}.{label}.{label}.{label}"
+  let longDomain := s!"{label}.{label}.{label}.{label}."
   (URI.Builder.empty.setHost? longDomain).isNone
 
 /--
