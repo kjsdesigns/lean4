@@ -407,7 +407,7 @@ info: "3;marker\x0d\nabc\x0d\n"
 
 -- Extension with empty string value (not quoted since "".any returns false)
 /--
-info: "3;key=\x0d\nabc\x0d\n"
+info: "3;key=\"\"\x0d\nabc\x0d\n"
 -/
 #guard_msgs in
 #eval encodeStr (Chunk.ofByteArray "abc".toUTF8 |>.insertExtension (Chunk.ExtensionName.mk "key") (.ofString! ""))
