@@ -27,7 +27,8 @@ set_option linter.all true
 open Internal Char
 
 /--
-Proposition that asserts all characters in a string are valid and that it is non-empty for HTTP header names.
+Proposition asserting that a string is a valid HTTP header name: all characters are valid token
+characters and the string is non-empty.
 
 Reference: https://www.rfc-editor.org/rfc/rfc9110.html#name-field-names
 -/
