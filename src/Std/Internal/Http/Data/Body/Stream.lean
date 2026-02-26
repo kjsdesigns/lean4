@@ -485,7 +485,11 @@ def send (outgoing : Outgoing) (chunk : Chunk) (incomplete : Bool := false) : As
   match (← collapseForSend outgoing chunk incomplete) with
   | .error err => throw err
   | .ok none => pure ()
-  | .ok (some toSend) => send' outgoing toSend
+  | .ok (some toSend) =>
+    if toSend.data.isEmpty ∧ toSend.extensions.isEmpty then
+      return ()
+
+    send' outgoing toSend
 
 /--
 Closes the channel.
