@@ -183,22 +183,8 @@ info: "TEXT/HTML"
 #guard_msgs in
 #eval do
   let h := Headers.empty.insert! "content-type" "text/html"
-  let h' := h.update (Name.ofString! "content-type") (fun
-    | some v => Value.ofString! v.value.toUpper
-    | none => Value.ofString! "default")
+  let h' := h.update (Name.ofString! "content-type") (fun v => Value.ofString! v.value.toUpper)
   return (h'.get? (Name.ofString! "content-type")).get!.value
-
--- update missing (inserts)
-/--
-info: "default-value"
--/
-#guard_msgs in
-#eval do
-  let h := Headers.empty
-  let h' := h.update (Name.ofString! "x-new") (fun
-    | some v => v
-    | none => Value.ofString! "default-value")
-  return (h'.get? (Name.ofString! "x-new")).get!.value
 
 -- ofList
 #guard
