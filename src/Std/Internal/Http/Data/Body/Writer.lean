@@ -208,9 +208,9 @@ instance : Writer AnyBody where
 
 instance : Reader AnyBody where
   recv
-    | .outgoing body, count => Reader.recv body count
-    | .full body, count => Reader.recv body count
-    | .empty body, count => Reader.recv body count
+    | .outgoing body => Reader.recv body
+    | .full body => Reader.recv body
+    | .empty body => Reader.recv body
   close
     | .outgoing body => Reader.close body
     | .full body => Reader.close body

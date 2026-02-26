@@ -11,7 +11,7 @@ public import Init.Data.Repr
 public section
 
 /-!
-# Length
+# Body.Length
 
 This module defines the `Length` type, that represents the Content-Length or Transfer-Encoding
 of an HTTP request or response.
