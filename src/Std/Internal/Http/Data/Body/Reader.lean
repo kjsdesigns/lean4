@@ -31,7 +31,7 @@ class Reader (α : Type) where
   /--
   Receives the next body chunk. Returns `none` at end-of-stream.
   -/
-  recv : α → Option UInt64 → Async (Option Chunk)
+  recv : α → Async (Option Chunk)
 
   /--
   Closes the reader stream.
@@ -55,7 +55,7 @@ instance : Reader Incoming where
   recvSelector := Incoming.recvSelector
 
 instance : Reader Outgoing where
-  recv body count := Reader.recv (Body.Internal.outgoingToIncoming body) count
+  recv body := Reader.recv (Body.Internal.outgoingToIncoming body)
   close body := Reader.close (Body.Internal.outgoingToIncoming body)
   isClosed body := Reader.isClosed (Body.Internal.outgoingToIncoming body)
   recvSelector body := Reader.recvSelector (Body.Internal.outgoingToIncoming body)

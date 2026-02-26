@@ -56,7 +56,7 @@ Returns `none` when any character in `s` cannot be represented by the grammar.
 -/
 @[expose]
 def quoteHttpString? (s : String) : Option String :=
-  if s.all token then
+  if s.all token ∧ ¬s.isEmpty then
     some s
   else if s.all quotedStringChar then
     some (.append
@@ -105,5 +105,12 @@ def unquoteHttpString? (s : String) : Option String :=
     some s
   else
     none
+
+/--
+Checks whether a string is a valid non-empty HTTP token.
+-/
+@[expose]
+def isToken (s : String) : Bool :=
+  ¬s.isEmpty ∧ s.toList.all Char.token
 
 end Std.Http.Internal

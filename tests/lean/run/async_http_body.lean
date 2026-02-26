@@ -13,7 +13,7 @@ def channelSendRecv : Async Unit := do
   let chunk := Chunk.ofByteArray "hello".toUTF8
 
   let sendTask ← async (t := AsyncTask) <| outgoing.send chunk
-  let result ← incoming.recv none
+  let result ← incoming.recv
 
   assert! result.isSome
   assert! result.get!.data == "hello".toUTF8
@@ -68,7 +68,7 @@ def channelClose : Async Unit := do
 def channelRecvAfterClose : Async Unit := do
   let (outgoing, incoming) ← Body.mkChannel
   outgoing.close
-  let result ← incoming.recv none
+  let result ← incoming.recv
   assert! result.isNone
 
 #eval channelRecvAfterClose.block
@@ -125,7 +125,7 @@ def channelExtensions : Async Unit := do
   let chunk := { data := "hello".toUTF8, extensions := #[(.mk "key", some (Chunk.ExtensionValue.ofString! "value"))] : Chunk }
 
   let sendTask ← async (t := AsyncTask) <| outgoing.send chunk
-  let result ← incoming.recv none
+  let result ← incoming.recv
 
   assert! result.isSome
   assert! result.get!.extensions.size == 1
@@ -179,7 +179,7 @@ def channelKnownSizeDecreases : Async Unit := do
   outgoing.setKnownSize (some (.fixed 5))
 
   let sendTask ← async (t := AsyncTask) <| outgoing.send (Chunk.ofByteArray "hello".toUTF8)
-  let _ ← incoming.recv none
+  let _ ← incoming.recv
   await sendTask
 
   let size ← incoming.getKnownSize
@@ -206,7 +206,7 @@ def channelSingleProducerRule : Async Unit := do
       pure true
   assert! send2Failed
 
-  let first ← incoming.recv none
+  let first ← incoming.recv
   assert! first.isSome
   assert! first.get!.data == "one".toUTF8
 
@@ -219,7 +219,7 @@ def channelSingleProducerRule : Async Unit := do
 def channelSingleConsumerRule : Async Unit := do
   let (outgoing, incoming) ← Body.mkChannel
 
-  let recv1 ← async (t := AsyncTask) <| incoming.recv none
+  let recv1 ← async (t := AsyncTask) <| incoming.recv
 
   let hasInterest ← Selectable.one #[
     .case outgoing.interestSelector pure
@@ -228,7 +228,7 @@ def channelSingleConsumerRule : Async Unit := do
 
   let recv2Failed ←
     try
-      let _ ← incoming.recv none
+      let _ ← incoming.recv
       pure false
     catch _ =>
       pure true
@@ -250,7 +250,7 @@ def channelHasInterest : Async Unit := do
   let (outgoing, incoming) ← Body.mkChannel
   assert! !(← outgoing.hasInterest)
 
-  let recvTask ← async (t := AsyncTask) <| incoming.recv none
+  let recvTask ← async (t := AsyncTask) <| incoming.recv
 
   let hasInterest ← Selectable.one #[
     .case outgoing.interestSelector pure
@@ -288,8 +288,8 @@ def channelInterestSelectorClose : Async Unit := do
 
 def fullRecvConsumesOnce : Async Unit := do
   let full ← Body.Full.ofUTF8String "hello"
-  let first ← full.recv none
-  let second ← full.recv none
+  let first ← full.recv
+  let second ← full.recv
 
   assert! first.isSome
   assert! first.get!.data == "hello".toUTF8
@@ -372,7 +372,7 @@ def emptyWriterSendFails : Async Unit := do
 /-! ## Request.Builder body tests -/
 
 private def recvBuiltBody (body : Body.Full) : Async (Option Chunk) :=
-  body.recv none
+  body.recv
 
 private def emptyBodyKnownSize (body : Body.Empty) : Async (Option Body.Length) :=
   Writer.getKnownSize body

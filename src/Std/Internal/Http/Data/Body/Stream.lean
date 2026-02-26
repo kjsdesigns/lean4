@@ -18,7 +18,7 @@ public import Init.Data.ByteArray
 public section
 
 /-!
-# Body Channels
+# Body.Stream
 
 This module defines a zero-buffer rendezvous body channel split into two faces:
 
@@ -55,7 +55,10 @@ private def Consumer.resolve (c : Consumer) (x : Option Chunk) : BaseIO Bool := 
 
 private structure Producer where
   chunk : Chunk
-  /-- Resolved with `true` when consumed by a receiver, `false` when the channel closes. -/
+
+  /--
+  Resolved with `true` when consumed by a receiver, `false` when the channel closes.
+  -/
   done : IO.Promise Bool
 
 open Internal.IO.Async in
@@ -101,19 +104,25 @@ deriving Nonempty
 
 end Channel
 
-/-- Receive-side face of a body channel. -/
+/--
+Receive-side face of a body channel.
+-/
 structure Incoming where
   private mk ::
   private state : Mutex Channel.State
 deriving Nonempty, TypeName
 
-/-- Send-side face of a body channel. -/
+/--
+Send-side face of a body channel.
+-/
 structure Outgoing where
   private mk ::
   private state : Mutex Channel.State
 deriving Nonempty, TypeName
 
-/-- Creates a rendezvous body channel. -/
+/--
+Creates a rendezvous body channel.
+-/
 def mkChannel : Async (Outgoing × Incoming) := do
   let state ← Mutex.new {
     pendingProducer := none
@@ -250,34 +259,41 @@ private def recv' (incoming : Incoming) : BaseIO (AsyncTask (Option Chunk)) := d
 Receives a chunk from the channel. Blocks until a producer sends one.
 Returns `none` if the channel is closed and no producer is waiting.
 -/
-def recv (incoming : Incoming) (_count : Option UInt64) : Async (Option Chunk) :=
-  do Async.ofAsyncTask (← recv' incoming)
+def recv (incoming : Incoming) : Async (Option Chunk) := do
+  Async.ofAsyncTask (← recv' incoming)
 
-/-- Closes the channel. -/
+/--
+Closes the channel.
+-/
 def close (incoming : Incoming) : Async Unit :=
   incoming.state.atomically do
     Channel.close'
 
-/-- Checks whether the channel is closed. -/
+/--
+Checks whether the channel is closed.
+-/
 @[always_inline, inline]
 def isClosed (incoming : Incoming) : Async Bool :=
   incoming.state.atomically do
     return (← get).closed
 
-/-- Gets the known size if available. -/
+/--
+Gets the known size if available.
+-/
 @[always_inline, inline]
 def getKnownSize (incoming : Incoming) : Async (Option Body.Length) :=
   incoming.state.atomically do
     return (← get).knownSize
 
-/-- Sets known size metadata. -/
+/--
+Sets known size metadata.
+-/
 @[always_inline, inline]
 def setKnownSize (incoming : Incoming) (size : Option Body.Length) : Async Unit :=
   incoming.state.atomically do
     modify fun st => { st with knownSize := size }
 
 open Internal.IO.Async in
-
 /--
 Creates a selector that resolves when a producer is waiting (or the channel closes).
 -/
@@ -319,7 +335,7 @@ protected partial def forIn
     (step : Chunk → β → Async (ForInStep β)) : Async β := do
 
   let rec @[specialize] loop (incoming : Incoming) (acc : β) : Async β := do
-    if let some chunk ← incoming.recv none then
+    if let some chunk ← incoming.recv then
       match ← step chunk acc with
       | .done res => return res
       | .yield res => loop incoming res
@@ -388,6 +404,7 @@ private def collapseForSend
     (outgoing : Outgoing)
     (chunk : Chunk)
     (incomplete : Bool) : BaseIO (Except IO.Error (Option Chunk)) := do
+
   outgoing.state.atomically do
     Channel.pruneFinishedWaiters
     let st ← get
@@ -410,10 +427,13 @@ private def collapseForSend
       set { st with pendingIncompleteChunk := none }
       return .ok (some merged)
 
--- Returns `some true` = delivered directly, `some false` = consumer race lost (retry),
--- `none` = producer installed, caller must await `done`.
-private def send' (outgoing : Outgoing) (chunk : Chunk) : Async Unit := do
+/-
+Returns `some true` = delivered directly, `some false` = consumer race lost (retry),
+`none` = producer installed, caller must await `done`.
+-/
+private partial def send' (outgoing : Outgoing) (chunk : Chunk) : Async Unit := do
   let done ← IO.Promise.new
+
   while true do
     let result : Except IO.Error (Option Bool) ← outgoing.state.atomically do
       Channel.pruneFinishedWaiters
@@ -424,6 +444,7 @@ private def send' (outgoing : Outgoing) (chunk : Chunk) : Async Unit := do
 
       if let some consumer := st.pendingConsumer then
         let success ← consumer.resolve (some chunk)
+
         if success then
           set {
             st with
@@ -432,7 +453,6 @@ private def send' (outgoing : Outgoing) (chunk : Chunk) : Async Unit := do
           }
           return .ok (some true)
         else
-          -- Consumer's selector race was lost; clear the stale entry and retry.
           set { st with pendingConsumer := none }
           return .ok (some false)
       else if st.pendingProducer.isSome then
@@ -447,11 +467,8 @@ private def send' (outgoing : Outgoing) (chunk : Chunk) : Async Unit := do
     | .ok (some true) =>
       return ()
     | .ok (some false) =>
-      -- Retry immediately; no sleep needed, no producer installed yet.
-      pure ()
+      send' outgoing chunk
     | .ok none =>
-      -- Producer is installed; block until the consumer signals via `done`.
-      -- `done` resolves with `true` when consumed, `false` when the channel closes.
       match ← await done.result? with
       | some true => return ()
       | _ => throw (IO.Error.userError "channel closed")
@@ -465,52 +482,51 @@ If `incomplete := false`, any buffered incomplete pieces are collapsed with this
 single merged chunk is sent.
 -/
 def send (outgoing : Outgoing) (chunk : Chunk) (incomplete : Bool := false) : Async Unit := do
-  if chunk.data.isEmpty ∧ chunk.extensions.isEmpty then
-    return
-
   match (← collapseForSend outgoing chunk incomplete) with
-  | .error err =>
-      throw err
-  | .ok none =>
-      pure ()
-  | .ok (some toSend) =>
-      send' outgoing toSend
+  | .error err => throw err
+  | .ok none => pure ()
+  | .ok (some toSend) => send' outgoing toSend
 
-/-- Alias for `send`. -/
-def writeChunk (outgoing : Outgoing) (chunk : Chunk) : Async Unit :=
-  outgoing.send chunk
-
-/-- Closes the channel. -/
+/--
+Closes the channel.
+-/
 def close (outgoing : Outgoing) : Async Unit :=
   outgoing.state.atomically do
     Channel.close'
 
-/-- Checks whether the channel is closed. -/
+/--
+Checks whether the channel is closed.
+-/
 @[always_inline, inline]
 def isClosed (outgoing : Outgoing) : Async Bool :=
   outgoing.state.atomically do
     return (← get).closed
 
-/-- Returns true when a consumer is currently blocked waiting for data. -/
+/--
+Returns `true` when a consumer is currently blocked waiting for data.
+-/
 def hasInterest (outgoing : Outgoing) : Async Bool :=
   outgoing.state.atomically do
     Channel.pruneFinishedWaiters
     Channel.hasInterest'
 
-/-- Gets the known size if available. -/
+/--
+Gets the known size if available.
+-/
 @[always_inline, inline]
 def getKnownSize (outgoing : Outgoing) : Async (Option Body.Length) :=
   outgoing.state.atomically do
     return (← get).knownSize
 
-/-- Sets known size metadata. -/
+/--
+Sets known size metadata.
+-/
 @[always_inline, inline]
 def setKnownSize (outgoing : Outgoing) (size : Option Body.Length) : Async Unit :=
   outgoing.state.atomically do
     modify fun st => { st with knownSize := size }
 
 open Internal.IO.Async in
-
 /--
 Creates a selector that resolves when consumer interest is present.
 Returns `true` when a consumer is waiting, `false` when the channel closes first.
@@ -557,12 +573,16 @@ end Outgoing
 Use these only in HTTP internals where body direction must be adapted. -/
 namespace Internal
 
-/-- Reinterprets the receive-side handle as a send-side handle over the same channel. -/
+/--
+Reinterprets the receive-side handle as a send-side handle over the same channel.
+-/
 @[always_inline, inline]
 def incomingToOutgoing (incoming : Incoming) : Outgoing :=
   { state := incoming.state }
 
-/-- Reinterprets the send-side handle as a receive-side handle over the same channel. -/
+/--
+Reinterprets the send-side handle as a receive-side handle over the same channel.
+-/
 @[always_inline, inline]
 def outgoingToIncoming (outgoing : Outgoing) : Incoming :=
   { state := outgoing.state }

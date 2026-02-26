@@ -208,9 +208,15 @@ info: some " "
 #eval parseCheck "http://[2001:db8::1]:8080/path"
 #eval parseCheck "https://xn--nxasmq6b.xn--o3cw4h/path"
 #eval parseCheck "localhost:65535"
+#eval parseCheck "http:80"
 #eval parseCheck "https://user:pass@secure.example.com/private"
 #eval parseCheck "/double//slash//path"
 #eval parseCheck "http://user%40example:pass%3Aword@host.com"
+
+#guard
+  match (parseRequestTarget <* Std.Internal.Parsec.eof).run "http:80".toUTF8 with
+  | .ok (.absoluteForm _ _) => true
+  | _ => false
 
 -- Parse failure tests
 #eval parseCheckFail "/path with space"
@@ -226,6 +232,13 @@ info: some " "
 #eval parseCheckFail "#frag"
 #eval parseCheckFail "/path/\n"
 #eval parseCheckFail "/path/\u0000"
+
+-- maxPathSegments should apply to trailing empty segments as well.
+#guard
+  match (parseURI { maxPathSegments := 1 } <* Std.Internal.Parsec.eof).run
+      "http://example.com/a/".toUTF8 with
+  | .error _ => true
+  | .ok _ => false
 
 -- ============================================================================
 -- Request Target Parsing - Detailed Output Tests
@@ -335,7 +348,7 @@ info: Std.Http.RequestTarget.absoluteForm
 /--
 info: Std.Http.RequestTarget.absoluteForm
   { scheme := "https",
-    authority := some { userInfo := some { username := "user b", password := some "pass" },
+    authority := some { userInfo := some { username := "user%20b", password := some "pass" },
                    host := Std.Http.URI.Host.name "secure.example.com",
                    port := none },
     path := { segments := #["private"], absolute := true },
@@ -397,7 +410,7 @@ info: some { username := "user", password := some "pass" }
   | none => IO.println "no authority"
 
 /--
-info: some { username := "user only", password := none }
+info: some { username := "user%20only", password := none }
 -/
 #guard_msgs in
 #eval show IO _ from do
@@ -417,7 +430,7 @@ info: some { username := "", password := some "pass" }
   | none => IO.println "no authority"
 
 /--
-info: some { username := "user", password := some "p@ss:w0rd" }
+info: some { username := "user", password := some "p%40ss%3Aw0rd" }
 -/
 #guard_msgs in
 #eval show IO _ from do
@@ -673,13 +686,35 @@ info: some (some "value")
   let result ← runParser parseRequestTarget "/api?key=value"
   IO.println (repr (result.query.find? "key"))
 
-/--
-info: some "x y"
--/
-#guard_msgs in
-#eval show IO _ from do
-  let result ← runParser parseRequestTarget "/form?q=x+y"
-  IO.println (repr (result.query.get "q"))
+-- Raw lookup APIs should not alias with pre-encoded key spellings.
+#guard
+  match (parseRequestTarget <* Std.Internal.Parsec.eof).run "/api?%61=1&a=2".toUTF8 with
+  | .ok result =>
+      let encodedA? := EncodedQueryParam.fromString? "%61"
+      ((result.query.find? "a" |>.bind id |>.bind EncodedQueryParam.decode) == some "2") &&
+      (result.query.find? "%61").isNone &&
+      result.query.contains "a" &&
+      !result.query.contains "%61" &&
+      (match encodedA? with
+       | some encodedA =>
+           ((result.query.findEncoded? encodedA |>.bind id |>.bind EncodedQueryParam.decode) == some "1") &&
+           result.query.containsEncoded encodedA
+       | none => false)
+  | .error _ => false
+
+#guard
+  match (parseRequestTarget <* Std.Internal.Parsec.eof).run "/api?%61=1&a=2".toUTF8 with
+  | .ok result =>
+      match EncodedQueryParam.fromString? "%61" with
+      | some encodedA =>
+          let erasedRaw := result.query.erase "a"
+          let erasedEncoded := result.query.eraseEncoded encodedA
+          !erasedRaw.contains "a" &&
+          erasedRaw.containsEncoded encodedA &&
+          !erasedEncoded.containsEncoded encodedA &&
+          erasedEncoded.contains "a"
+      | none => false
+  | .error _ => false
 
 -- ============================================================================
 -- Query Operations
@@ -730,6 +765,17 @@ info: none
 -- ============================================================================
 -- URI Builder Tests
 -- ============================================================================
+
+-- Domain names longer than 255 characters are rejected.
+#guard
+  let label := String.ofList (List.replicate 63 'a')
+  let longDomain := s!"{label}.{label}.{label}.{label}."
+  (URI.DomainName.ofString? longDomain).isNone
+
+#guard
+  let label := String.ofList (List.replicate 63 'a')
+  let longDomain := s!"{label}.{label}.{label}.{label}."
+  (URI.Builder.empty.setHost? longDomain).isNone
 
 /--
 info: https://example.com/api/users?page=1

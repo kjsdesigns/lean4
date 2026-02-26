@@ -34,23 +34,32 @@ deriving Inhabited
 
 namespace Empty
 
-/-- Receives from an empty body, always returning end-of-stream. -/
+/--
+Receives from an empty body, always returning end-of-stream.
+-/
 @[inline]
-def recv (_ : Empty) (_count : Option UInt64) : Async (Option Chunk) :=
+def recv (_ : Empty) : Async (Option Chunk) :=
   pure none
 
-/-- Closes an empty body (no-op). -/
+/--
+Closes an empty body (no-op).
+-/
 @[inline]
 def close (_ : Empty) : Async Unit :=
   pure ()
 
-/-- Empty bodies are always closed for reading. -/
+/--
+Empty bodies are always closed for reading.
+-/
 @[inline]
 def isClosed (_ : Empty) : Async Bool :=
   pure true
 
 open Internal.IO.Async in
-/-- Selector that immediately resolves with end-of-stream for an empty body. -/
+
+/--
+Selector that immediately resolves with end-of-stream for an empty body.
+-/
 @[inline]
 def recvSelector (_ : Empty) : Selector (Option Chunk) where
   tryFn := pure (some none)
