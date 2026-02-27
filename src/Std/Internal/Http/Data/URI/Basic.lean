@@ -49,8 +49,7 @@ Reference: https://www.rfc-editor.org/rfc/rfc3986.html#section-3.1
 abbrev IsValidScheme (s : String) : Prop :=
   IsLowerCase s ∧
   s.toList.all isValidSchemeChar ∧
-  (s.toList.head?.map isAlphaChar |>.getD false) ∧ -- ALPHA
-  IsLowerCase s -- An implementation should accept uppercase letters as equivalent to lowercase in scheme names
+  (s.toList.head?.map isAlphaChar |>.getD false) -- first character must be ALPHA
 
 /--
 URI scheme identifier (e.g., "http", "https", "ftp").
@@ -75,7 +74,7 @@ def ofString? (s : String) : Option Scheme :=
     none
 
 /--
-Creates a `Scheme` from a string, normalizing to lowercase. Panicks if invalid.
+Creates a `Scheme` from a string, normalizing to lowercase. Panics if invalid.
 -/
 def ofString! (s : String) : Scheme :=
   match ofString? s with
@@ -152,7 +151,7 @@ def isValidDomainLabel (s : String) : Bool :=
 
 /--
 Proposition that asserts `s` is a valid dot-separated domain name.
-Each label must satisfy `IsValidDomainLabel`, and the full name must be at most 253 characters.
+Each label must satisfy `IsValidDomainLabel`, and the full name must be at most 255 characters.
 -/
 abbrev IsValidDomainName (s : String) : Prop :=
   let labels := s.splitOn "."

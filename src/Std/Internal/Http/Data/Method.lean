@@ -30,8 +30,8 @@ set_option linter.all true
 open Internal
 
 /--
-A proposition stating that `s` is a valid HTTP method name: every character is an HTTP token
-character, `s` is non-empty, and `s` is not one of the standard method names.
+A proposition stating that `s` is a valid HTTP method name: every character is an uppercase HTTP
+token character and `s` is non-empty.
 
 Reference: https://httpwg.org/specs/rfc9110.html#method
 -/
