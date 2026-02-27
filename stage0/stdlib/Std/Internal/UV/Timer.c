@@ -24,7 +24,7 @@ lean_object* lean_uv_timer_stop(lean_object*);
 LEAN_EXPORT lean_object* l_Std_Internal_UV_Timer_stop___boxed(lean_object*, lean_object*);
 lean_object* lean_uv_timer_cancel(lean_object*);
 LEAN_EXPORT lean_object* l_Std_Internal_UV_Timer_cancel___boxed(lean_object*, lean_object*);
-static lean_object* _init_l___private_Std_Internal_UV_Timer_0__Std_Internal_UV_TimerImpl() {
+static lean_object* _init_l___private_Std_Internal_UV_Timer_0__Std_Internal_UV_TimerImpl(void) {
 _start:
 {
 return lean_box(0);
@@ -35,7 +35,7 @@ _start:
 {
 uint64_t x_4; uint8_t x_5; lean_object* x_6; 
 x_4 = lean_unbox_uint64(x_1);
-lean_dec(x_1);
+lean_dec_ref(x_1);
 x_5 = lean_unbox(x_2);
 x_6 = lean_uv_timer_mk(x_4, x_5);
 return x_6;
@@ -77,17 +77,45 @@ lean_dec(x_1);
 return x_3;
 }
 }
+lean_object* runtime_initialize_Init_System_Promise(uint8_t builtin);
+static bool _G_runtime_initialized = false;
+LEAN_EXPORT lean_object* runtime_initialize_Std_Internal_UV_Timer(uint8_t builtin) {
+lean_object * res;
+if (_G_runtime_initialized) return lean_io_result_mk_ok(lean_box(0));
+_G_runtime_initialized = true;
+res = runtime_initialize_Init_System_Promise(builtin)
+;
+if (lean_io_result_is_error(res)) return res;
+lean_dec_ref(res);
+l___private_Std_Internal_UV_Timer_0__Std_Internal_UV_TimerImpl = _init_l___private_Std_Internal_UV_Timer_0__Std_Internal_UV_TimerImpl();
+return lean_io_result_mk_ok(lean_box(0));
+}
+static bool _G_meta_initialized = false;
+LEAN_EXPORT lean_object* meta_initialize_Std_Internal_UV_Timer(uint8_t builtin) {
+lean_object * res;
+if (_G_meta_initialized) return lean_io_result_mk_ok(lean_box(0));
+_G_meta_initialized = true;
+return lean_io_result_mk_ok(lean_box(0));
+}
 lean_object* initialize_Init_System_Promise(uint8_t builtin);
 static bool _G_initialized = false;
 LEAN_EXPORT lean_object* initialize_Std_Internal_UV_Timer(uint8_t builtin) {
 lean_object * res;
 if (_G_initialized) return lean_io_result_mk_ok(lean_box(0));
 _G_initialized = true;
-res = initialize_Init_System_Promise(builtin);
+res = initialize_Init_System_Promise(builtin)
+;
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-l___private_Std_Internal_UV_Timer_0__Std_Internal_UV_TimerImpl = _init_l___private_Std_Internal_UV_Timer_0__Std_Internal_UV_TimerImpl();
-return lean_io_result_mk_ok(lean_box(0));
+res = runtime_initialize_Std_Internal_UV_Timer(builtin)
+;
+if (lean_io_result_is_error(res)) return res;
+lean_dec_ref(res);
+res = meta_initialize_Std_Internal_UV_Timer(builtin)
+;
+if (lean_io_result_is_error(res)) return res;
+lean_dec_ref(res);
+return initialize_Std_Internal_UV_Timer(builtin);
 }
 #ifdef __cplusplus
 }
