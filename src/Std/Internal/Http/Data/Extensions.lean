@@ -68,7 +68,7 @@ structure Extensions where
   private mk ::
 
   /--
-  The underlying tree map storing dynamic values keyed by their type name.entao
+  The underlying tree map storing dynamic values keyed by their type name.
   -/
   private data : TreeMap Name Dynamic Extensions.compareName := .empty
 deriving Inhabited
