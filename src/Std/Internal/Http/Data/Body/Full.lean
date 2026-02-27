@@ -71,7 +71,7 @@ def ofByteArray (data : ByteArray) : Async Full := do
 /--
 Creates a `Full` body from a `String`.
 -/
-def ofUTF8String (data : String) : Async Full := do
+def ofString (data : String) : Async Full := do
   let state ← Mutex.new (some data.toUTF8)
   return { state }
 
