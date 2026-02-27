@@ -1480,6 +1480,24 @@ def levelMVarToParam (mctx : MetavarContext) (alreadyUsedPred : Name → Bool) (
 def getExprAssignmentDomain (mctx : MetavarContext) : Array MVarId :=
   mctx.eAssignment.foldl (init := #[]) fun a mvarId _ => Array.push a mvarId
 
+/--
+Abstract the given fvars from an unassigned mvar by creating a delayed-assigned mvar.
+Returns `(mctx', result)` where `result` has the fvars replaced by `values`.
+This is used by `instantiateMVarsNoUpdate` when encountering an unassigned mvar
+with an active fvar substitution.
+-/
+@[export lean_abstract_mvar_fvars]
+def abstractMVarFVars (mctx : MetavarContext) (mvarId : MVarId) (fvars : Array Expr) (values : Array Expr) : MetavarContext × Expr :=
+  match mctx.decls.find? mvarId with
+  | none => (mctx, mkMVar mvarId)
+  | some _mvarDecl =>
+    let ngen : NameGenerator := { namePrefix := `_noUpdate, idx := mctx.mvarCounter }
+    let ctx : MkBinding.Context := { quotContext := `_root_, preserveOrder := false }
+    let state : MkBinding.State := { mctx, nextMacroScope := 0, ngen }
+    match (MkBinding.elimMVarDeps fvars (mkMVar mvarId) ctx).run state with
+    | .ok e s => (s.mctx, Expr.replaceFVars e fvars values)
+    | .error _ s => (s.mctx, mkMVar mvarId)
+
 end MetavarContext
 
 namespace MVarId

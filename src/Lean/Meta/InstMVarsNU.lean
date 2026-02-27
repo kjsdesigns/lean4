@@ -163,7 +163,33 @@ partial def go (e : Expr) : M Expr := do
           let newE ← go newE
           -- logInfo m!"Instantiated {mkMVar mvarId} mvar assignment to {newE}"
           return newE
-        | none => pure e
+        | none =>
+          let ctx ← read
+          if ctx.fvarSubst.isEmpty then
+            pure e
+          else
+            /- The mvar is unassigned and we have an active fvar substitution. The mvar's
+               eventual value might reference fvars from our substitution. We use
+               `elimMVarDeps` to create a delayed assignment that captures the substitution,
+               just like `mkForallFVars`/`mkLambdaFVars` would do when abstracting fvars
+               over an expression containing unassigned mvars. -/
+            let mvarDecl ← mvarId.getDecl
+            let (fvars, values) := ctx.fvarSubst.foldl (init := (#[], #[]))
+              fun (fvars, values) fvarId dl =>
+                if mvarDecl.lctx.contains fvarId then
+                  (fvars.push (mkFVar fvarId),
+                   values.push (dl.expr.liftLooseBVars (s := 0) (d := ctx.depth - dl.originalDepth)))
+                else
+                  (fvars, values)
+            if fvars.isEmpty then
+              pure e
+            else
+              -- Abstract the fvars via elimMVarDeps (creates delayed assignment)
+              let e' ← (do
+                mvarId.withContext do
+                  elimMVarDeps fvars (mkMVar mvarId) : MetaM Expr)
+              -- Replace fvars with their substitution values
+              pure (Expr.replaceFVars e' fvars values)
   modify fun s => { s with cache := s.cache.insert (ExprStructEq.mk e) e' }
   return e'
 

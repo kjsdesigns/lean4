@@ -7,6 +7,7 @@ Authors: Joachim Breitner
 #include <vector>
 #include <unordered_map>
 #include "util/name_set.h"
+#include "util/name_hash_map.h"
 #include "runtime/option_ref.h"
 #include "runtime/array_ref.h"
 #include "kernel/instantiate.h"
@@ -42,6 +43,7 @@ extern "C" object * lean_assign_lmvar(obj_arg mctx, obj_arg mid, obj_arg val);
 extern "C" object * lean_get_mvar_assignment(obj_arg mctx, obj_arg mid);
 extern "C" object * lean_get_delayed_mvar_assignment(obj_arg mctx, obj_arg mid);
 extern "C" object * lean_assign_mvar(obj_arg mctx, obj_arg mid, obj_arg val);
+extern "C" object * lean_abstract_mvar_fvars(obj_arg mctx, obj_arg mid, obj_arg fvars, obj_arg values);
 
 typedef object_ref metavar_ctx;
 typedef object_ref delayed_assignment;
@@ -66,6 +68,20 @@ static option_ref<expr> get_mvar_assignment(metavar_ctx & mctx, name const & mid
 
 static option_ref<delayed_assignment> get_delayed_mvar_assignment(metavar_ctx & mctx, name const & mid) {
     return option_ref<delayed_assignment>(lean_get_delayed_mvar_assignment(mctx.to_obj_arg(), mid.to_obj_arg()));
+}
+
+/* Abstract fvars from an unassigned mvar by creating a delayed-assigned mvar.
+   Returns a pair (mctx', result) where result has the fvars replaced by values.
+   Uses the Lean-implemented elimMVarDeps machinery. */
+static object_ref abstract_mvar_fvars(metavar_ctx & mctx, name const & mid,
+                                      array_ref<expr> const & fvars, array_ref<expr> const & values) {
+    object * r = lean_abstract_mvar_fvars(mctx.steal(), mid.to_obj_arg(), fvars.to_obj_arg(), values.to_obj_arg());
+    /* result is a pair (MetavarContext, Expr) */
+    mctx.set_box(cnstr_get(r, 0));
+    lean_inc(cnstr_get(r, 0));
+    expr result(cnstr_get(r, 1), true);
+    lean_dec(r);
+    return object_ref(result.steal());
 }
 
 /* Level metavariable instantiation -- same as in instantiate_mvars.cpp,
@@ -131,8 +147,9 @@ struct fvar_subst_entry {
 class instantiate_mvars_no_update_fn {
     metavar_ctx & m_mctx;
     instantiate_lmvars_nu_fn m_level_fn;
-    /* The fvar substitution, mapping fvar names to (depth, value) pairs. */
-    lean::unordered_map<lean_object *, fvar_subst_entry> m_fvar_subst;
+    /* The fvar substitution, mapping fvar names to (depth, value) pairs.
+       Uses name_hash_map for structural name equality (not pointer equality). */
+    name_hash_map<fvar_subst_entry> m_fvar_subst;
     /* Current binder depth. */
     unsigned m_depth;
     /* Expression cache. Cleared when going under binders. */
@@ -162,7 +179,7 @@ class instantiate_mvars_no_update_fn {
 
     /* Look up an fvar in our substitution. Returns none if not found. */
     optional<expr> lookup_fvar(name const & fid) {
-        auto it = m_fvar_subst.find(fid.raw());
+        auto it = m_fvar_subst.find(fid);
         if (it == m_fvar_subst.end())
             return optional<expr>();
         unsigned d = m_depth - it->second.depth;
@@ -182,13 +199,10 @@ class instantiate_mvars_no_update_fn {
         if (!r)
             return optional<expr>();
         expr a(r.get_val());
-        if (!has_mvar(a) && !has_fvar(a)) {
-            return optional<expr>(a);
-        }
         if (fvar_subst_empty()) {
-            /* Sound to update: no fvar substitution active, so the result
-               is identical to what instantiateMVars would compute. */
-            if (m_already_normalized.contains(mid)) {
+            /* Match standard instantiateMVars behavior exactly:
+               return immediately if no mvars or already normalized. */
+            if (!has_mvar(a) || m_already_normalized.contains(mid)) {
                 return optional<expr>(a);
             }
             m_already_normalized.insert(mid);
@@ -199,7 +213,11 @@ class instantiate_mvars_no_update_fn {
             }
             return optional<expr>(a_new);
         } else {
-            /* Cannot update: fvar substitution is active. Just visit. */
+            /* Fvar substitution is active. Cannot update assignments.
+               Return immediately if nothing to process. */
+            if (!has_mvar(a) && !has_fvar(a)) {
+                return optional<expr>(a);
+            }
             return optional<expr>(visit(a));
         }
     }
@@ -260,32 +278,39 @@ class instantiate_mvars_no_update_fn {
         /* Save and extend the fvar substitution.
            The substitution values are the (already visited) args at indices
            [args.size()-1 .. args.size()-fvar_count] (reversed, since args is built in reverse). */
-        struct saved_entry { lean_object * key; bool had_old; fvar_subst_entry old; };
+        struct saved_entry { name key; bool had_old; fvar_subst_entry old; };
         std::vector<saved_entry> saved_entries;
         saved_entries.reserve(fvar_count);
         for (size_t i = 0; i < fvar_count; i++) {
             name const & fid = fvar_name(fvars[i]);
-            auto old_it = m_fvar_subst.find(fid.raw());
+            auto old_it = m_fvar_subst.find(fid);
             if (old_it != m_fvar_subst.end()) {
-                saved_entries.push_back({fid.raw(), true, old_it->second});
+                saved_entries.push_back({fid, true, old_it->second});
             } else {
-                saved_entries.push_back({fid.raw(), false, {0, expr()}});
+                saved_entries.push_back({fid, false, {0, expr()}});
             }
             /* args is reversed: args[args.size()-1] corresponds to the first argument.
                fvars[i] should be mapped to the i-th argument, which is
                args[args.size() - 1 - i]. */
-            m_fvar_subst[fid.raw()] = {m_depth, args[args.size() - 1 - i]};
+            m_fvar_subst[fid] = {m_depth, args[args.size() - 1 - i]};
         }
 
-        /* Visit ?pending with the extended substitution */
+        /* Visit ?pending with the extended substitution.
+           We must use a fresh depth-dependent cache because the fvar substitution
+           has changed: existing cache entries were computed with the old substitution
+           and would produce incorrect results. (The global cache is fine since it
+           only contains entries for fvar-free expressions.) */
+        lean::unordered_map<lean_object *, expr> saved_cache;
+        saved_cache.swap(m_cache);
         expr val_new = visit(mk_mvar(mid_pending));
+        saved_cache.swap(m_cache);
 
         /* Restore the fvar substitution */
-        for (size_t i = 0; i < saved_entries.size(); i++) {
-            if (!saved_entries[i].had_old) {
-                m_fvar_subst.erase(saved_entries[i].key);
+        for (auto & se : saved_entries) {
+            if (!se.had_old) {
+                m_fvar_subst.erase(se.key);
             } else {
-                m_fvar_subst[saved_entries[i].key] = saved_entries[i].old;
+                m_fvar_subst[se.key] = se.old;
             }
         }
 
@@ -299,20 +324,13 @@ class instantiate_mvars_no_update_fn {
             return visit_app_default(e);
         } else {
             name const & mid = mvar_name(f);
-            /* Regular assignments take precedence over delayed ones. */
+            /* Regular assignments take precedence over delayed ones.
+               Always use visit_args_and_beta (with preserve_data=false) to match
+               the standard instantiateMVars behavior: apply_beta strips mdata
+               wrappers like _recApp even for non-lambda assignments. */
             if (auto f_new = get_assignment(mid)) {
                 buffer<expr> args;
-                if (is_lambda(*f_new)) {
-                    return visit_args_and_beta(*f_new, e, args);
-                } else {
-                    /* Visit args and rebuild */
-                    expr const * curr = &e;
-                    while (is_app(*curr)) {
-                        args.push_back(visit(app_arg(*curr)));
-                        curr = &app_fn(*curr);
-                    }
-                    return mk_rev_app(*f_new, args.size(), args.data());
-                }
+                return visit_args_and_beta(*f_new, e, args);
             }
             option_ref<delayed_assignment> d = get_delayed_mvar_assignment(m_mctx, mid);
             if (!d) {
@@ -323,8 +341,15 @@ class instantiate_mvars_no_update_fn {
             if (fvars.size() > get_app_num_args(e)) {
                 return visit_mvar_app_args(e);
             }
-            /* Unlike the standard version, we always attempt to instantiate
-               the delayed assignment by extending our fvar substitution. */
+            /* When fvar subst is empty, use the same guards as the standard version:
+               only resolve when pending is assigned and its normalized value has no mvars.
+               When fvar subst is non-empty, always resolve (using delayed mvar creation
+               for unassigned mvars). */
+            if (fvar_subst_empty()) {
+                optional<expr> pending_val = get_assignment(mid_pending);
+                if (!pending_val || has_expr_mvar(*pending_val))
+                    return visit_mvar_app_args(e);
+            }
             buffer<expr> args;
             return visit_delayed(fvars, mid_pending, e, args);
         }
@@ -334,8 +359,26 @@ class instantiate_mvars_no_update_fn {
         name const & mid = mvar_name(e);
         if (auto r = get_assignment(mid)) {
             return *r;
-        } else {
+        } else if (fvar_subst_empty()) {
             return e;
+        } else {
+            /* The mvar is unassigned and we have an active fvar substitution.
+               Create a delayed assignment that captures the substitution,
+               so that when the mvar is eventually assigned, the substitution
+               is correctly applied. */
+            lean_object * fvars_arr = lean_mk_empty_array();
+            lean_object * values_arr = lean_mk_empty_array();
+            for (auto & entry : m_fvar_subst) {
+                name const & fid = entry.first;
+                expr fv = mk_fvar(fid);
+                fvars_arr = lean_array_push(fvars_arr, fv.steal());
+                unsigned d = m_depth - entry.second.depth;
+                expr val = (d == 0) ? entry.second.value : lift_loose_bvars(entry.second.value, d);
+                values_arr = lean_array_push(values_arr, val.steal());
+            }
+            object_ref result(abstract_mvar_fvars(m_mctx,
+                mid, array_ref<expr>(fvars_arr), array_ref<expr>(values_arr)));
+            return expr(result.steal());
         }
     }
 
@@ -352,8 +395,16 @@ public:
         : m_mctx(mctx), m_level_fn(mctx), m_depth(0) {}
 
     expr visit(expr const & e) {
-        if (!has_mvar(e) && !has_fvar(e))
-            return e;
+        /* When fvar_subst is empty, match the standard instantiateMVars behavior:
+           only process expressions that have mvars. When fvar_subst is active,
+           also process expressions that have fvars (for substitution). */
+        if (fvar_subst_empty()) {
+            if (!has_mvar(e))
+                return e;
+        } else {
+            if (!has_mvar(e) && !has_fvar(e))
+                return e;
+        }
 
         /* If the expression has no FVars, the result is independent of the current
            binder depth and fvar substitution, so we can use the global cache. */
