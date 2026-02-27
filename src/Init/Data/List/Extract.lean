@@ -439,6 +439,7 @@ theorem takeWhile_eq_extract_findIdx_not {p : α → Bool} :
     takeWhile p xs = xs.extract 0 (xs.findIdx (fun a => !p a)) := by
   simp [takeWhile_eq_take_findIdx_not, extract_eq_drop_take']
 
+@[simp]
 theorem extract_cons_of_start_pos (h : 0 < i) :
     (a :: as).extract i j = as.extract (i - 1) (j - 1) := by
   apply ext_getElem
@@ -448,6 +449,7 @@ theorem extract_cons_of_start_pos (h : 0 < i) :
     simp only [getElem_extract, getElem_cons, reduceDIte, *]
     congr 1; omega
 
+@[simp]
 theorem extract_cons_zero_of_stop_pos (h : 0 < j) :
     (a :: as).extract 0 j = a :: as.extract 0 (j - 1) := by
   apply ext_getElem
