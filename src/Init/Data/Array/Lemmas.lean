@@ -2856,6 +2856,14 @@ theorem getElem?_extract {xs : Array α} {start stop : Nat} :
     (xs.extract start stop).toList = xs.toList.extract start stop := by
   apply List.ext_getElem <;> simp [List.extract_eq_drop_take']
 
+@[simp] theorem toList_take {xs : Array α} {stop : Nat} :
+    (xs.take stop).toList = xs.toList.take stop := by
+  apply List.ext_getElem <;> simp [take_eq_extract, List.extract_eq_drop_take']
+
+@[simp] theorem toList_drop {xs : Array α} {start : Nat} :
+    (xs.drop start).toList = xs.toList.drop start := by
+  apply List.ext_getElem <;> simp [drop_eq_extract, List.extract_eq_drop_take']
+
 @[simp] theorem extract_size {xs : Array α} : xs.extract 0 xs.size = xs := by
   apply ext
   · rw [size_extract, Nat.min_self, Nat.sub_zero]
@@ -2915,10 +2923,10 @@ theorem getElem_shrink {xs : Array α} {i j : Nat} (h : j < (xs.shrink i).size) 
   simp [shrink]
 
 @[simp] theorem shrink_eq_take {xs : Array α} {i : Nat} : xs.shrink i = xs.take i := by
-  ext <;> simp [size_shrink, getElem_shrink]
+  ext <;> simp [size_shrink, getElem_shrink, take_eq_extract]
 
 theorem toList_shrink {xs : Array α} {i : Nat} : (xs.shrink i).toList = xs.toList.take i := by
-  simp [List.extract_eq_drop_take']
+  simp
 
 /-! ### foldlM and foldrM -/
 
@@ -4550,8 +4558,13 @@ Our goal is to have `simp` "pull `List.toArray` outwards" as much as possible.
 
 theorem toListRev_toArray {l : List α} : l.toArray.toListRev = l.reverse := by simp
 
-@[grind =] theorem take_toArray {l : List α} {i : Nat} : l.toArray.take i = (l.take i).toArray := by
-  simp [List.extract_eq_drop_take']
+@[simp, grind =] theorem take_toArray {l : List α} {i : Nat} : l.toArray.take i = (l.take i).toArray := by
+  simp [take_eq_extract, List.extract_eq_drop_take']
+
+@[simp, grind =] theorem List.drop_toArray {l : List α} {start : Nat} :
+    l.toArray.drop start = (l.drop start).toArray := by
+  apply ext'
+  simp
 
 @[simp, grind =] theorem mapM_toArray [Monad m] [LawfulMonad m] {f : α → m β} {l : List α} :
     l.toArray.mapM f = List.toArray <$> l.mapM f := by

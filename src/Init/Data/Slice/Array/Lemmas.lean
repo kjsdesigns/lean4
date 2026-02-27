@@ -540,7 +540,7 @@ public theorem toList_mkSlice_roi {xs : Array α} {lo : Nat} :
 @[simp, grind =]
 public theorem toArray_mkSlice_roi {xs : Array α} {lo : Nat} :
     xs[lo<...*].toArray = xs.drop (lo + 1) := by
-  simp [mkSlice_roi_eq_mkSlice_rci]
+  simp [mkSlice_roi_eq_mkSlice_rci, drop_eq_extract]
 
 @[simp, grind =]
 public theorem size_mkSlice_roi {xs : Array α} {lo : Nat} :
