@@ -142,16 +142,6 @@ structure ModuleData where
   entries         : Array (Name × Array EnvExtensionEntry)
   deriving Inhabited
 
-/-- Phases for which some IR is available for execution. -/
-inductive IRPhases where
-  /-- Available for execution in the final native code. -/
-  | runtime
-  /-- Available for execution during elaboration. -/
-  | comptime
-  /-- Available during run time and compile time. -/
-  | all
-deriving Inhabited, BEq, Repr
-
 /-- Import including information resulting from processing of the entire import DAG. -/
 structure EffectiveImport extends Import where
   /-- Phases for which the import's IR is available. -/
@@ -1784,13 +1774,16 @@ private opaque getIRExtraConstNames (env : Environment) (level : OLeanLevel) (in
 def mkModuleData (env : Environment) (level : OLeanLevel := .private) : IO ModuleData := do
   let env := env.setExporting (level != .private)
   let pExts ← persistentEnvExtensionsRef.get
-  let entries := pExts.map fun pExt => Id.run do
+  let entries := pExts.filterMap fun pExt => do
     -- get state from `checked` at the end if `async`; it would otherwise panic
     let mut asyncMode := pExt.toEnvExtension.asyncMode
     if asyncMode matches .async _ then
       asyncMode := .sync
     let state := pExt.getState (asyncMode := asyncMode) env
-    (pExt.name, pExt.exportEntriesFn env state level)
+    let ents := pExt.exportEntriesFn env state level
+    -- no need to export empty entries
+    guard !ents.isEmpty
+    return (pExt.name, ents)
   let kenv := env.toKernelEnv
   let constNames := kenv.constants.foldStage2 (fun names name _ => names.push name) #[]
   -- not all kernel constants may be exported at `level < .private`
