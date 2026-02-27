@@ -411,7 +411,7 @@ deriving Repr, Inhabited, BEq
 namespace Status
 
 /--
-Convert a Status to a numeric code. This is useful for sending the status code in a response.
+Converts a Status to a numeric code. This is useful for sending the status code in a response.
 -/
 def toCode : Status → UInt16
   | «continue» => 100
