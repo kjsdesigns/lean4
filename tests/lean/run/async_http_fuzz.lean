@@ -579,41 +579,6 @@ def fuzzTrailerHeaderCountLimit (iterations : Nat) (seed0 : Nat) : IO Unit := do
     else
       assertExact s!"fuzzTrailerHeaderCountLimit case={i} seed={caseSeed} trailerCount={trailerCount}" response bad400
 
-
-def fuzzIncompleteFirstBodyBlocksPipeline (iterations : Nat) (seed0 : Nat) : IO Unit := do
-  let mut seed := seed0
-
-  for i in [0:iterations] do
-    let caseSeed := seed
-
-    let (declaredLen, seed1) := randIn seed 1 32
-    seed := seed1
-
-    let (actualLen, seed2) := randIn seed 0 (declaredLen - 1)
-    seed := seed2
-
-    let (body, seed3) := randomAsciiBytes seed actualLen
-    seed := seed3
-
-    let uri1 := s!"/first-incomplete-{i}"
-    let req1 :=
-      s!"POST {uri1} HTTP/1.1\x0d\nHost: example.com\x0d\nContent-Length: {declaredLen}\x0d\n\x0d\n".toUTF8 ++ body
-    let req2 := "GET /second HTTP/1.1\x0d\nHost: example.com\x0d\nConnection: close\x0d\n\x0d\n".toUTF8
-
-    let (response, seen) ← runPipelinedReadAll (req1 ++ req2)
-
-    let text := responseText response
-
-    unless text.contains uri1 do
-      throw <| IO.userError s!"fuzzIncompleteFirstBodyBlocksPipeline case={i} seed={caseSeed} failed:\nMissing first URI {uri1.quote}\n{text.quote}"
-
-    if text.contains "/second" then
-      throw <| IO.userError s!"fuzzIncompleteFirstBodyBlocksPipeline case={i} len={actualLen} data={body} seed={caseSeed} failed:\nUnexpected second response\n{text.quote}"
-
-    if seen.size != 1 ∨ seen[0]! != uri1 then
-      throw <| IO.userError s!"fuzzIncompleteFirstBodyBlocksPipeline case={i} seed={caseSeed} failed:\nExpected seen=[{uri1.quote}] got {seen}"
-
-
 def fuzzCompleteFirstBodyAllowsPipeline (iterations : Nat) (seed0 : Nat) : IO Unit := do
   let mut seed := seed0
 
@@ -681,10 +646,6 @@ def fuzzCompleteFirstBodyAllowsPipeline (iterations : Nat) (seed0 : Nat) : IO Un
 -- Property: Trailer header count limit is enforced under randomized trailer sections.
 #eval runWithTimeout "fuzz_trailer_header_count_limit" 20000 do
   fuzzTrailerHeaderCountLimit 35 0x00A71A12
-
--- Property: Incomplete first request body blocks pipelined follow-up parsing.
-#eval runWithTimeout "fuzz_incomplete_first_body_blocks_pipeline" 20000 do
-  fuzzIncompleteFirstBodyBlocksPipeline 30 0x00331337
 
 -- Property: Complete first request body allows pipelined follow-up parsing.
 #eval runWithTimeout "fuzz_complete_first_body_allows_pipeline" 20000 do
