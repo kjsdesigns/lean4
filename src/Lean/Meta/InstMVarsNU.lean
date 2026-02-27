@@ -169,6 +169,9 @@ partial def go (e : Expr) : M Expr := do
 
 end IntantiateMVars
 
+@[extern "lean_instantiate_expr_mvars_no_update"]
+private opaque instantiateMVarsNoUpdateImp (mctx : MetavarContext) (e : Expr) : MetavarContext × Expr
+
 /--
 This alternative to `instantiateMVars` does *not* update the assignments of the meta variables
 it visits. The benefit is that it carries a substitution of free variables as it traverses
@@ -177,6 +180,14 @@ repeated substitution. This can make a big difference in terms with many metavar
 `mkLambdaFVars`/`mkForallFVars`, or terms produced by tactics with lots of uses of `intro`.
 -/
 public def instantiateMVarsNoUpdate (e : Expr) : MetaM Expr := do
+  if !e.hasMVar then
+    return e
+  let (mctx, eNew) := instantiateMVarsNoUpdateImp (← getMCtx) e
+  modifyMCtx fun _ => mctx
+  return eNew
+
+/-- Lean implementation of `instantiateMVarsNoUpdate`, exposed for benchmarking. -/
+public def instantiateMVarsNoUpdateLean (e : Expr) : MetaM Expr := do
   (IntantiateMVars.go e).run {} |>.run' {}
 
 end Lean.Meta
