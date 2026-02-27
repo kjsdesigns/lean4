@@ -280,7 +280,8 @@ private def authorityHostHeaderValue (authority : URI.Authority) : Header.Value 
   Header.Value.ofString! value
 
 /--
-Validates an incoming request head and selects the body framing mode.
+Extracts the transfer-encoding coding names from an incoming message head.
+Returns `none` if no `Transfer-Encoding` header is present.
 -/
 @[inline]
 private def transferCodings? (message : Message.Head .receiving) : Option (Array String) :=
@@ -321,7 +322,7 @@ private def checkReceivingMessageHead (message : Message.Head .receiving) : Exce
       | none => throw .badMessage
 
 /--
-Validates an incoming response head and selects body framing mode.
+Validates an outgoing response head and selects body framing mode.
 
 For status codes that must not carry a response body, framing headers are still
 syntactically validated but the machine always uses `.fixed 0` framing.

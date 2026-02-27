@@ -287,7 +287,7 @@ def channelInterestSelectorClose : Async Unit := do
 -- Test Full.recv returns content once then EOF
 
 def fullRecvConsumesOnce : Async Unit := do
-  let full ← Body.Full.ofUTF8String "hello"
+  let full ← Body.Full.ofString "hello"
   let first ← full.recv
   let second ← full.recv
 
@@ -314,7 +314,7 @@ def fullKnownSizeLifecycle : Async Unit := do
 -- Test Full.close discards remaining content
 
 def fullClose : Async Unit := do
-  let full ← Body.Full.ofUTF8String "bye"
+  let full ← Body.Full.ofString "bye"
   assert! !(← full.isClosed)
   full.close
   assert! (← full.isClosed)
@@ -325,7 +325,7 @@ def fullClose : Async Unit := do
 -- Test Full interest API always reports no consumer interest
 
 def fullInterest : Async Unit := do
-  let full ← Body.Full.ofUTF8String "x"
+  let full ← Body.Full.ofString "x"
   assert! !(← full.hasInterest)
   let interested ← Selectable.one #[
     .case full.interestSelector pure
