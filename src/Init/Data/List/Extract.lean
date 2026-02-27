@@ -256,9 +256,6 @@ theorem extract_zero_right :
     as.extract i 0 = [] := by
   simp [extract_eq_drop_take']
 
--- TODO: analogue of `Array.push_extract_getElem`?
-
--- TODO: Should we use `concat` instead?
 theorem extract_succ_right (w : i < j + 1) (h : j < as.length) :
     as.extract i (j + 1) = (as.extract i j) ++ [as[j]] := by
   apply ext_getElem
@@ -305,7 +302,9 @@ theorem set_extract {a : α} :
     (as.extract i j).set k a = (as.set (i + k) a).extract i j := by
   apply ext_getElem <;> simp [getElem_set]
 
--- TODO: analogue for `Array.set_eq_push_extract_append_extract`
+theorem set_eq_extract_append_cons_extract (h : i < as.length) :
+    as.set i a = as.extract 0 i ++ (a :: (as.extract (i + 1) as.length)) := by
+  simp [set_eq_take_append_cons_drop, extract_eq_drop_take', h]
 
 @[simp, grind =]
 theorem extract_append :
@@ -354,12 +353,6 @@ theorem map_extract {f : α → β} :
 theorem extract_replicate {a : α} {n : Nat} :
     (replicate n a).extract i j = replicate (min j n - i) a := by
   apply ext_getElem <;> simp
-
--- TODO: concat lemmas?
-
--- TODO: pop lemmas?
-
--- TODO: find a good place for these
 
 theorem extract_eq_extract_right :
     as.extract i j = as.extract i j' ↔ min (j - i) (as.length - i) = min (j' - i) (as.length - i) := by
@@ -445,5 +438,31 @@ theorem extract_takeWhile {i : Nat} :
 theorem takeWhile_eq_extract_findIdx_not {p : α → Bool} :
     takeWhile p xs = xs.extract 0 (xs.findIdx (fun a => !p a)) := by
   simp [takeWhile_eq_take_findIdx_not, extract_eq_drop_take']
+
+theorem extract_cons_of_start_pos (h : 0 < i) :
+    (a :: as).extract i j = as.extract (i - 1) (j - 1) := by
+  apply ext_getElem
+  · simp; omega
+  · intro p h₁ h₂
+    have : i + p ≠ 0 := by omega
+    simp only [getElem_extract, getElem_cons, reduceDIte, *]
+    congr 1; omega
+
+theorem extract_cons_zero_of_stop_pos (h : 0 < j) :
+    (a :: as).extract 0 j = a :: as.extract 0 (j - 1) := by
+  apply ext_getElem
+  · simp; omega
+  · intro p h₁ h₂
+    simp only [getElem_extract, Nat.zero_add, getElem_cons]
+
+theorem extract_cons :
+    (a :: as).extract i j =
+      if 0 < i ∨ j = 0 then as.extract (i - 1) (j - 1) else a :: as.extract (i - 1) (j - 1) := by
+  split <;> rename_i h
+  · cases h
+    · exact extract_cons_of_start_pos ‹_›
+    · simp [*]
+  · simp only [not_or, Nat.not_lt, Nat.le_zero_eq, Nat.ne_zero_iff_zero_lt] at h
+    simp +contextual [extract_cons_zero_of_stop_pos, *]
 
 end List
