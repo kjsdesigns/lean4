@@ -96,7 +96,7 @@ abbrev IsValidExtensionValue (s : String) : Prop :=
   (quoteHttpString? s).isSome
 
 /--
-A validated chunk extension value that all characters conform to HTTP standards per RFC 9112 §7.1.1.
+A validated chunk extension value that ensures all characters conform to HTTP standards per RFC 9112 §7.1.1.
 Extension values appear in chunked transfer encoding as metadata associated with extension names.
 
 Note: UTF-8 encoding is not supported. The quoting mechanism is strict and only permits escaping
