@@ -292,6 +292,10 @@ theorem extract_eq_drop_take {xs : Array α} {start stop : Nat} :
     xs.extract start stop = (xs.take stop).drop start := by
   apply ext'; simp [List.extract_eq_drop_take']
 
+theorem extract_eq_take_drop {xs : Array α} {start stop : Nat} :
+    xs.extract start stop = (xs.drop start).take (stop - start) := by
+  apply ext'; simp [List.extract_eq_take_drop]
+
 theorem drop_eq_toArray_getElem?_append {xs : Array α} {i : Nat} :
     xs.drop i = xs[i]?.toArray ++ xs.drop (i + 1) := by
   apply ext'
