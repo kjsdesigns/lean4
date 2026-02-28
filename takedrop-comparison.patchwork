@@ -872,8 +872,12 @@ theorem take_one {l : List α} : l.take 1 = l.head?.toList := by
 
 Missing: `Array.take_add`
 
-``` lean src/Init/Data/Array/TakeDrop.lean:/theorem take_add /../^$/
-@[grind =] theorem take_add {xs : Array α} {i j : Nat} :
+``` lean src/Init/Data/Array/TakeDrop.lean:/theorem take_add \:^$/../^$/
+/-
+TODO: not marked as `@[grind]` because it causes trouble by creating many large terms.
+For example, `set_getElem_succ_eraseIdx_succ` in `grind_list_erase.lean` would fail with it.
+-/
+theorem take_add {xs : Array α} {i j : Nat} :
     xs.take (i + j) = xs.take i ++ (xs.drop i).take j := by
   apply ext'; simp [List.take_add]
 ```
