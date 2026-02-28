@@ -115,7 +115,9 @@ structure Config where
 
   /--
   Maximum allowed total body size per message in bytes (default: 64 MiB).
-  This limit applies across all body framing modes.
+  This limit applies across all body framing modes. For chunked transfer encoding,
+  chunk-size lines (including extensions) and the trailer section also count toward
+  this limit, so the total wire bytes consumed by the body cannot exceed this value.
   -/
   maxBodySize : Nat := 64 * 1024 * 1024
 
@@ -125,8 +127,8 @@ structure Config where
   maxReasonPhraseLength : Nat := 512
 
   /--
-  Maximum number of trailer headers (default: 100)
+  Maximum number of trailer headers (default: 20)
   -/
-  maxTrailerHeaders : Nat := 100
+  maxTrailerHeaders : Nat := 20
 
 end Std.Http.Protocol.H1
