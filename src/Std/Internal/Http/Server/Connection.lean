@@ -83,6 +83,7 @@ private def receiveWithTimeout {α : Type} {β : Type}
     (response : Option (Std.Channel (Except Error (Response β))))
     (timeoutMs : Millisecond.Offset)
     (keepAliveTimeoutMs : Option Millisecond.Offset)
+    (headerTimeout : Option Timestamp)
     (connectionContext : CancellationContext) : Async (Recv β) := do
 
   let mut baseSelectables : Array (Selectable (Recv β)) := #[
@@ -96,10 +97,10 @@ private def receiveWithTimeout {α : Type} {β : Type}
   if let some socket := socket then
     baseSelectables := baseSelectables.push (.case (Transport.recvSelector socket expect) (Recv.bytes · |> pure))
 
-    -- Always keep a timeout active while waiting on socket progress to avoid
-    -- pinning the connection during slow/incomplete transfers.
     if let some keepAliveTimeout := keepAliveTimeoutMs then
       baseSelectables := baseSelectables.push (.case (← Selector.sleep keepAliveTimeout) (fun _ => pure .timeout))
+    else if let some timeout := headerTimeout then
+      baseSelectables := baseSelectables.push (.case (← Selector.sleep (timeout - (← Timestamp.now)).toMilliseconds) (fun _ => pure .timeout))
     else
       baseSelectables := baseSelectables.push (.case (← Selector.sleep timeoutMs) (fun _ => pure .timeout))
 
@@ -125,14 +126,16 @@ private def processNeedMoreData
     (requestBody : Option Body.Outgoing)
     (timeout : Millisecond.Offset)
     (keepAliveTimeout : Option Millisecond.Offset)
+    (headerTimeout : Option Timestamp)
     (connectionContext : CancellationContext) : Async (Recv β) := do
-  try
-    let expectedBytes := expect
-      |>.getD config.defaultPayloadBytes
-      |>.min config.maximumRecvSize
-      |>.toUInt64
 
-    receiveWithTimeout socket expectedBytes responseBody requestBody response timeout keepAliveTimeout connectionContext
+  let expectedBytes := expect
+    |>.getD config.defaultPayloadBytes
+    |>.min config.maximumRecvSize
+    |>.toUInt64
+
+  try
+    receiveWithTimeout socket expectedBytes responseBody requestBody response timeout keepAliveTimeout headerTimeout connectionContext
   catch e =>
     Handler.onFailure handler e
     pure .close
@@ -165,6 +168,8 @@ private def handle
   let mut keepAliveTimeout := some config.keepAliveTimeout.val
   let mut currentTimeout := config.keepAliveTimeout.val
 
+  let mut headerTimeout : Option Timestamp := none
+
   let mut response : Std.Channel (Except Error (Response (Handler.ResponseBody σ))) ← Std.Channel.new
   let mut respStream : Option (Handler.ResponseBody σ) := none
   let mut requiresData := false
@@ -179,7 +184,10 @@ private def handle
     machine := newMachine
 
     if step.output.size > 0 then
-      try Transport.sendAll socket #[step.output.toByteArray] catch _ => break
+      try Transport.sendAll socket #[step.output.toByteArray]
+      catch e =>
+        Handler.onFailure handler e
+        break
 
     for event in step.events do
       match event with
@@ -193,6 +201,7 @@ private def handle
       | .endHeaders head =>
         currentTimeout := config.lingeringTimeout
         keepAliveTimeout := none
+        headerTimeout := none
 
         if let some length := head.getSize true then
           Body.Writer.setKnownSize requestOutgoing (some length)
@@ -201,7 +210,18 @@ private def handle
 
       | .«continue» =>
         if let some head := pendingHead then
-          let canContinue ← Handler.onContinue handler head
+
+          let continueChannel : Std.Channel Bool ← Std.Channel.new
+          let continueTask ← (Handler.onContinue handler head).asTask
+          BaseIO.chainTask continueTask fun
+            | .ok v => discard <| continueChannel.send v
+            | .error _ => discard <| continueChannel.send false
+          let canContinue ← Selectable.one #[
+            .case continueChannel.recvSelector pure,
+            .case connectionContext.doneSelector (fun _ => pure false),
+            .case (← Selector.sleep config.lingeringTimeout) (fun _ => pure false)
+          ]
+
           let status := if canContinue then Status.«continue» else Status.expectationFailed
           machine := machine.canContinue status
           if ¬canContinue then
@@ -224,9 +244,12 @@ private def handle
 
         keepAliveTimeout := some config.keepAliveTimeout.val
         currentTimeout := config.keepAliveTimeout.val
+        headerTimeout := none
         waitingResponse := false
 
-      | .failed _ =>
+      | .failed err =>
+        Handler.onFailure handler (toString err)
+
         pendingHead := none
         requiresData := false
         if ¬(← Body.Writer.isClosed requestOutgoing) then
@@ -280,18 +303,14 @@ private def handle
       requiresData := false
 
       let event ← processNeedMoreData
-        config handler socket expectData answer respStream requestBody currentTimeout keepAliveTimeout connectionContext
+        config handler socket expectData answer respStream requestBody currentTimeout keepAliveTimeout headerTimeout connectionContext
 
       match event with
       | .bytes (some bs) =>
-        -- First byte of a new request: transition from the keepAlive timer to the
-        -- shorter headerTimeout. This caps how long a client can take to deliver
-        -- complete request headers after sending the first byte, preventing
-        -- Slowloris-style drip attacks that would otherwise hold a slot for the
-        -- full keepAliveTimeout per read.
         if keepAliveTimeout.isSome then
           keepAliveTimeout := none
-          currentTimeout := config.headerTimeout
+          headerTimeout := some <| (← Timestamp.now) + config.headerTimeout
+
         machine := machine.feed bs
 
       | .bytes none =>
@@ -316,8 +335,8 @@ private def handle
           if let some pulled := pulledChunk then
             try
               Body.Writer.send requestOutgoing pulled.chunk pulled.incomplete
-            catch _ =>
-              pure ()
+            catch e =>
+              Handler.onFailure handler e
 
             if pulled.final then
               if ¬(← Body.Writer.isClosed requestOutgoing) then
@@ -329,6 +348,7 @@ private def handle
         break
 
       | .timeout =>
+        Handler.onFailure handler "request header timeout"
         machine := machine.closeReader
         let (newMachine, newWaitingResponse) := handleError machine .requestTimeout waitingResponse
         machine := newMachine

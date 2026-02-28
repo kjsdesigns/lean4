@@ -197,7 +197,8 @@ def notImplemented : String :=
   let (clientB, serverB) ← Mock.new
   let emptyHost := "GET / HTTP/1.1\x0d\nHost: \x0d\nConnection: close\x0d\n\x0d\n".toUTF8
   let responseB ← sendRaw clientB serverB emptyHost okHandler
-  assertExact "Empty Host header allowed" responseB bad400
+  -- RFC 9110 §7.2: for origin-form URIs (no authority), an empty Host field value is valid.
+  assertExact "Empty Host header allowed" responseB ok200
 
   let (clientC, serverC) ← Mock.new
   let multiHost := "GET / HTTP/1.1\x0d\nHost: example.com\x0d\nHost: other.com\x0d\nConnection: close\x0d\n\x0d\n".toUTF8
@@ -289,7 +290,7 @@ def notImplemented : String :=
   let (clientE, serverE) ← Mock.new
   let tokenMethod := "X-CUSTOM / HTTP/1.1\x0d\nHost: example.com\x0d\nConnection: close\x0d\n\x0d\n".toUTF8
   let responseE ← sendRaw clientE serverE tokenMethod okHandler
-  assertExact "Token extension method returns 501" responseE notImplemented
+  assertExact "Token method with hyphen forwarded to handler" responseE ok200
 
 -- HEAD framing and authority-form rules.
 #eval show IO _ from do

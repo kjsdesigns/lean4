@@ -28,7 +28,9 @@ Connection limits configuration with validation.
 structure Config where
   /--
   Maximum number of simultaneous active connections (default: 1024).
-  Set to 0 to disable the limit.
+  Setting this to `0` disables the limit entirely: the server will accept any number of
+  concurrent connections and no semaphore-based cap is enforced. Use with care — an
+  unconstrained server may exhaust file descriptors or memory under adversarial load.
   -/
   maxConnections : Nat := 1024
 
@@ -156,9 +158,9 @@ structure Config where
   maxReasonPhraseLength : Nat := 512
 
   /--
-  Maximum number of trailer headers (default: 100)
+  Maximum number of trailer headers (default: 20)
   -/
-  maxTrailerHeaders : Nat := 100
+  maxTrailerHeaders : Nat := 20
 
   /--
   Maximum number of extensions on a single chunk-size line (default: 16).

@@ -19,7 +19,7 @@ open Std.Internal.IO.Async
 set_option linter.all true
 
 /--
-A type class for handling HTTP server events. Implement this class to define how the server
+A type class for handling HTTP server requests. Implement this class to define how the server
 responds to incoming requests, failures, and `Expect: 100-continue` headers.
 -/
 class Handler (σ : Type) where
@@ -45,17 +45,21 @@ class Handler (σ : Type) where
   onRequest (self : σ) (request : Request Body.Incoming) : ContextAsync (Response ResponseBody)
 
   /--
-  Called when an error occurs while processing a request. The default implementation does nothing.
+  Called when an I/O or transport error occurs while processing a request (e.g. broken socket,
+  handler exception). This is a **notification only**: the connection will close regardless of
+  the handler's response. Use this for logging and metrics. The default implementation does nothing.
   -/
   onFailure (self : σ) (error : IO.Error) : Async Unit :=
     pure ()
 
   /--
   Called when a request includes an `Expect: 100-continue` header. Return `true` to send a
-  `100 Continue` response and accept the body, or `false` to reject it. The default implementation
-  always rejects.
+  `100 Continue` response and accept the body. If `false` is returned the server sends
+  `417 Expectation Failed`, disables keep-alive, and closes the request body reader.
+  This function is guarded by `Config.lingeringTimeout` and may be cancelled on server shutdown.
+  The default implementation always returns `true`.
   -/
   onContinue (self : σ) (request : Request.Head) : Async Bool :=
-    pure false
+    pure true
 
 end Std.Http.Server
