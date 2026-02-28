@@ -483,8 +483,7 @@ expr type_checker::whnf_core(expr const & e, bool cheap_rec, bool cheap_proj) {
 }
 
 /** \brief Return some definition \c d iff \c e is a target for delta-reduction, and the given definition is the one
-    to be expanded. If \c is_delta succeeds, then \c unfold_definition will also succeed, i.e., there will be no
-    failure due to level parameter length mismatch. */
+    to be expanded. If \c is_delta succeeds, then \c unfold_definition will also succeed. */
 optional<constant_info> type_checker::is_delta(expr const & e) const {
     expr const & f = get_app_fn(e);
     if (is_constant(f)) {
