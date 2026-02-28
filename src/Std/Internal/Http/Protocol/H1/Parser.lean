@@ -22,10 +22,6 @@ open Std Internal Parsec ByteArray Internal Internal.Char
 
 set_option linter.all true
 
-@[inline]
-def isVChar (c : UInt8) : Bool :=
-  vchar (Char.ofUInt8 c)
-
 /--
 Checks if a byte may appear inside a field value.
 
@@ -128,14 +124,6 @@ def ows (limits : H1.Config) : Parser Unit := do
   else
     pure ()
 
-/--
-Parses a single ASCII decimal digit and returns it as a `UInt8` (value 0–9 as raw byte).
--/
-@[inline]
-def uint8 : Parser UInt8 := do
-  let d ← digit
-  return d.toUInt8
-
 def hexDigit : Parser UInt8 := do
   let b ← any
   if isHexDigitByte b then
@@ -164,38 +152,46 @@ partial def hex : Parser Nat := do
 
 -- Actual parsers
 
--- HTTP-version  = HTTP-name "/" DIGIT "." DIGIT
--- HTTP-name     = %s"HTTP"
+/-
+HTTP-version  = HTTP-name "/" DIGIT "." DIGIT
+HTTP-name     = %s"HTTP"
+-/
 def parseHttpVersionNumber : Parser (Nat × Nat) := do
   skipBytes "HTTP/".toUTF8
-  let major ← uint8
+  let major ← digit
   skipByte '.'.toUInt8
-  let minor ← uint8
-  pure ((major - 48 |>.toNat), (minor - 48 |>.toNat))
+  let minor ← digit
+  pure ((major.toNat - 48), (minor.toNat - 48))
 
--- HTTP-version  = HTTP-name "/" DIGIT "." DIGIT
--- HTTP-name     = %s"HTTP"
 def parseHttpVersion : Parser Version := do
   let (major, minor) ← parseHttpVersionNumber
   liftOption<| Version.ofNumber? major minor
 
---   method         = token
+/-
+method         = token
+
+Every branch is wrapped in `attempt` so that `<|>` always backtracks on
+failure, even after consuming bytes. This is strictly necessary only for the
+P-group (POST / PUT / PATCH) which share a common first byte, but wrapping
+all alternatives keeps the parser defensively correct if new methods are
+added in the future.
+-/
 def parseMethod : Parser Method :=
-  (skipBytes "GET".toUTF8 <&> fun _ => Method.get)
-  <|> (skipBytes "HEAD".toUTF8 <&> fun _ => Method.head)
+  (attempt <| skipBytes "GET".toUTF8 <&> fun _ => Method.get)
+  <|> (attempt <| skipBytes "HEAD".toUTF8 <&> fun _ => Method.head)
   <|> (attempt <| skipBytes "POST".toUTF8 <&> fun _ => Method.post)
   <|> (attempt <| skipBytes "PUT".toUTF8 <&> fun _ => Method.put)
-  <|> (skipBytes "DELETE".toUTF8 <&> fun _ => Method.delete)
-  <|> (skipBytes "CONNECT".toUTF8 <&> fun _ => Method.connect)
-  <|> (skipBytes "OPTIONS".toUTF8 <&> fun _ => Method.options)
-  <|> (skipBytes "TRACE".toUTF8 <&> fun _ => Method.trace)
-  <|> (skipBytes "PATCH".toUTF8 <&> fun _ => Method.patch)
+  <|> (attempt <| skipBytes "DELETE".toUTF8 <&> fun _ => Method.delete)
+  <|> (attempt <| skipBytes "CONNECT".toUTF8 <&> fun _ => Method.connect)
+  <|> (attempt <| skipBytes "OPTIONS".toUTF8 <&> fun _ => Method.options)
+  <|> (attempt <| skipBytes "TRACE".toUTF8 <&> fun _ => Method.trace)
+  <|> (attempt <| skipBytes "PATCH".toUTF8 <&> fun _ => Method.patch)
 
 /--
 Parses the method token as text.
 -/
-def parseMethodToken (limits : H1.Config) : Parser String := do
-  let raw ← parseToken limits.maxStartLineLength
+def parseMethodToken : Parser String := do
+  let raw ← parseToken 64
   liftOption <| String.fromUTF8? raw.toByteArray
 
 def parseURI (limits : H1.Config) : Parser ByteArray := do
@@ -232,7 +228,7 @@ request-line = method SP request-target SP HTTP-version
 -/
 public def parseRequestLineRawVersion (limits : H1.Config) : Parser (Option Method × RequestTarget × Option Version) := do
   skipLeadingRequestEmptyLines limits
-  let methodToken ← parseMethodToken limits <* sp
+  let methodToken ← parseMethodToken <* sp
   let uri ← parseURI limits <* sp
 
   let uri ← match (Std.Http.URI.Parser.parseRequestTarget <* eof).run uri with
