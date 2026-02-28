@@ -15,8 +15,9 @@ public section
 # Method
 
 This module provides the `Method` type that represents HTTP request methods. It defines the
-standard set of HTTP methods (e.g. `GET`, `POST`, `PUT`, `DELETE`). All methods are limited to
-all-uppercase US-ASCII letters.
+standard set of HTTP methods (e.g. `GET`, `POST`, `PUT`, `DELETE`). Custom methods must contain
+only non-lowercase HTTP token characters (uppercase letters, digits, and non-letter token symbols
+such as `-`). Methods with lowercase letters (e.g. `get`, `X-delete`) return 501.
 
 References:
 * https://httpwg.org/specs/rfc9112.html#request.method
@@ -30,19 +31,23 @@ set_option linter.all true
 open Internal
 
 /--
-A proposition stating that `s` is a valid HTTP method name: every character is an uppercase HTTP
-token character and `s` is non-empty.
+A proposition stating that `s` is a valid HTTP method name: every character is a non-lowercase
+HTTP token character (RFC 9110 §5.6.2 `tchar`) and `s` is non-empty.
+
+Valid characters are uppercase ASCII letters (`A`–`Z`), digits, and the non-letter token symbols
+`! # $ % & ' * + - . ^ _ ` | ~`. Lowercase letters are rejected so that `GET` and `get` are
+treated as distinct: unknown methods with lowercase characters return 501.
 
 Reference: https://httpwg.org/specs/rfc9110.html#method
 -/
 abbrev IsValidMethodName (s : String) : Prop :=
-  s.toList.all (fun c => Char.token c ∧ Char.isUpper c) ∧
+  s.toList.all (fun c => Char.token c ∧ ¬c.isLower) ∧
   ¬s.toList.isEmpty
 
 /--
 A validated HTTP method name, ensuring all characters conform to the HTTP token specification
 per RFC 9110 §9.1. Used to represent custom (non-standard) HTTP methods such as WebDAV's
-`PROPFIND` or `LOCK`.
+`PROPFIND`, `LOCK`, or extension methods like `X-CUSTOM`.
 
 Reference: https://httpwg.org/specs/rfc9110.html#method
 -/
