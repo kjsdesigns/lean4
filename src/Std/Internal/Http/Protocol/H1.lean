@@ -7,6 +7,7 @@ module
 
 prelude
 public import Std.Time
+public import Init.Data.Array
 public import Std.Internal.Http.Data
 public import Std.Internal.Http.Internal
 public import Std.Internal.Http.Protocol.H1.Parser
@@ -215,9 +216,15 @@ private inductive BodyMode where
   | chunked
   | eof
 
+/-
+This part of the code is really related to the RFC.
+-/
+
 /--
 Returns `true` when RFC semantics forbid a response payload body on the wire.
 This includes informational responses, `204`, and `304`.
+
+Reference: https://www.rfc-editor.org/rfc/rfc9112.html#name-message-body-length
 -/
 @[inline]
 private def responseMustNotHaveBody (status : Status) : Bool :=
@@ -227,47 +234,61 @@ private def responseMustNotHaveBody (status : Status) : Bool :=
 /--
 Checks that request-target form and method are compatible
 (`CONNECT` requires authority-form and `*` is reserved for `OPTIONS`).
+
+Reference: https://www.rfc-editor.org/rfc/rfc9110#name-methods
 -/
+
 @[inline]
 private def isValidRequestTargetForMethod (message : Message.Head .receiving) : Bool :=
   match message.method, message.uri with
+
+  -- Reference: https://www.rfc-editor.org/rfc/rfc9110#section-9.3.6
   | .connect, .authorityForm _ => true
   | .connect, _ => false
   | _, .authorityForm _ => false
+
+  -- Reference: https://www.rfc-editor.org/rfc/rfc9110#name-options
   | .options, .asteriskForm => true
   | _, .asteriskForm => false
+
   | _, _ => true
 
 /--
 Validates the required `Host` header for HTTP/1.1 requests:
 exactly one value, with absolute-form authority taking precedence over Host.
+
+As defined in RFC 9112 Section 3.2:
+
+"A client MUST send a Host header field (Section 7.2 of [HTTP]) in all HTTP/1.1 request messages.
+If the target URI includes an authority component, then a client MUST send a field value for Host that
+is identical to that authority component, excluding any userinfo subcomponent and its "@"
+delimiter (Section 4.2 of [HTTP]). If the authority component is missing or undefined for the target
+URI, then a client MUST send a Host header field with an empty field value."
+
+Reference: https://www.rfc-editor.org/rfc/rfc9112.html#name-request-target
 -/
 @[inline]
 private def hasSingleAcceptedHostHeader (message : Message.Head .receiving) : Bool :=
   match message.headers.getAll? Header.Name.host with
-  | some headers =>
-      if headers.size != 1 then
-        false
-      else
-        match headers[0]? with
+  | some #[hostValue] =>
+      let parsed := Header.Host.parse hostValue
+      match message.uri with
+      | .asteriskForm =>
+        hostValue.value.isEmpty ∨ parsed.isSome
+      | .absoluteForm { authority := some authority, .. } _ | .authorityForm authority =>
+        match parsed with
+        | some ⟨host, _⟩ => authority.host == host -- && authority.port == port (Not so strict!)
         | none => false
-        | some hostValue =>
-            match message.uri with
-            | .absoluteForm _ _ =>
-                -- RFC 9112 §3.2: absolute-form authority overrides Host.
-                true
-            | _ =>
-                if hostValue.value.isEmpty then
-                  -- RFC 9112 §3.2 allows an empty Host when authority is undefined.
-                  true
-                else
-                  match (Std.Http.URI.Parser.parseHostHeader <* eof).run hostValue.value.toUTF8 with
-                  | .ok _ => true
-                  | .error _ => false
-  | none => false
+      | _ =>
+        match parsed with
+        | some _ => true
+        | none => false
+  | _ => false
 
 /--
 Computes the effective Host header value from request-target authority.
+
+Reference: https://www.rfc-editor.org/rfc/rfc9110.html#section-7.2
 -/
 @[inline]
 private def authorityHostHeaderValue (authority : URI.Authority) : Header.Value :=
@@ -280,46 +301,30 @@ private def authorityHostHeaderValue (authority : URI.Authority) : Header.Value 
   Header.Value.ofString! value
 
 /--
-Extracts the transfer-encoding coding names from an incoming message head.
-Returns `none` if no `Transfer-Encoding` header is present.
--/
-@[inline]
-private def transferCodings? (message : Message.Head .receiving) : Option (Array String) :=
-  match message.headers.getAll? .transferEncoding with
-  | none => none
-  | some teHeaders =>
-      teHeaders.foldl (fun acc headerValue => do
-        let acc ← acc
-        let te ← Header.TransferEncoding.parse headerValue
-        pure (acc ++ te.codings)
-      ) (some #[])
-
-/--
 Validates an incoming request head and selects the body framing mode.
 -/
 private def checkReceivingMessageHead (message : Message.Head .receiving) : Except H1.Error BodyMode := do
+  -- URI Validation
   if !isValidRequestTargetForMethod message then
     throw .badMessage
 
+  -- Host validation
   if !hasSingleAcceptedHostHeader message then
     throw .badMessage
 
-  match transferCodings? message with
-  | some codings =>
-      if !Header.TransferEncoding.Validate codings then
-        throw .badMessage
-      else if codings.back? == some "chunked" then
-        if message.headers.contains Header.Name.contentLength then
-          throw .badMessage
-        else
-          return .chunked
-      else
-        throw .unsupportedTransferEncoding
-  | none =>
-      match message.getSize true with
-      | some (.fixed n) => return .fixed n
-      | some .chunked => return .chunked
-      | none => throw .badMessage
+  -- Gets the size of the message.
+  match message.getSize (allowEOFBody := true) with
+  | some (.fixed n) => return .fixed n
+  | some .chunked => return .chunked
+  | none => throw .badMessage
+
+/--
+Returns `true` when user-provided headers include body framing fields.
+-/
+@[inline]
+private def hasFramingHeaders (message : Message.Head dir) : Bool :=
+  message.headers.contains Header.Name.contentLength ∨
+  message.headers.contains Header.Name.transferEncoding
 
 /--
 Validates an outgoing response head and selects body framing mode.
@@ -328,12 +333,10 @@ For status codes that must not carry a response body, framing headers are still
 syntactically validated but the machine always uses `.fixed 0` framing.
 -/
 private def checkSendingMessageHead (message : Message.Head .sending) : Except H1.Error BodyMode :=
-
-  let framingInHeaders :=
-    message.headers.contains Header.Name.contentLength ∨
-    message.headers.contains Header.Name.transferEncoding
+  let framingInHeaders := hasFramingHeaders message
 
   let parsedSize := message.getSize false
+
   if responseMustNotHaveBody message.status then
     match parsedSize with
     | some _ => pure (.fixed 0)
@@ -358,19 +361,11 @@ Returns `true` when an `Expect` header includes `100-continue`.
 @[inline]
 private def hasExpectContinue (message : Message.Head dir) : Bool :=
   match message.headers.getAll? Header.Name.expect with
-  | none => false
-  | some values =>
-      values.any fun value =>
-        value.value.split (· == ',')
-        |>.any (fun token => token.trimAscii.toString.toLower == "100-continue")
-
-/--
-Returns `true` when user-provided headers include body framing fields.
--/
-@[inline]
-private def hasFramingHeaders (message : Message.Head dir) : Bool :=
-  message.headers.contains Header.Name.contentLength ∨
-  message.headers.contains Header.Name.transferEncoding
+  | some #[value] =>
+      match Header.Expect.parse value with
+      | some res => res.expect
+      | none => false
+  | _ => false
 
 /--
 Builds canonical framing headers for a chosen transfer mode.
@@ -488,6 +483,7 @@ def shouldFlush (machine : Machine dir) : Bool :=
   machine.reader.state == .closed ∨
   machine.writer.isReadyToSend ∨
   machine.writer.knownSize.isSome ∨
+
   -- Flush as soon as body bytes exist so keep-alive streaming does not wait
   -- for producer EOF before sending first chunks.
   machine.writer.userData.size > 0
@@ -540,9 +536,11 @@ private def parseWith (machine : Machine dir) (parser : Parser α) (limit : Opti
     (onHardError : Std.Internal.Parsec.Error → H1.Error := fun _ => .badMessage) :
     Machine dir × Option α :=
   let remaining := machine.reader.input.remainingBytes
+
   match parser machine.reader.input with
   | .success buffer result =>
       let usedBytes := remaining - buffer.remainingBytes
+
       if let some limit := limit then
         if usedBytes > limit then
           (machine.setFailure .badMessage, none)
@@ -1302,6 +1300,7 @@ for header parsing.
 Unsupported methods or versions are converted into protocol failures.
 -/
 private partial def processReceivingStartLine (machine : Machine .receiving) : Machine .receiving :=
+
   let (machine, result) := parseWith machine
     (parseRequestLineRawVersion machine.config)
     (limit := some machine.config.maxStartLineLength)
@@ -1327,6 +1326,7 @@ Parses one response start-line in client mode and initializes
 `reader.messageHead` for header parsing.
 -/
 private partial def processSendingStartLine (machine : Machine .sending) : Machine .sending :=
+
   let (machine, result) := parseWith machine
     (parseStatusLineRawVersion machine.config)
     (limit := some machine.config.maxStartLineLength)
@@ -1351,8 +1351,12 @@ dispatches to request-line/status-line parsing based on machine direction.
 -/
 private partial def processNeedStartLine (machine : Machine dir) : Machine dir :=
   let reader := machine.reader
+
+  -- Closed connection, no more data
   if reader.noMoreInput ∧ reader.input.atEnd then
     machine.setReaderState .closed
+
+  -- No more data
   else if reader.input.atEnd then
     machine.addEvent (.needMoreData none)
   else
@@ -1489,12 +1493,15 @@ def pullBody (machine : Machine dir) : Machine dir × Option PulledChunk :=
   let (machine, pulledChunk) := pullNextChunk machine
   let readerState := machine.reader.state
   let ignoreBodyPull := shouldIgnoreBodyPull machine
+
+  -- It stalled if it is blocked and cannot produce a new chunk when it needs one.
   let stalled :=
     pulledChunk.isNone &&
     !ignoreBodyPull &&
     match readerState with
     | .readBody _ => true
     | _ => false
+
   ({ machine with pullBodyStalled := stalled }, pulledChunk)
 
 end Std.Http.Protocol.H1.Machine

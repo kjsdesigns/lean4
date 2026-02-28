@@ -78,32 +78,24 @@ Determines the message body size based on the `Content-Length` header and the `T
 -/
 def Message.Head.getSize (message : Message.Head dir) (allowEOFBody : Bool) : Option Body.Length :=
   let contentLength := message.headers.getAll? .contentLength
+
   match message.headers.getAll? .transferEncoding with
   | none =>
       match contentLength with
       | some #[cl] => .fixed <$> cl.value.toNat?
-      | none => if allowEOFBody then some (.fixed 0) else none
       | some _ => none -- To avoid request smuggling with malformed/multiple content-length headers.
-  | some teHeaders =>
-      let codings? : Option (Array String) :=
-        teHeaders.foldl (fun acc headerValue => do
-          let acc ← acc
-          let te ← Header.TransferEncoding.parse headerValue
-          pure (acc ++ te.codings)
-        ) (some #[])
+      | none => if allowEOFBody then some (.fixed 0) else none
 
-      match codings? with
-      | none => none
-      | some codings =>
-          if ¬Header.TransferEncoding.Validate codings then
-            none
-          else if codings != #["chunked"] then -- Non-chunked transfer codings are not supported.
-            none
-          else
-            match contentLength with
-            | none => some .chunked
-            | some _ => none -- To avoid request smuggling when TE and CL are mixed.
+  -- Single transfer-encoding header.
+  | some #[header] =>
+    let te := Header.TransferEncoding.parse header
 
+    match Header.TransferEncoding.isChunked <$> te, contentLength with
+    | some true, none => some .chunked
+    | _, _ => none -- To avoid request smuggling when TE and CL are mixed.
+
+  -- We disallow multiple transfer-encoding headers.
+  | some _ => none
 /--
 Checks whether the message indicates that the connection should be kept alive.
 -/
