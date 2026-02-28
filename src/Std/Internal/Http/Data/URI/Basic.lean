@@ -205,7 +205,7 @@ inductive Host
   An IPv6 address.
   -/
   | ipv6 (ipv6 : Net.IPv6Addr)
-deriving Inhabited
+deriving Inhabited, BEq
 
 instance : Repr Host where
   reprPrec x prec :=
