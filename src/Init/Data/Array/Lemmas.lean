@@ -4561,7 +4561,7 @@ theorem toListRev_toArray {l : List α} : l.toArray.toListRev = l.reverse := by 
 @[simp, grind =] theorem take_toArray {l : List α} {i : Nat} : l.toArray.take i = (l.take i).toArray := by
   simp [take_eq_extract, List.extract_eq_drop_take']
 
-@[simp, grind =] theorem List.drop_toArray {l : List α} {start : Nat} :
+@[simp, grind =] theorem drop_toArray {l : List α} {start : Nat} :
     l.toArray.drop start = (l.drop start).toArray := by
   apply ext'
   simp

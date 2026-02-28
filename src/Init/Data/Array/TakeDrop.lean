@@ -153,7 +153,11 @@ theorem drop_take {xs : Array α} {i j : Nat} :
     (xs.take i).drop i = #[] := by
   apply ext'; simp
 
-@[grind =] theorem take_add {xs : Array α} {i j : Nat} :
+/-
+TODO: not marked as `@[grind]` because it causes trouble by creating many large terms.
+For example, `set_getElem_succ_eraseIdx_succ` in `grind_list_erase.lean` would fail with it.
+-/
+theorem take_add {xs : Array α} {i j : Nat} :
     xs.take (i + j) = xs.take i ++ (xs.drop i).take j := by
   apply ext'; simp [List.take_add]
 
