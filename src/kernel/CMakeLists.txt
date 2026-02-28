@@ -20,4 +20,5 @@ add_library(
   trace.cpp
   instantiate_mvars.cpp
   instantiate_mvars_no_update.cpp
+  instantiate_mvars_all.cpp
 )
