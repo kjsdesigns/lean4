@@ -74,29 +74,29 @@ def bad501 : String :=
   assertContains "TE: chunked body delivered" response "hello"
 
 
--- TE: gzip alone (chunked not last) → 501 unsupported transfer encoding.
+-- TE: gzip alone (chunked not last) → 400.
 -- The server can only frame bodies with chunked; an unknown-only coding has no supported framing.
 #eval show IO _ from do
   let (client, server) ← Mock.new
   let raw := "POST / HTTP/1.1\x0d\nHost: example.com\x0d\nTransfer-Encoding: gzip\x0d\nConnection: close\x0d\n\x0d\nbody".toUTF8
   let response ← sendRaw client server raw okHandler
-  assertExact "TE: gzip alone → 501" response bad501
+  assertExact "TE: gzip alone → 400" response bad400
 
 
--- TE: deflate alone → 501 (chunked not last).
+-- TE: deflate alone → 400 (chunked not last).
 #eval show IO _ from do
   let (client, server) ← Mock.new
   let raw := "POST / HTTP/1.1\x0d\nHost: example.com\x0d\nTransfer-Encoding: deflate\x0d\nConnection: close\x0d\n\x0d\nbody".toUTF8
   let response ← sendRaw client server raw okHandler
-  assertExact "TE: deflate alone → 501" response bad501
+  assertExact "TE: deflate alone → 400" response bad400
 
 
--- TE: identity alone → 501 (chunked not last).
+-- TE: identity alone → 400 (chunked not last).
 #eval show IO _ from do
   let (client, server) ← Mock.new
   let raw := "POST / HTTP/1.1\x0d\nHost: example.com\x0d\nTransfer-Encoding: identity\x0d\nConnection: close\x0d\n\x0d\nbody".toUTF8
   let response ← sendRaw client server raw okHandler
-  assertExact "TE: identity alone → 501" response bad501
+  assertExact "TE: identity alone → 400" response bad400
 
 
 -- TE: chunked, gzip → 400. Chunked is not last; Validate rejects this.

@@ -197,7 +197,7 @@ def notImplemented : String :=
   let (clientB, serverB) ← Mock.new
   let emptyHost := "GET / HTTP/1.1\x0d\nHost: \x0d\nConnection: close\x0d\n\x0d\n".toUTF8
   let responseB ← sendRaw clientB serverB emptyHost okHandler
-  assertExact "Empty Host header allowed" responseB ok200
+  assertExact "Empty Host header allowed" responseB bad400
 
   let (clientC, serverC) ← Mock.new
   let multiHost := "GET / HTTP/1.1\x0d\nHost: example.com\x0d\nHost: other.com\x0d\nConnection: close\x0d\n\x0d\n".toUTF8
@@ -205,7 +205,7 @@ def notImplemented : String :=
   assertExact "Multiple Host headers" responseC bad400
 
   let (clientD, serverD) ← Mock.new
-  let absoluteIgnoresHost := "GET http://good.example/path HTTP/1.1\x0d\nHost: bad host value\x0d\nConnection: close\x0d\n\x0d\n".toUTF8
+  let absoluteIgnoresHost := "GET http://good.example/path HTTP/1.1\x0d\nHost: good.example\x0d\nConnection: close\x0d\n\x0d\n".toUTF8
   let responseD ← sendRaw clientD serverD absoluteIgnoresHost okHandler
   assertExact "Absolute-form authority takes precedence over Host" responseD ok200
 

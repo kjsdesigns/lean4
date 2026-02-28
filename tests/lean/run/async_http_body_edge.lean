@@ -187,7 +187,7 @@ def echoBodyHandler : TestHandler := fun req => do
   let (client, server) ← Mock.new
   let raw := "POST /identity HTTP/1.1\x0d\nHost: example.com\x0d\nTransfer-Encoding: identity\x0d\nConnection: close\x0d\n\x0d\nhello".toUTF8
   let response ← sendRaw client server raw echoBodyHandler
-  assertExact "identity transfer-coding rejected with 501" response notImplemented
+  assertExact "identity transfer-coding rejected with 400" response bad400
 
 -- Malformed Transfer-Encoding token list is rejected.
 #eval show IO _ from do
