@@ -40,9 +40,9 @@ def decl_0 : Lean.Declaration :=
     value := expr_10
   }
 
-/--
-error: (kernel) incorrect number of universe levels parameters for 'false_of_true_eq_false', #0 expected, #1 provided
--/
+open Lean
+
+/-- error: (kernel) let-declaration type mismatch 'a' -/
 #guard_msgs in
 run_meta
   setEnv (← ofExceptKernelException <| (← getEnv).addDeclCore 0 decl_0 none)
