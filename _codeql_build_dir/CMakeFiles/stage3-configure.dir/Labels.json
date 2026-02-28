@@ -1,0 +1,34 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "/home/runner/work/lean4/lean4/_codeql_build_dir/CMakeFiles/stage3-configure"
+		},
+		{
+			"file" : "/home/runner/work/lean4/lean4/_codeql_build_dir/CMakeFiles/stage3-configure.rule"
+		},
+		{
+			"file" : "/home/runner/work/lean4/lean4/_codeql_build_dir/stage3-prefix/src/stage3-stamp/stage3-configure.rule"
+		},
+		{
+			"file" : "/home/runner/work/lean4/lean4/_codeql_build_dir/stage3-prefix/src/stage3-stamp/stage3-patch.rule"
+		},
+		{
+			"file" : "/home/runner/work/lean4/lean4/_codeql_build_dir/stage3-prefix/src/stage3-stamp/stage3-update.rule"
+		},
+		{
+			"file" : "/home/runner/work/lean4/lean4/_codeql_build_dir/stage3-prefix/src/stage3-stamp/stage3-download.rule"
+		},
+		{
+			"file" : "/home/runner/work/lean4/lean4/_codeql_build_dir/stage3-prefix/src/stage3-stamp/stage3-mkdir.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"stage3"
+		],
+		"name" : "stage3-configure"
+	}
+}
