@@ -1,0 +1,13 @@
+# Target labels
+ mimalloc
+# Source files and their labels
+/home/runner/work/lean4/lean4/_codeql_build_dir/CMakeFiles/mimalloc
+/home/runner/work/lean4/lean4/_codeql_build_dir/CMakeFiles/mimalloc.rule
+/home/runner/work/lean4/lean4/_codeql_build_dir/CMakeFiles/mimalloc-complete.rule
+/home/runner/work/lean4/lean4/_codeql_build_dir/mimalloc/src/mimalloc-stamp/mimalloc-build.rule
+/home/runner/work/lean4/lean4/_codeql_build_dir/mimalloc/src/mimalloc-stamp/mimalloc-configure.rule
+/home/runner/work/lean4/lean4/_codeql_build_dir/mimalloc/src/mimalloc-stamp/mimalloc-download.rule
+/home/runner/work/lean4/lean4/_codeql_build_dir/mimalloc/src/mimalloc-stamp/mimalloc-install.rule
+/home/runner/work/lean4/lean4/_codeql_build_dir/mimalloc/src/mimalloc-stamp/mimalloc-mkdir.rule
+/home/runner/work/lean4/lean4/_codeql_build_dir/mimalloc/src/mimalloc-stamp/mimalloc-patch.rule
+/home/runner/work/lean4/lean4/_codeql_build_dir/mimalloc/src/mimalloc-stamp/mimalloc-update.rule
