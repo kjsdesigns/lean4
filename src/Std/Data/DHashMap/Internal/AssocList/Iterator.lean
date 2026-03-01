@@ -34,27 +34,6 @@ public instance : Iterator (α := AssocListIterator α β) Id ((a : α) × β a)
         | ⟨⟨.nil⟩⟩ => .deflate ⟨.done, rfl⟩
         | ⟨⟨.cons k v l⟩⟩ => .deflate ⟨.yield ⟨⟨l⟩⟩ ⟨k, v⟩, rfl⟩)
 
-public instance : LawfulDeterministicIterator (AssocListIterator α β) Id where
-  isPlausibleStep_eq_eq it := by
-    rcases it with ⟨⟨_ | ⟨k, v, l⟩⟩⟩
-    · exact ⟨.done, by
-        ext step
-        simp only [IterM.IsPlausibleStep, Iterator.IsPlausibleStep,
-          instIteratorAssocListIteratorIdSigma]
-        cases step <;> simp⟩
-    · exact ⟨.yield ⟨⟨l⟩⟩ ⟨k, v⟩, by
-        ext step
-        simp only [IterM.IsPlausibleStep, Iterator.IsPlausibleStep,
-          instIteratorAssocListIteratorIdSigma]
-        cases step with
-        | yield it' out =>
-          constructor
-          · intro h; rcases it' with ⟨⟨l'⟩⟩; rcases out with ⟨k', v'⟩
-            cases h; rfl
-          · intro h; cases h; rfl
-        | skip => simp
-        | done => simp⟩
-
 def AssocListIterator.finitenessRelation :
     FinitenessRelation (AssocListIterator α β) Id where
   Rel := InvImage WellFoundedRelation.rel (AssocListIterator.l ∘ IterM.internalState)
@@ -78,5 +57,29 @@ Internal implementation detail of the hash map. Returns a finite iterator on an 
 public def iter {α : Type u} {β : α → Type v} (l : AssocList α β) :
     Iter (α := AssocListIterator α β) ((a : α) × β a) :=
   ⟨⟨l⟩⟩
+
+public instance : LawfulDeterministicIterator (AssocListIterator α β) Id where
+  isPlausibleStep_eq_eq it := by
+    rcases it with ⟨⟨_ | ⟨k, v, l⟩⟩⟩
+    · exact ⟨.done, by
+        ext step
+        simp only [IterM.IsPlausibleStep, Iterator.IsPlausibleStep,
+          instIteratorAssocListIteratorIdSigma] -- TODO: remove `inst...` argument as soon as possible
+        cases step <;> simp⟩
+    · exact ⟨.yield ⟨⟨l⟩⟩ ⟨k, v⟩, by
+        ext step
+        simp only [IterM.IsPlausibleStep, Iterator.IsPlausibleStep,
+          instIteratorAssocListIteratorIdSigma] -- TODO: remove `inst...` argument as soon as possible
+        cases step with
+        | yield it' out =>
+          constructor
+          · intro h
+            rcases it' with ⟨⟨l'⟩⟩
+            rcases out with ⟨k', v'⟩
+            cases h
+            rfl
+          · intro h; cases h; rfl
+        | skip => simp
+        | done => simp⟩
 
 end Std.DHashMap.Internal.AssocList

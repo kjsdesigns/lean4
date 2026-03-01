@@ -284,31 +284,40 @@ instance instLawfulDeterministicIteratorFlatten
       cases outerStep with
       | done =>
         exact ⟨.done, by
-          ext step; simp only [IterM.IsPlausibleStep, Iterator.IsPlausibleStep]
+          ext step
+          simp only [IterM.IsPlausibleStep, Iterator.IsPlausibleStep]
           constructor
           · intro h; cases h with
             | outerDone h => rfl
             | outerYield h => rw [houter] at h; cases h
             | outerSkip h => rw [houter] at h; cases h
-          · intro h; cases h; exact .outerDone (by rw [houter])⟩
+          · intro h
+            cases h
+            exact .outerDone (by rw [houter])⟩
       | skip it₁' =>
         exact ⟨.skip ⟨⟨it₁', none⟩⟩, by
-          ext step; simp only [IterM.IsPlausibleStep, Iterator.IsPlausibleStep]
+          ext step
+          simp only [IterM.IsPlausibleStep, Iterator.IsPlausibleStep]
           constructor
           · intro h; cases h with
             | outerSkip h => rw [houter] at h; cases h; rfl
             | outerDone h => rw [houter] at h; cases h
             | outerYield h => rw [houter] at h; cases h
-          · intro h; cases h; exact .outerSkip (by rw [houter])⟩
+          · intro h
+            cases h
+            exact .outerSkip (by rw [houter])⟩
       | yield it₁' it₂' =>
         exact ⟨.skip ⟨⟨it₁', some it₂'⟩⟩, by
-          ext step; simp only [IterM.IsPlausibleStep, Iterator.IsPlausibleStep]
+          ext step
+          simp only [IterM.IsPlausibleStep, Iterator.IsPlausibleStep]
           constructor
           · intro h; cases h with
             | outerYield h => rw [houter] at h; cases h; rfl
             | outerDone h => rw [houter] at h; cases h
             | outerSkip h => rw [houter] at h; cases h
-          · intro h; cases h; exact .outerYield (by rw [houter])⟩
+          · intro h
+            cases h
+            exact .outerYield (by rw [houter])⟩
     | some it₂ =>
       obtain ⟨innerStep, hinner⟩ := LawfulDeterministicIterator.isPlausibleStep_eq_eq it₂
       cases innerStep with
@@ -316,29 +325,38 @@ instance instLawfulDeterministicIteratorFlatten
         exact ⟨.skip ⟨⟨it₁, none⟩⟩, by
           ext step; simp only [IterM.IsPlausibleStep, Iterator.IsPlausibleStep]
           constructor
-          · intro h; cases h with
+          · intro h
+            cases h with
             | innerDone h => rfl
             | innerYield h => rw [hinner] at h; cases h
             | innerSkip h => rw [hinner] at h; cases h
-          · intro h; cases h; exact .innerDone (by rw [hinner])⟩
+          · intro h
+            cases h
+            exact .innerDone (by rw [hinner])⟩
       | skip it₂' =>
         exact ⟨.skip ⟨⟨it₁, some it₂'⟩⟩, by
-          ext step; simp only [IterM.IsPlausibleStep, Iterator.IsPlausibleStep]
+          ext step
+          simp only [IterM.IsPlausibleStep, Iterator.IsPlausibleStep]
           constructor
           · intro h; cases h with
             | innerSkip h => rw [hinner] at h; cases h; rfl
             | innerDone h => rw [hinner] at h; cases h
             | innerYield h => rw [hinner] at h; cases h
-          · intro h; cases h; exact .innerSkip (by rw [hinner])⟩
+          · intro h
+            cases h
+            exact .innerSkip (by rw [hinner])⟩
       | yield it₂' b =>
         exact ⟨.yield ⟨⟨it₁, some it₂'⟩⟩ b, by
-          ext step; simp only [IterM.IsPlausibleStep, Iterator.IsPlausibleStep]
+          ext step
+          simp only [IterM.IsPlausibleStep, Iterator.IsPlausibleStep]
           constructor
           · intro h; cases h with
             | innerYield h => rw [hinner] at h; cases h; rfl
             | innerDone h => rw [hinner] at h; cases h
             | innerSkip h => rw [hinner] at h; cases h
-          · intro h; cases h; exact .innerYield (by rw [hinner])⟩
+          · intro h
+            cases h
+            exact .innerYield (by rw [hinner])⟩
 
 end LawfulDeterministic
 

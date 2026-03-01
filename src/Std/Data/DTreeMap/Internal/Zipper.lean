@@ -341,7 +341,7 @@ public instance : LawfulDeterministicIterator (Zipper α β) Id where
   isPlausibleStep_eq_eq it := ⟨it.internalState.step, by
     ext step
     simp only [IterM.IsPlausibleStep, Iterator.IsPlausibleStep, instIteratorZipperIdSigma,
-      eq_comm]⟩
+      eq_comm]⟩ -- TODO: remove `inst...` argument as soon as possible
 
 def Zipper.FinitenessRelation : FinitenessRelation (Zipper α β) Id where
   Rel t' t := t'.internalState.size < t.internalState.size

@@ -279,14 +279,14 @@ theorem atIdxSlow?_stepSize [Iterator α Id β] [Productive α Id]
     (it.stepSize n).atIdxSlow? k = it.atIdxSlow? ((n - 1 + 1) * k) := by
   simp [stepSize_eq_intermediateStepSize, atIdxSlow?_intermediate_stepSize]
 
-theorem getElem?_toList_stepSize [Iterator α Id β] [Productive α Id]
+theorem getElem?_toList_stepSize [Iterator α Id β]
     [LawfulDeterministicIterator α Id]
     [IteratorAccess α Id] [Finite α Id]
     {it : Iter (α := α) β} {k n : Nat} :
     (it.stepSize n).toList[k]? = it.toList[(n - 1 + 1) * k]? := by
   simp only [getElem?_toList_eq_atIdxSlow?, atIdxSlow?_stepSize]
 
-theorem getElem?_toArray_stepSize [Iterator α Id β] [Productive α Id]
+theorem getElem?_toArray_stepSize [Iterator α Id β]
     [LawfulDeterministicIterator α Id]
     [IteratorAccess α Id] [Finite α Id]
     {it : Iter (α := α) β} {k n : Nat} :
