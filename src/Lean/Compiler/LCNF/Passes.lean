@@ -26,6 +26,9 @@ public import Lean.Compiler.LCNF.SimpCase
 public import Lean.Compiler.LCNF.InferBorrow
 public import Lean.Compiler.LCNF.ExplicitBoxing
 public import Lean.Compiler.LCNF.ExplicitRC
+public import Lean.Compiler.LCNF.Toposort
+public import Lean.Compiler.LCNF.ExpandResetReuse
+public import Lean.Compiler.LCNF.SimpleGroundExpr
 
 public section
 
@@ -153,8 +156,12 @@ def builtinPassManager : PassManager := {
     inferBorrow,
     explicitBoxing,
     explicitRc,
+    expandResetReuse,
+    pushProj (occurrence := 1),
+    detectSimpleGround,
     inferVisibility (phase := .impure),
     saveImpure, -- End of impure phase
+    toposortPass,
   ]
 }
 
