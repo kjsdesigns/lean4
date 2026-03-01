@@ -311,16 +311,16 @@ def check_cmake_version(repo_url, branch, version_major, version_minor, github_t
         print(f"  ❌ Could not retrieve {cmake_file_path} from {branch}")
         return False
 
-    expected_lines = [
-        f"set(LEAN_VERSION_MAJOR {version_major})",
-        f"set(LEAN_VERSION_MINOR {version_minor})",
-        f"set(LEAN_VERSION_PATCH 0)",
-        f"set(LEAN_VERSION_IS_RELEASE 1)"
+    expected_prefixes = [
+        f"set(LEAN_VERSION_MAJOR {version_major}",
+        f"set(LEAN_VERSION_MINOR {version_minor}",
+        f"set(LEAN_VERSION_PATCH 0",
+        f"set(LEAN_VERSION_IS_RELEASE 1"
     ]
 
-    for line in expected_lines:
-        if not any(l.strip().startswith(line) for l in content.splitlines()):
-            print(f"  ❌ Missing or incorrect line in {cmake_file_path}: {line}")
+    for prefix in expected_prefixes:
+        if not any(l.strip().startswith(prefix) for l in content.splitlines()):
+            print(f"  ❌ Missing or incorrect line in {cmake_file_path}: {prefix}...)")
             return False
 
     print(f"  ✅ CMake version settings are correct in {cmake_file_path}")
@@ -343,11 +343,11 @@ def check_stage0_version(repo_url, branch, version_major, version_minor, github_
     for line in content.splitlines():
         stripped = line.strip()
         if stripped.startswith("set(LEAN_VERSION_MAJOR "):
-            actual = stripped.split()[-1].rstrip(")")
+            actual = stripped.split()[1].rstrip(")")
             if actual != str(version_major):
                 errors.append(f"LEAN_VERSION_MAJOR: expected {version_major}, found {actual}")
         elif stripped.startswith("set(LEAN_VERSION_MINOR "):
-            actual = stripped.split()[-1].rstrip(")")
+            actual = stripped.split()[1].rstrip(")")
             if actual != str(version_minor):
                 errors.append(f"LEAN_VERSION_MINOR: expected {version_minor}, found {actual}")
 
