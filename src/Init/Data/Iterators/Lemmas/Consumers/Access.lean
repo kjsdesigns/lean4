@@ -7,7 +7,10 @@ module
 
 prelude
 public import Init.Data.Iterators.Consumers.Access
+public import Init.Data.Iterators.Lemmas.Consumers.Loop
+import Init.Data.Iterators.Lemmas.Basic
 import Init.Data.Iterators.Lemmas.Consumers.Monadic.Access
+import Init.Omega
 
 namespace Std.Iter
 open Std.Iterators
@@ -47,5 +50,53 @@ public theorem atIdxSlow?_eq_match [Iterator α Id β] [Productive α Id]
       | .skip it' => it'.atIdxSlow? n
       | .done => none) := by
   induction n, it using Iter.atIdxSlow?.induct_unfolding <;> simp_all
+
+public theorem lt_length_of_nextAtIdxSlow?_eq_yield [Iterator α Id β] [Finite α Id]
+    [Productive α Id] [IteratorLoop α Id Id] [LawfulIteratorLoop α Id Id]
+    {it it' : Iter (α := α) β} {i : Nat} {out : β}
+    (h : (it.nextAtIdxSlow? i).val = .yield it' out) :
+    i < it.length := by
+  induction it using Iter.inductSteps generalizing i it' out with
+  | step it ihy ihs =>
+    rw [Std.Iter.length_eq_match_step]
+    rw [nextAtIdxSlow?_eq_match] at h
+    cases hstep : it.step using PlausibleIterStep.casesOn with
+    | yield it'' out'' hp =>
+      simp only [hstep] at h
+      simp only
+      cases i with
+      | zero => omega
+      | succ k =>
+        simp only at h
+        exact Nat.succ_lt_succ (ihy hp h)
+    | skip it'' hp => exact ihs hp (by simpa [hstep] using h)
+    | done hp => simp [hstep] at h
+
+public theorem length_le_of_nextAtIdxSlow?_eq_done [Iterator α Id β] [Finite α Id]
+    [Productive α Id] [IteratorLoop α Id Id] [LawfulIteratorLoop α Id Id]
+    {it : Iter (α := α) β} {i : Nat}
+    (h : (it.nextAtIdxSlow? i).val = .done) :
+    it.length ≤ i := by
+  induction it using Iter.inductSteps generalizing i with
+  | step it ihy ihs =>
+    rw [Std.Iter.length_eq_match_step]
+    rw [nextAtIdxSlow?_eq_match] at h
+    cases hstep : it.step using PlausibleIterStep.casesOn with
+    | yield it'' out'' hp =>
+      simp only [hstep] at h
+      simp only
+      cases i with
+      | zero => simp at h
+      | succ k =>
+        have := ihy hp (by simpa using h)
+        omega
+    | skip it'' hp =>
+      simp only [hstep] at h
+      simp only
+      have := ihs hp h
+      omega
+    | done hp =>
+      simp only
+      omega
 
 end Std.Iter

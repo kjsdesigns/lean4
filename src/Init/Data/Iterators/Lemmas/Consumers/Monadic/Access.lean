@@ -8,12 +8,12 @@ module
 prelude
 public import Init.Data.Iterators.Consumers.Monadic.Access
 import all Init.Data.Iterators.Consumers.Monadic.Access
+public import Init.Data.Iterators.Consumers.Monadic.Loop
 public import Init.Control.Lawful.Basic
 import Init.Control.Lawful.Lemmas
 
 namespace Std.IterM
 open Std.Iterators
-
 
 public theorem atIdxSlow?_eq_match [Monad m] [LawfulMonad m] [Iterator α m β] [Productive α m]
     {n : Nat} {it : IterM (α := α) m β} :

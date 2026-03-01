@@ -131,15 +131,15 @@ instance : IteratorAccess (ArrayIterator α) Id where
       induction n generalizing it
       · split
         · refine .zero_yield ?_
-          simpa [IterM.IsPlausibleStep, Iterator.IsPlausibleStep, *]
+          simpa [IterM.IsPlausibleStep, Iterator.IsPlausibleStep, ArrayIterator.instIterator, *] -- TODO
         · refine .done ?_
-          simp_all [IterM.IsPlausibleStep, Iterator.IsPlausibleStep]
+          simp_all [IterM.IsPlausibleStep, Iterator.IsPlausibleStep, ArrayIterator.instIterator] -- TODO
       · rename_i n ih
         by_cases h : it.internalState.pos < it.internalState.array.size
         · refine .yield (it' := ?it') (out := ?_) ?_ ?_
           · exact ⟨⟨it.internalState.array, it.internalState.pos + 1⟩⟩
           · exact it.internalState.array[it.internalState.pos]
-          · simpa [IterM.IsPlausibleStep, Iterator.IsPlausibleStep]
+          · simpa [IterM.IsPlausibleStep, Iterator.IsPlausibleStep, ArrayIterator.instIterator] -- TODO
           · specialize ih ?it'
             simp only [Nat.add_comm 1, Nat.add_assoc] at ih ⊢
             split
