@@ -491,7 +491,7 @@ public instance [Ord α] : LawfulDeterministicIterator (RxcIterator α β) Id wh
   isPlausibleStep_eq_eq it := ⟨it.internalState.step, by
     ext step
     simp only [IterM.IsPlausibleStep, Iterator.IsPlausibleStep, instIteratorRxcIteratorIdSigma,
-      eq_comm]⟩
+      eq_comm]⟩ -- TODO: remove `inst...` argument as soon as possible
 
 @[simp]
 theorem RxcIterator.step_done [Ord α] {upper : α} : ({ iter := .done, upper := upper } : RxcIterator α β).step = .done := rfl
@@ -626,7 +626,7 @@ public instance [Ord α] : LawfulDeterministicIterator (RxoIterator α β) Id wh
   isPlausibleStep_eq_eq it := ⟨it.internalState.step, by
     ext step
     simp only [IterM.IsPlausibleStep, Iterator.IsPlausibleStep, instIteratorRxoIteratorIdSigma,
-      eq_comm]⟩
+      eq_comm]⟩ -- TODO: remove `inst...` argument as soon as possible
 
 @[simp]
 theorem RxoIterator.step_done [Ord α] {upper : α} : ({ iter := .done, upper := upper } : RxoIterator α β).step = .done := rfl
