@@ -7,6 +7,7 @@ module
 
 prelude
 public import Init.Data.Iterators.Consumers.Access
+public import Init.Data.Iterators.Consumers.Monadic.Access
 public import Init.Data.Iterators.Consumers.Collect
 public import Init.Data.Iterators.Consumers.Loop
 public import Init.Data.Iterators.Combinators.Take
@@ -30,52 +31,6 @@ theorem stepSize_eq_intermediateStepSize [Iterator α Id β] [IteratorAccess α 
     {it : Iter (α := α) β} {n : Nat} :
     it.stepSize n = Intermediate.stepSize it 0 n :=
   rfl
-
-theorem _root_.Std.IterM.IsPlausibleNthOutputStep.unique [Iterator α Id β]
-    [LawfulDeterministicIterator α Id]
-    {it : IterM (α := α) Id β} {s s'}
-    (hs : it.IsPlausibleNthOutputStep n s)
-    (hs' : it.IsPlausibleNthOutputStep n s') :
-    s = s' := by
-  induction hs
-  case zero_yield h =>
-    match hs' with
-    | .zero_yield h' ..
-    | .skip h' ..
-    | .done h' =>
-      replace h' := h'.eq_step
-      rw [← h.eq_step] at h'
-      cases h'
-      all_goals simp
-  case done h =>
-    match hs' with
-    | .zero_yield h' ..
-    | .yield h' ..
-    | .skip h' .. =>
-      replace h := h.eq_step
-      replace h' := h'.eq_step
-      rw [← h] at h'
-      cases h'
-    | .done h' => simp
-  case yield h _ ih =>
-    match hs' with
-    | .yield h' ..
-    | .skip h' ..
-    | .done h' =>
-      replace h' := h'.eq_step
-      rw [← h.eq_step] at h'
-      cases h'
-      all_goals apply ih ‹_›
-  case skip h _ ih =>
-    match hs' with
-    | .zero_yield h' ..
-    | .yield h' ..
-    | .skip h' ..
-    | .done h' =>
-      replace h' := h'.eq_step
-      rw [← h.eq_step] at h'
-      cases h'
-      all_goals apply ih ‹_›
 
 instance [Iterator α Id β] [LawfulDeterministicIterator α Id] {it : IterM (α := α) Id β} :
     Subsingleton (PlausibleIterStep (it.IsPlausibleNthOutputStep n)) where
@@ -134,13 +89,13 @@ theorem _root_.Std.IterM.nextAtIdxSlow?_stepSize_aux [Iterator α Id β] [Produc
         return .yield (IterM.Intermediate.stepSize it' (n - 1) n) out (by
           refine .zero_yield ?_
           simpa [IterM.IsPlausibleStep, Iterator.IsPlausibleStep, IterM.Intermediate.stepSize,
-            IterM.Intermediate.stepSize, StepSizeIterator.instIterator]) -- TODO
+            IterM.Intermediate.stepSize, StepSizeIterator.instIterator]) -- TODO: remove `inst...` argument as soon as possible
       | .skip it' h => return IterM.not_isPlausibleNthOutputStep_skip.elim h
       | .done h =>
         return .done (by
           refine .done ?_
           simpa [IterM.IsPlausibleStep, Iterator.IsPlausibleStep, Intermediate.stepSize,
-            IterM.Intermediate.stepSize, StepSizeIterator.instIterator])) := by -- TODO
+            IterM.Intermediate.stepSize, StepSizeIterator.instIterator])) := by -- TODO: remove `inst...` argument as soon as possible
   induction it, i using IterM.atIdxSlow?.induct_unfolding
   rw [IterM.nextAtIdxSlow?_eq_match]
   simp only [IterM.Intermediate.stepSize, IterM.step_eq, IterM.internalState_mk,
@@ -196,13 +151,13 @@ theorem nextAtIdxSlow?_zero_intermediate_stepSize [Iterator α Id β] [Productiv
         .yield (Intermediate.stepSize it' (n - 1) n) out (by
           refine .zero_yield ?_
           simpa [IterM.IsPlausibleStep, Iterator.IsPlausibleStep,
-            Intermediate.stepSize, IterM.Intermediate.stepSize, StepSizeIterator.instIterator]) -- TODO
+            Intermediate.stepSize, IterM.Intermediate.stepSize, StepSizeIterator.instIterator]) -- TODO: remove `inst...` argument as soon as possible
       | .skip it' h => IterM.not_isPlausibleNthOutputStep_skip.elim h
       | .done h =>
         .done (by
           refine .done ?_
           simpa [IterM.IsPlausibleStep, Iterator.IsPlausibleStep,
-            Intermediate.stepSize, IterM.Intermediate.stepSize, StepSizeIterator.instIterator]) := by -- TODO
+            Intermediate.stepSize, IterM.Intermediate.stepSize, StepSizeIterator.instIterator]) := by -- TODO: remove `inst...` argument as soon as possible
   simp only [Iter.nextAtIdxSlow?, Intermediate.stepSize, toIterM_toIter,
     IterM.nextAtIdxSlow?_stepSize_aux, Id.run_bind]
   apply Subtype.ext

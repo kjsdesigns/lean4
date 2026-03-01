@@ -9,6 +9,7 @@ prelude
 public import Init.Data.Iterators.Basic
 public import Init.WFExtrinsicFix
 import Init.RCases
+import Init.Data.Iterators.Lemmas.Monadic.Basic
 
 set_option linter.missingDocs true
 
@@ -97,6 +98,50 @@ theorem IterM.isPlausibleNthOutputStep_trans_of_done {α β : Type w} {m : Type 
   case done =>
     cases hs
     exact .done ‹_›
+
+theorem IterM.IsPlausibleNthOutputStep.unique [Iterator α Id β]
+    [LawfulDeterministicIterator α Id] {it : IterM (α := α) Id β} {s s'}
+    (hs : it.IsPlausibleNthOutputStep n s) (hs' : it.IsPlausibleNthOutputStep n s') :
+    s = s' := by
+  induction hs
+  case zero_yield h =>
+    match hs' with
+    | .zero_yield h' ..
+    | .skip h' ..
+    | .done h' =>
+      replace h' := h'.eq_step
+      rw [← h.eq_step] at h'
+      cases h'
+      all_goals simp
+  case done h =>
+    match hs' with
+    | .zero_yield h' ..
+    | .yield h' ..
+    | .skip h' .. =>
+      replace h := h.eq_step
+      replace h' := h'.eq_step
+      rw [← h] at h'
+      cases h'
+    | .done h' => simp
+  case yield h _ ih =>
+    match hs' with
+    | .yield h' ..
+    | .skip h' ..
+    | .done h' =>
+      replace h' := h'.eq_step
+      rw [← h.eq_step] at h'
+      cases h'
+      all_goals apply ih ‹_›
+  case skip h _ ih =>
+    match hs' with
+    | .zero_yield h' ..
+    | .yield h' ..
+    | .skip h' ..
+    | .done h' =>
+      replace h' := h'.eq_step
+      rw [← h.eq_step] at h'
+      cases h'
+      all_goals apply ih ‹_›
 
 /--
 `IteratorAccess α m` provides efficient implementations for random access or iterators that support
