@@ -57,7 +57,7 @@ partial def manyItems {α : Type} (parser : Parser (Option α)) (maxCount : Nat)
       let acc := acc.push x
 
       if acc.size > maxCount then
-        fail s!"Too many items: {acc.size} > {maxCount}"
+        fail s!"too many items: {acc.size} > {maxCount}"
 
       go acc
   go #[]
@@ -130,7 +130,7 @@ def hexDigit : Parser UInt8 := do
     if b ≥ '0'.toUInt8 && b ≤ '9'.toUInt8 then return b - '0'.toUInt8
     else if b ≥ 'A'.toUInt8 && b ≤ 'F'.toUInt8 then return b - 'A'.toUInt8 + 10
     else return b - 'a'.toUInt8 + 10
-  else fail s!"Invalid hex digit {Char.ofUInt8 b |>.quote}"
+  else fail s!"invalid hex digit {Char.ofUInt8 b |>.quote}"
 
 partial def hex : Parser Nat := do
   let rec go (acc : Nat) (count : Nat) : Parser Nat := do
@@ -165,7 +165,7 @@ def parseHttpVersionNumber : Parser (Nat × Nat) := do
 
 def parseHttpVersion : Parser Version := do
   let (major, minor) ← parseHttpVersionNumber
-  liftOption<| Version.ofNumber? major minor
+  liftOption <| Version.ofNumber? major minor
 
 /-
 method         = token
@@ -407,20 +407,20 @@ public def parseTrailers (limits : H1.Config) : Parser (Array (String × String)
   return trailers
 
 /--
-Parses reason phrase (text after status code)
+Returns `true` if `c` is a valid reason-phrase byte (`HTAB / SP / VCHAR`, strict ASCII-only).
 -/
 @[inline]
 def isReasonPhraseByte (c : UInt8) : Bool :=
   fieldContent (Char.ofUInt8 c)
 
 /--
-Parses reason phrase (text after status code).
+Parses a reason phrase (text after status code).
 
 Allows only `HTAB / SP / VCHAR` bytes (strict ASCII-only).
 -/
 def parseReasonPhrase (limits : H1.Config) : Parser String := do
   let bytes ← takeWhileUpTo isReasonPhraseByte limits.maxReasonPhraseLength
-  liftOption<| String.fromUTF8? bytes.toByteArray
+  liftOption <| String.fromUTF8? bytes.toByteArray
 
 /--
 Parses HTTP status code (3 digits)

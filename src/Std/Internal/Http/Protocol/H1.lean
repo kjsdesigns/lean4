@@ -217,7 +217,7 @@ private inductive BodyMode where
   | eof
 
 /-
-This part of the code is really related to the RFC.
+RFC-conformance helpers.
 -/
 
 /--
@@ -727,7 +727,7 @@ private def writeHead (messageHead : Message.Head dir.swap) (machine : Machine d
     outputData :=
       match dir, messageHead with
       | .receiving, messageHead => Encode.encode (v := .v11) writer.outputData { messageHead with headers }
-      | .sending, messageHead => Encode.encode  (v := .v11) writer.outputData { messageHead with headers },
+      | .sending, messageHead => Encode.encode (v := .v11) writer.outputData { messageHead with headers },
 
     state
   })

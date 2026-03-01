@@ -58,7 +58,7 @@ structure Config where
   serverName : Option Header.Value := none
 
   /--
-  Maximum length of request URI (default: 8192 bytes)
+  Maximum length of request URI (default: 8192 bytes).
   -/
   maxUriLength : Nat := 8192
 
@@ -68,17 +68,17 @@ structure Config where
   maxStartLineLength : Nat := 8192
 
   /--
-  Maximum length of header field name (default: 256 bytes)
+  Maximum length of header field name (default: 256 bytes).
   -/
   maxHeaderNameLength : Nat := 256
 
   /--
-  Maximum length of header field value (default: 8192 bytes)
+  Maximum length of header field value (default: 8192 bytes).
   -/
   maxHeaderValueLength : Nat := 8192
 
   /--
-  Maximum number of spaces in delimiter sequences (default: 16)
+  Maximum number of spaces in delimiter sequences (default: 16).
   -/
   maxSpaceSequence : Nat := 16
 
@@ -94,12 +94,12 @@ structure Config where
   maxChunkExtensions : Nat := 16
 
   /--
-  Maximum length of chunk extension name (default: 256 bytes)
+  Maximum length of chunk extension name (default: 256 bytes).
   -/
   maxChunkExtNameLength : Nat := 256
 
   /--
-  Maximum length of chunk extension value (default: 256 bytes)
+  Maximum length of chunk extension value (default: 256 bytes).
   -/
   maxChunkExtValueLength : Nat := 256
 
@@ -122,12 +122,12 @@ structure Config where
   maxBodySize : Nat := 64 * 1024 * 1024
 
   /--
-  Maximum length of reason phrase (default: 512 bytes)
+  Maximum length of reason phrase (default: 512 bytes).
   -/
   maxReasonPhraseLength : Nat := 512
 
   /--
-  Maximum number of trailer headers (default: 20)
+  Maximum number of trailer headers (default: 20).
   -/
   maxTrailerHeaders : Nat := 20
 

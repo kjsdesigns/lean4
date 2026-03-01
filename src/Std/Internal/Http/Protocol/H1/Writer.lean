@@ -80,12 +80,12 @@ Manages the writing state of the HTTP generating and writing machine.
 -/
 structure Writer (dir : Direction) where
   /--
-  This is all the data that the user is sending that is being accumulated.
+  Body chunks supplied by the user, accumulated before being flushed to output.
   -/
   userData : Array Chunk := .empty
 
   /--
-  All the data that is produced by the writer.
+  All the data produced by the writer, ready to be sent to the socket.
   -/
   outputData : ChunkedBuffer := .empty
 
@@ -95,8 +95,8 @@ structure Writer (dir : Direction) where
   state : Writer.State := .pending
 
   /--
-  When the user specifies the exact size upfront, we can use Content-Length
-  instead of chunked transfer encoding for streaming.
+  When the user specifies the exact body size upfront, `Content-Length` framing is
+  used instead of chunked transfer encoding.
   -/
   knownSize : Option Body.Length := none
 
@@ -106,12 +106,13 @@ structure Writer (dir : Direction) where
   messageHead : Message.Head dir.swap := {}
 
   /--
-  The user sent the message.
+  Whether the user has called `send` to provide the outgoing message head.
   -/
   sentMessage : Bool := false
 
   /--
-  This flags that the body stream is closed so if we start to write the body we know exactly the size.
+  Set when the user has finished sending body data, allowing fixed-size framing
+  to be determined upfront.
   -/
   userClosedBody : Bool := false
 

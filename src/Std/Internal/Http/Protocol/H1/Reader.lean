@@ -129,7 +129,7 @@ structure Reader (dir : Direction) where
   headerBytesRead : Nat := 0
 
   /--
-  Flag that says that it cannot receive more input (the socket disconnected).
+  Set when no further input bytes will arrive (the remote end has closed the connection).
   -/
   noMoreInput : Bool := false
 

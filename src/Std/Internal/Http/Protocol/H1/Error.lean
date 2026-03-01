@@ -106,5 +106,3 @@ instance : ToString Error where
   | .badMessage => "Bad message"
   | .other msg => s!"Other error: {msg}"
 
-instance : Repr ByteSlice where
-  reprPrec x := reprPrec x.toByteArray.data
