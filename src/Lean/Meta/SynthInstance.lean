@@ -982,6 +982,7 @@ register_builtin_option trace.Meta.synthInstance : Bool := {
 
 builtin_initialize
   registerTraceClass `Meta.synthPending
+  registerTraceClass `Meta.synthInstance.apply (inherited := true)
   registerTraceClass `Meta.synthInstance.instances (inherited := true)
   registerTraceClass `Meta.synthInstance.tryResolve (inherited := true)
   registerTraceClass `Meta.synthInstance.answer (inherited := true)
