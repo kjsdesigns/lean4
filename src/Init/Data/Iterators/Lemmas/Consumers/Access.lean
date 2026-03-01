@@ -99,4 +99,21 @@ public theorem length_le_of_nextAtIdxSlow?_eq_done [Iterator α Id β] [Finite �
       simp only
       omega
 
+public theorem nextAtIdx?_eq_nextAtIdxSlow? [Iterator α Id β] [Productive α Id] [LawfulDeterministicIterator α Id]
+    [IteratorAccess α Id] {it : Iter (α := α) β} {n : Nat} :
+    it.nextAtIdx? n = it.nextAtIdxSlow? n := by
+  simp [Iter.nextAtIdx?, Iter.nextAtIdxSlow?, IterM.nextAtIdx?_eq_nextAtIdxSlow?]
+
+public theorem length_nextAtIdxSlow? [Iterator α Id β] [Finite α Id] [IteratorLoop α Id Id]
+    [LawfulIteratorLoop α Id Id] {it : Iter (α := α) β} :
+    (it.nextAtIdxSlow? n).val.successor.elim 0 Iter.length = it.length - n - 1 := by
+  have := IterM.length_nextAtIdxSlow? (it := it.toIterM) (n := n)
+  replace this := congrArg (fun x => ULift.down (Id.run x)) this
+  simp only [Id.run_bind, Id.run_map] at this
+  simp only [nextAtIdxSlow?, length, ← this]
+  split at this
+  · simpa [Option.elim, *]
+  · exact IterM.not_isPlausibleNthOutputStep_skip.elim ‹_›
+  · simp [Option.elim, *]
+
 end Std.Iter

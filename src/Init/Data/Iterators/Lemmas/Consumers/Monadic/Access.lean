@@ -9,6 +9,7 @@ prelude
 public import Init.Data.Iterators.Consumers.Monadic.Access
 import all Init.Data.Iterators.Consumers.Monadic.Access
 public import Init.Data.Iterators.Consumers.Monadic.Loop
+import Init.Data.Iterators.Lemmas.Consumers.Monadic.Loop
 public import Init.Control.Lawful.Basic
 import Init.Control.Lawful.Lemmas
 
@@ -140,3 +141,42 @@ public theorem nextAtIdxSlow?_add_one [Monad m] [LawfulMonad m] [Iterator α m �
       | .skip _ hp => not_isPlausibleNthOutputStep_skip.elim hp
       | .done hp => return ⟨.done, isPlausibleNthOutputStep_trans_of_done (k := 0) hp (Nat.zero_le _)⟩) := by
   rw [nextAtIdxSlow?_eq_match_nextAtIdxSlow?]
+
+public local instance instSubsingletonPlausibleIterStepIsPlausibleNthOutputStep [Iterator α Id β]
+    [LawfulDeterministicIterator α Id] {it : IterM (α := α) Id β} :
+    Subsingleton (PlausibleIterStep (it.IsPlausibleNthOutputStep n)) where
+  allEq s s' := by
+    obtain ⟨s, hs⟩ := s
+    obtain ⟨s', hs'⟩ := s'
+    have := hs.unique hs'
+    rwa [Subtype.mk.injEq]
+
+public theorem nextAtIdx?_eq_nextAtIdxSlow? [Iterator α Id β] [Productive α Id]
+    [LawfulDeterministicIterator α Id] [IteratorAccess α Id] {it : IterM (α := α) Id β} {n : Nat} :
+    it.nextAtIdx? n = it.nextAtIdxSlow? n := by
+  apply Id.ext
+  apply Subsingleton.allEq
+
+public theorem length_nextAtIdxSlow? [Monad m] [LawfulMonad m] [Iterator α m β] [Finite α m] [IteratorLoop α m m] [LawfulIteratorLoop α m m]
+    {it : IterM (α := α) m β} :
+    (do match ← it.nextAtIdxSlow? n with
+      | .yield it' _out _ => it'.length
+      | .skip _it' h => IterM.not_isPlausibleNthOutputStep_skip.elim h
+      | .done _h => return .up 0) = (fun len => .up (len.down - n - 1)) <$> it.length := by
+  induction it using IterM.inductSteps generalizing n with | step it ihy ihs
+  rw [it.nextAtIdxSlow?_eq_match, it.length_eq_match_step]
+  simp only [map_eq_pure_bind, bind_assoc]
+  apply bind_congr; intro step
+  cases step.inflate using PlausibleIterStep.casesOn
+  · simp only [bind_pure_comp, Functor.map_map]
+    split
+    · simp only [pure_bind, Nat.sub_zero, Nat.add_one_sub_one, id_map']
+    · simp only [Nat.succ_eq_add_one, Nat.add_sub_add_right, bind_map_left]
+      rw [← ihy ‹_›]
+      apply bind_congr; intro step
+      cases step using PlausibleIterStep.casesOn <;> simp [Not.elim, absurd]
+  · simp only [bind_pure_comp, bind_map_left, id_map']
+    rw [← ihs ‹_›]
+    apply bind_congr; intro step
+    cases step using PlausibleIterStep.casesOn <;> simp [Not.elim, absurd]
+  · simp
