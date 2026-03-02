@@ -486,7 +486,7 @@ public instance [Monad m] : MonadLog (LogT m) := .ofMonadState
 
 namespace LogT
 
-public abbrev run [Functor m] (self : LogT m α) (log : Log := {})  : m (α × Log) :=
+public abbrev run (self : LogT m α) (log : Log := {})  : m (α × Log) :=
   StateT.run self log
 
 public abbrev run' [Functor m] (self : LogT m α) (log : Log := {}) :  m α :=
