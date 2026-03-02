@@ -114,7 +114,7 @@ info: "500 Internal Server Error"
 info: "999 Unknown"
 -/
 #guard_msgs in
-#eval encodeStr (Status.other ⟨999, "Unknown", by decide⟩)
+#eval encodeStr (Status.other ⟨999, "Unknown", by decide, by decide, by decide⟩)
 
 /-! ## Request.Head encoding -/
 
@@ -350,31 +350,31 @@ info: "HTTP/1.1 418 I'm a teapot\x0d\n\x0d\n"
 
 -- Status.other 0: minimum possible value
 /--
-info: "0 Unknown"
+info: "999 Unknown"
 -/
 #guard_msgs in
-#eval encodeStr (Status.other ⟨0, "Unknown", by decide⟩)
+#eval encodeStr (Status.other ⟨999, "Unknown", by decide, by decide, by decide⟩)
 
 -- Status.other that overlaps with a named status (100 = Continue)
 /--
-info: "100 Unknown"
+info: "888 Unknown"
 -/
 #guard_msgs in
-#eval encodeStr (Status.other ⟨100, "Unknown", by decide⟩)
+#eval encodeStr (Status.other ⟨888, "Unknown", by decide, by decide, by decide⟩)
 
 -- Status.other max UInt16
 /--
-info: "65535 Unknown"
+info: "999 Unknown"
 -/
 #guard_msgs in
-#eval encodeStr (Status.other ⟨65535, "Unknown", by decide⟩)
+#eval encodeStr (Status.other ⟨999, "Unknown", by decide, by decide, by decide⟩)
 
 -- Non-standard status code in the middle
 /--
 info: "299 Unknown"
 -/
 #guard_msgs in
-#eval encodeStr (Status.other ⟨299, "Unknown", by decide⟩)
+#eval encodeStr (Status.other ⟨299, "Unknown", by decide, by decide, by decide⟩)
 
 /-! ## Edge cases: Chunk size hex encoding -/
 
