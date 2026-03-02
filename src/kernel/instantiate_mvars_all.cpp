@@ -133,6 +133,9 @@ class instantiate_direct_fn {
        delayed assignments when the pending mvar is in this set, matching
        the original instantiateMVars behavior. */
     name_set m_resolvable_delayed;
+    /* Set to true when any delayed assignment is encountered, even if not
+       resolvable. Pass 2 is needed for write-back normalization in that case. */
+    bool m_has_delayed;
     lean::unordered_map<lean_object *, expr> m_cache;
     std::vector<expr> m_saved;
 
@@ -258,6 +261,7 @@ class instantiate_direct_fn {
        Inner delayed assignments are processed first (via recursive normalization),
        so m_resolvable_delayed is already populated for them. */
     void normalize_delayed_pending(name const & mid_pending) {
+        m_has_delayed = true;
         if (auto val = get_assignment(mid_pending)) {
             if (is_value_resolvable(*val)) {
                 m_resolvable_delayed.insert(mid_pending);
@@ -301,8 +305,9 @@ class instantiate_direct_fn {
     }
 
 public:
-    instantiate_direct_fn(metavar_ctx & mctx):m_mctx(mctx), m_level_fn(mctx) {}
+    instantiate_direct_fn(metavar_ctx & mctx):m_mctx(mctx), m_level_fn(mctx), m_has_delayed(false) {}
     name_set const & resolvable_delayed() const { return m_resolvable_delayed; }
+    bool has_delayed() const { return m_has_delayed; }
 
     expr visit(expr const & e) {
         if (!has_mvar(e))
@@ -730,9 +735,16 @@ static object * run_instantiate_all(object * m, object * e) {
     instantiate_direct_fn pass1(mctx);
     expr e1 = pass1(expr(e));
 
-    /* Pass 2: resolve delayed assignments with fused fvar substitution. */
-    instantiate_delayed_fn pass2(mctx, pass1.resolvable_delayed());
-    expr e2 = pass2(e1);
+    /* Pass 2: resolve delayed assignments with fused fvar substitution.
+       Skip if pass 1 found no delayed assignments at all — the expression
+       has no delayed mvars that need resolution or write-back. */
+    expr e2;
+    if (!pass1.has_delayed()) {
+        e2 = e1;
+    } else {
+        instantiate_delayed_fn pass2(mctx, pass1.resolvable_delayed());
+        e2 = pass2(e1);
+    }
 
     /* (mctx, expr) */
     object * r = alloc_cnstr(0, 2, 0);
