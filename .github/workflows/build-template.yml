@@ -66,15 +66,9 @@ jobs:
           brew install ccache tree zstd coreutils gmp libuv
         if: runner.os == 'macOS'
       - name: Checkout
-        if: (!endsWith(matrix.os, '-with-cache'))
         uses: actions/checkout@v6
         with:
           # the default is to use a virtual merge commit between the PR and master: just use the PR
-          ref: ${{ github.event.pull_request.head.sha }}
-      - name: Namespace Checkout
-        if: endsWith(matrix.os, '-with-cache')
-        uses: namespacelabs/nscloud-checkout-action@v8
-        with:
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Open Nix shell once
         run: true
@@ -240,14 +234,16 @@ jobs:
       - name: Build Stage 2
         run: |
           make -C build -j$NPROC stage2
-        if: matrix.test-speedcenter
+        if: matrix.test-bench
       - name: Check Stage 3
         run: |
           make -C build -j$NPROC check-stage3
         if: matrix.check-stage3
-      - name: Test Speedcenter Benchmarks
-        run: nix shell github:Kha/lakeprof -c make -C build -j$NPROC bench
-        if: matrix.test-speedcenter
+      - name: Test Benchmarks
+        run: |
+          cd tests
+          nix develop -c make -C ../build -j$NPROC bench
+        if: matrix.test-bench
       - name: Check rebootstrap
         run: |
           set -e
