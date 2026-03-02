@@ -481,7 +481,7 @@ Returns `true` if the machine should flush buffered output.
 def shouldFlush (machine : Machine dir) : Bool :=
   machine.failed ∨
   machine.reader.state == .closed ∨
-  machine.writer.isReadyToSend ∨
+  machine.writer.noMoreUserData ∨
   machine.writer.knownSize.isSome ∨
 
   -- Flush as soon as body bytes exist so keep-alive streaming does not wait
@@ -1051,7 +1051,7 @@ private partial def processChunkedBody (machine : Machine dir) : Machine dir :=
   else if machine.writer.userClosedBody then
     machine.modifyWriter Writer.writeFinalChunk
     |> completeWriterMessage
-  else if machine.writer.userData.size > 0 ∨ machine.writer.isReadyToSend then
+  else if machine.writer.userData.size > 0 ∨ machine.writer.noMoreUserData then
     machine.modifyWriter Writer.writeChunkedBody
     |> processWrite
   else
@@ -1106,6 +1106,8 @@ private def errorResponseStatus (error : H1.Error) : Status :=
   | .uriTooLong => .uriTooLong
   | .unsupportedMethod => .notImplemented
   | .unsupportedTransferEncoding => .notImplemented
+  | .tooManyHeaders => .requestHeaderFieldsTooLarge
+  | .headersTooLarge => .requestHeaderFieldsTooLarge
   | _ => .badRequest
 
 /--
@@ -1375,8 +1377,10 @@ private partial def processParsedHeader (machine : Machine dir) (headerCount : N
   let reader := machine.reader
   let headerBytes := startRemaining - reader.input.remainingBytes
 
-  if headerCount ≥ machine.config.maxHeaders ∨ reader.headerBytesRead + headerBytes > machine.config.maxHeaderBytes then
-    failBadMessage machine
+  if headerCount ≥ machine.config.maxHeaders then
+    machine.setFailure .tooManyHeaders
+  else if reader.headerBytesRead + headerBytes > machine.config.maxHeaderBytes then
+    machine.setFailure .headersTooLarge
   else
     match typedHeader? name value with
     | some (name, headerValue) =>

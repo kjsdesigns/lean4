@@ -203,19 +203,28 @@ def parseURI (limits : H1.Config) : Parser ByteArray := do
   return uri.toByteArray
 
 /--
+Shared core for request-line parsing: parses `request-target SP HTTP-version CRLF`
+and returns the `RequestTarget` together with the raw major/minor version numbers.
+
+Both `parseRequestLine` and `parseRequestLineRawVersion` call this after consuming
+the method token, keeping URI validation and version parsing in one place.
+-/
+private def parseRequestLineBody (limits : H1.Config) : Parser (RequestTarget × Nat × Nat) := do
+  let rawUri ← parseURI limits <* sp
+  let uri ← match (Std.Http.URI.Parser.parseRequestTarget <* eof).run rawUri with
+  | .ok res => pure res
+  | .error res => fail res
+  let versionPair ← parseHttpVersionNumber <* crlf
+  return (uri, versionPair)
+
+/--
 Parses a request line and returns a fully-typed `Request.Head`.
 `request-line = method SP request-target SP HTTP-version`
 -/
 public def parseRequestLine (limits : H1.Config) : Parser Request.Head := do
   skipLeadingRequestEmptyLines limits
   let method ← parseMethod <* sp
-  let uri ← parseURI limits <* sp
-
-  let uri ← match (Std.Http.URI.Parser.parseRequestTarget <* eof).run uri with
-  | .ok res => pure res
-  | .error res => fail res
-
-  let (major, minor) ← parseHttpVersionNumber <* crlf
+  let (uri, (major, minor)) ← parseRequestLineBody limits
   if major == 1 ∧ minor == 1 then
     return ⟨method, .v11, uri, .empty⟩
   else
@@ -229,13 +238,7 @@ request-line = method SP request-target SP HTTP-version
 public def parseRequestLineRawVersion (limits : H1.Config) : Parser (Option Method × RequestTarget × Option Version) := do
   skipLeadingRequestEmptyLines limits
   let methodToken ← parseMethodToken <* sp
-  let uri ← parseURI limits <* sp
-
-  let uri ← match (Std.Http.URI.Parser.parseRequestTarget <* eof).run uri with
-  | .ok res => pure res
-  | .error res => fail res
-
-  let (major, minor) ← parseHttpVersionNumber <* crlf
+  let (uri, (major, minor)) ← parseRequestLineBody limits
   return (Method.ofString? methodToken, uri, Version.ofNumber? major minor)
 
 -- field-line   = field-name ":" OWS field-value OWS

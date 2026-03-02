@@ -126,10 +126,15 @@ structure Writer (dir : Direction) where
 namespace Writer
 
 /--
-Checks if the writer is ready to send data to the output.
+Returns `true` when no more user body data will arrive: either the user called
+`closeBody`, or the writer has already transitioned to `complete` or `closed`.
+
+Note: this does **not** mean the wire is ready to accept new bytes — a `closed`
+writer cannot send anything. Use this to decide whether to flush pending body
+data rather than to check writability.
 -/
 @[inline]
-def isReadyToSend {dir} (writer : Writer dir) : Bool :=
+def noMoreUserData {dir} (writer : Writer dir) : Bool :=
   match writer.state with
   | .closed | .complete => true
   | _ => writer.userClosedBody
