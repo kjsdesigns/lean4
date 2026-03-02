@@ -24,25 +24,46 @@ namespace Std.Http.Internal.Char
 set_option linter.all true
 
 /--
-Checks if a byte represents an ASCII character (value < 128).
+Checks if a character is ASCII (Unicode code point < 128).
 -/
 @[expose]
 def isAscii (c : Char) : Bool :=
   c.toNat < 128
 
 /--
+Checks if a character is a decimal digit (0-9).
+-/
+@[inline, expose]
+def isDigitChar (c : Char) : Bool :=
+  c ≥ '0' ∧ c ≤ '9'
+
+/--
+Checks if a character is an alphabetic character (a-z or A-Z).
+-/
+@[inline, expose]
+def isAlphaChar (c : Char) : Bool :=
+  (c ≥ 'A' ∧ c ≤ 'Z') ∨ (c ≥ 'a' ∧ c ≤ 'z')
+
+/--
+Checks if a byte represents an ASCII character (value < 128).
+-/
+@[expose]
+def isAsciiByte (c : UInt8) : Bool :=
+  c < 128
+
+/--
 Checks if a byte is a decimal digit (0-9).
 -/
 @[inline, expose]
-def isDigit (c : Char) : Bool :=
-  c ≥ '0' ∧ c ≤ '9'
+def isDigit (c : UInt8) : Bool :=
+  c >= '0'.toUInt8 && c <= '9'.toUInt8
 
 /--
 Checks if a byte is an alphabetic character (a-z or A-Z).
 -/
 @[inline, expose]
-def isAlpha (c : Char) : Bool :=
-  (c ≥ 'A' ∧ c ≤ 'Z') ∨ (c ≥ 'a' ∧ c ≤ 'z')
+def isAlpha (c : UInt8) : Bool :=
+  (c >= 'A'.toUInt8 && c <= 'Z'.toUInt8) || (c >= 'a'.toUInt8 && c <= 'z'.toUInt8)
 
 /--
 Two character predicates are equivalent on ASCII input (`0x00`-`0x7F`).
@@ -58,8 +79,8 @@ tchar = "!" / "#" / "$" / "%" / "&" / "'" / "*"
 -/
 def tchar (c : Char) : Bool :=
   "!#$%&'*+-.^_`|~".toList.contains c
-  ∨ isDigit c
-  ∨ isAlpha c
+  ∨ isDigitChar c
+  ∨ isAlphaChar c
 
 /--
 Checks if a character is a valid HTTP token character per RFC 9110 §5.6.2.
@@ -238,7 +259,8 @@ def obsText (c : Char) : Bool :=
 
 /--
 reason-phrase character class:
-HTAB / SP / VCHAR / obs-text
+HTAB / SP / VCHAR
+; ASCII-only variant (no obs-text).
 
 Reference: https://httpwg.org/specs/rfc9110.html#reason.phrase
 -/
@@ -254,15 +276,28 @@ def reasonPhraseChar (c : Char) : Bool :=
 theorem reasonPhraseChar_eq_reasonPhraseCharSpec : EqOnAscii reasonPhraseChar reasonPhraseCharSpec := by
   decide
 
+def isHexDigitSpec (c : Char) : Bool :=
+  (c ≥ '0' && c ≤ '9') ||
+  (c ≥ 'a' && c ≤ 'f') ||
+  (c ≥ 'A' && c ≤ 'F')
+
 /--
-Checks if a byte is a hexadecimal digit (0-9, a-f, or A-F). Note: This accepts both lowercase and
-uppercase hex digits.
+Checks if a byte is a hexadecimal digit (0-9, a-f, or A-F) using a precomputed bitmask.
 -/
 @[expose]
-def isHexDigit (c : UInt8) : Bool :=
-  (c ≥ '0'.toUInt8 ∧ c ≤ '9'.toUInt8) ∨
-  (c ≥ 'a'.toUInt8 ∧ c ≤ 'f'.toUInt8) ∨
-  (c ≥ 'A'.toUInt8 ∧ c ≤ 'F'.toUInt8)
+def isHexDigit (c : Char) : Bool :=
+  Nat.testBit 0x0000007e0000007e03ff000000000000 c.toNat
+
+theorem isHexDigit_eq_isHexDigitSpec_on_ascii : EqOnAscii isHexDigit isHexDigitSpec := by
+  decide
+
+/--
+Checks if a byte is a hexadecimal digit (0-9, a-f, or A-F).
+-/
+def isHexDigitByte (c : UInt8) : Bool :=
+  (c ≥ '0'.toUInt8 && c ≤ '9'.toUInt8) ||
+  (c ≥ 'a'.toUInt8 && c ≤ 'f'.toUInt8) ||
+  (c ≥ 'A'.toUInt8 && c ≤ 'F'.toUInt8)
 
 /--
 Checks if a byte is an alphanumeric digit (0-9, a-z, or A-Z).
