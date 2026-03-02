@@ -27,9 +27,6 @@ register_builtin_option linter.constructorNameAsVariable : Bool := {
   descr := "enable the linter that warns when bound variable names are nullary constructor names"
 }
 
-/-- Get the value of `linter.constructorNameAsVariable`, respecting `linter.all`. -/
-def getLinterConstructorNameAsVariable (o : Options) : Bool := getLinterValue linter.constructorNameAsVariable o
-
 /--
 Reports when bound variables' names overlap with constructor names for their type. This is to warn
 especially new users that they have built a pattern that matches anything, rather than one that
@@ -37,7 +34,7 @@ matches a particular constructor. Use `linter.constructorNameAsVariable` to disa
 -/
 def constructorNameAsVariable : Linter where
   run cmdStx := do
-    unless getLinterConstructorNameAsVariable (← getOptions) do
+    unless getLinterValue linter.constructorNameAsVariable (← getOptions) do
       return
     let some cmdStxRange := cmdStx.getRange?
       | return
