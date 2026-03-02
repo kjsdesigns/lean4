@@ -95,6 +95,7 @@ where
       have hcast : w * idx = outWidth := by
         simp only [show idx = w by omega, h']
       ⟨aig, hcast ▸ acc⟩
+termination_by w - idx
 
 theorem blastExtractAndExtend.go_le_size (aig : AIG α) (idx : Nat) (x : AIG.RefVec aig w)
     (acc : AIG.RefVec aig (w * idx)) (h : idx ≤ w) (h' : outWidth = w * w) :
@@ -105,6 +106,7 @@ theorem blastExtractAndExtend.go_le_size (aig : AIG α) (idx : Nat) (x : AIG.Ref
   · apply Nat.le_trans ?_ (by apply blastExtractAndExtend.go_le_size)
     apply AIG.LawfulVecOperator.le_size (f := blastExtractAndExtendBit)
   · simp
+termination_by w - idx
 
 theorem blastExtractAndExtend.go_decl_eq (aig : AIG α) (idx' : Nat) (x : AIG.RefVec aig w)
     (acc : AIG.RefVec aig (w * idx')) (h : idx' ≤ w) (h' : outWidth = w * w) :
@@ -121,6 +123,7 @@ theorem blastExtractAndExtend.go_decl_eq (aig : AIG α) (idx' : Nat) (x : AIG.Re
     apply AIG.LawfulVecOperator.lt_size_of_lt_aig_size (f := blastExtract)
     omega
   · simp [← hres]
+termination_by w - idx'
 
 instance : AIG.LawfulVecOperator α blastExtractAndExtendTarget blastExtractAndExtend where
   le_size := by
@@ -259,6 +262,7 @@ theorem blastCpopTree.go_le_size (aig : AIG α) (oldLayer : AIG.RefVec aig (len 
   · apply Nat.le_trans _ (by apply blastCpopTree.go_le_size)
     apply blastCpopLayer.go_le_size
   · simp
+termination_by len
 
 theorem blastCpopTree.go_decl_eq (aig : AIG α) (oldLayer : AIG.RefVec aig (len * w))
       (h : 0 < len) :
@@ -275,6 +279,7 @@ theorem blastCpopTree.go_decl_eq (aig : AIG α) (oldLayer : AIG.RefVec aig (len 
     · apply Nat.lt_of_lt_of_le h2
       apply blastCpopLayer.go_le_size
   · simp [← hres]
+termination_by len
 
 instance : AIG.LawfulVecOperator α blastCpopTreeTarget blastCpopTree where
   le_size := by

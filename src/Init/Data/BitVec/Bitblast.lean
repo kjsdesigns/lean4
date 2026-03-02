@@ -2444,6 +2444,7 @@ def cpopTree (l : BitVec (len * w)) : BitVec w :=
     l.cast (by simp [h])
   else
     cpopTree (cpopLayer l 0#(0 * w) (by omega))
+termination_by len
 
 /--
   Given flattened bitvector `x : BitVec w` and a length `l : Nat`,
@@ -2779,6 +2780,7 @@ private theorem addRecAux_cpopTree {x : BitVec (len * w)} :
       · rfl
       · intros j hj
         simp [extractLsb'_cpopLayer]
+termination_by len
 
 private theorem addRecAux_eq_cpopTree {x : BitVec (len * w)} :
     x.addRecAux len 0#w = (x.cpopTree).cast (by simp) := by

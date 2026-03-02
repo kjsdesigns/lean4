@@ -124,6 +124,7 @@ theorem denote_blastExtractAndExtend.go (assign : α → Bool) (aig : AIG α) (c
   · have hcurr : currIdx = w := by omega
     subst hcurr
     rw [← hgen, ← hacc idx hidx]
+termination_by w - currIdx
 
 theorem denote_blastExtractAndExtend (assign : α → Bool) (aig : AIG α) (w : Nat) (xc : AIG.RefVec aig w)
     (x : BitVec w)
@@ -295,7 +296,8 @@ theorem denote_blastCpopTree (aig : AIG α) (len : Nat)
   simp [hpar]
 
 @[simp]
-theorem denote_blastCpop (aig : AIG α) (xc : AIG.RefVec aig w) (x : BitVec w) (assign : α → Bool)
+public theorem denote_blastCpop (aig : AIG α) (xc : AIG.RefVec aig w) (x : BitVec w)
+    (assign : α → Bool)
     (hx : ∀ (idx : Nat) (hidx : idx < w), ⟦aig, xc.get idx hidx, assign⟧ = x.getLsbD idx) :
     ∀ (idx : Nat) (hidx : idx < w),
       ⟦
