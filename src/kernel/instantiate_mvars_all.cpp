@@ -411,13 +411,17 @@ class instantiate_delayed_fn {
         return optional<expr>(lift_loose_bvars(it->second.value, d));
     }
 
-    /* Cache lookup — O(1) with generation-based staleness check. */
+    /* Cache lookup — O(1) with generation-based staleness check.
+       An entry at scope_level 0 (no fvar dependency) is valid at any scope.
+       An entry at scope_level > 0 is only valid at exactly that scope level,
+       because an inner scope may shadow the fvars it depends on. */
     optional<expr> cache_lookup(lean_object * ptr) {
         auto key = mk_pair(ptr, m_depth);
         auto it = m_cache.find(key);
         if (it == m_cache.end()) return {};
         auto & entry = it->second;
-        if (entry.scope_level <= m_scope &&
+        if ((entry.scope_level == 0 || entry.scope_level == m_scope) &&
+            entry.scope_level <= m_scope &&
             m_scope_gens[entry.scope_level] == entry.scope_gen) {
             m_result_scope = std::max(m_result_scope, entry.scope_level);
             return optional<expr>(entry.result);
