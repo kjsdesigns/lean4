@@ -2408,6 +2408,7 @@ def extractAndExtendAux (k len : Nat) (x : BitVec w) (acc : BitVec (k * len)) (h
   | n' + 1 =>
     let acc' := extractAndExtendBit k len x ++ acc
     extractAndExtendAux (k + 1) len x (acc'.cast (by simp [Nat.add_mul]; omega)) (by omega)
+termination_by w - k
 
 /-- We instantiate `extractAndExtendAux` to extend each bit to `len`, extending
   each bit in `x` to have width `w` and returning a `BitVec (w * w)`. -/

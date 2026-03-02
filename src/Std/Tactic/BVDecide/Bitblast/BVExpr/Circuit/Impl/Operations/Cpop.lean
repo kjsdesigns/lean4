@@ -195,6 +195,7 @@ theorem blastCpopLayer.go_le_size (aig : AIG α) (iterNum: Nat) (oldLayer : AIG.
   · simp only [AIG.RefVec.cast_cast]
     <;> (refine Nat.le_trans ?_ (by apply blastCpopLayer.go_le_size); apply AIG.LawfulVecOperator.le_size)
   · simp
+termination_by len - iterNum * 2
 
 theorem blastCpopLayer.go_decl_eq (aig : AIG α) (iterNum: Nat) (oldLayer : AIG.RefVec aig (len * w))
     (newLayer : AIG.RefVec aig (iterNum * w)) (hold : 2 * (iterNum - 1) < len) (hout : outWidth = (len + 1) / 2 * w) :
@@ -212,6 +213,7 @@ theorem blastCpopLayer.go_decl_eq (aig : AIG α) (iterNum: Nat) (oldLayer : AIG.
       · apply AIG.LawfulVecOperator.lt_size_of_lt_aig_size (f := blastAdd)
         assumption
   · simp [← hres]
+termination_by len - iterNum * 2
 
 instance : AIG.LawfulVecOperator α blastCpopLayerTarget blastCpopLayer where
   le_size := by

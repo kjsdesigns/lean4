@@ -212,6 +212,7 @@ theorem denote_blastCpopLayer.go (aig : AIG α) (iterNum : Nat)
   · have h : iterNum = (len + 1) / 2 := by omega
     subst h
     rw [← hgen, hnew]
+termination_by len - iterNum * 2
 
 theorem denote_blastCpopLayer (aig : AIG α)
     (oldLayer : AIG.RefVec aig (len * w))
@@ -277,6 +278,7 @@ theorem denote_blastCpopTree.go (aig : AIG α) (len : Nat)
       · apply eqRec_heq
       · apply proof_irrel_heq
     · omega
+termination_by len
 
 
 theorem denote_blastCpopTree (aig : AIG α) (len : Nat)
