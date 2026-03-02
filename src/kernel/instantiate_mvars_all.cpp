@@ -26,8 +26,8 @@ Pass 2 (`instantiate_delayed_fn`):
   Fused traversal that resolves delayed assignments by carrying a fvar substitution.
   Since pass 1 has pre-normalized all direct chains, each pending value is compact
   and visited once, avoiding the O(n³) sharing loss that occurs when the fused
-  approach must also chase direct chains. Unassigned mvars under an active fvar
-  substitution are handled via `elimMVarDeps` (abstract_mvar_fvars).
+  approach must also chase direct chains. Unassigned mvars are left as-is (matching
+  the original `instantiateMVars` behavior).
 
 The combination preserves sharing (O(n²) output for the pathological nested-delayed
 case) while avoiding the separate `replace_fvars` calls of the standard approach.
@@ -39,8 +39,6 @@ extern "C" object * lean_assign_lmvar(obj_arg mctx, obj_arg mid, obj_arg val);
 extern "C" object * lean_get_mvar_assignment(obj_arg mctx, obj_arg mid);
 extern "C" object * lean_get_delayed_mvar_assignment(obj_arg mctx, obj_arg mid);
 extern "C" object * lean_assign_mvar(obj_arg mctx, obj_arg mid, obj_arg val);
-extern "C" object * lean_abstract_mvar_fvars(obj_arg mctx, obj_arg mid, obj_arg fvars, obj_arg values);
-
 typedef object_ref metavar_ctx;
 typedef object_ref delayed_assignment;
 
@@ -64,20 +62,6 @@ static option_ref<expr> get_mvar_assignment(metavar_ctx & mctx, name const & mid
 
 static option_ref<delayed_assignment> get_delayed_mvar_assignment(metavar_ctx & mctx, name const & mid) {
     return option_ref<delayed_assignment>(lean_get_delayed_mvar_assignment(mctx.to_obj_arg(), mid.to_obj_arg()));
-}
-
-/* Abstract fvars from an unassigned mvar by creating a delayed-assigned mvar.
-   Returns a pair (mctx', result) where result has the fvars replaced by values.
-   Uses the Lean-implemented elimMVarDeps machinery. */
-static object_ref abstract_mvar_fvars(metavar_ctx & mctx, name const & mid,
-                                      array_ref<expr> const & fvars, array_ref<expr> const & values) {
-    object * r = lean_abstract_mvar_fvars(mctx.steal(), mid.to_obj_arg(), fvars.to_obj_arg(), values.to_obj_arg());
-    /* result is a pair (MetavarContext, Expr) */
-    mctx.set_box(cnstr_get(r, 0));
-    lean_inc(cnstr_get(r, 0));
-    expr result(cnstr_get(r, 1), true);
-    lean_dec(r);
-    return object_ref(result.steal());
 }
 
 /* Level metavariable instantiation. */
@@ -144,6 +128,11 @@ class instantiate_direct_fn {
     metavar_ctx & m_mctx;
     instantiate_lmvars_all_fn m_level_fn;
     name_set m_already_normalized;
+    /* Set of delayed-assigned mvars whose pending value is assigned and
+       mvar-free after normalization. Used by pass 2 as a guard: only resolve
+       delayed assignments when the pending mvar is in this set, matching
+       the original instantiateMVars behavior. */
+    name_set m_resolvable_delayed;
     lean::unordered_map<lean_object *, expr> m_cache;
     std::vector<expr> m_saved;
 
@@ -218,6 +207,64 @@ class instantiate_direct_fn {
         return apply_beta(f_new, args.size(), args.data(), preserve_data, zeta);
     }
 
+    /* Check whether a normalized value would be mvar-free after full resolution.
+       Uses m_resolvable_delayed to check inner delayed mvars. After pass 1
+       normalization, remaining mvars are either unassigned or delayed-assigned. */
+    bool is_value_resolvable(expr const & e) {
+        if (!has_expr_mvar(e)) return true;
+        switch (e.kind()) {
+        case expr_kind::BVar: case expr_kind::Lit: case expr_kind::FVar:
+        case expr_kind::Sort: case expr_kind::Const:
+            return true;
+        case expr_kind::MVar:
+            /* Bare mvar after pass 1 normalization: not directly assigned. */
+            return false;
+        case expr_kind::App: {
+            expr const & f = get_app_fn(e);
+            if (is_mvar(f)) {
+                /* Mvar app after pass 1: must be delayed-assigned or unassigned. */
+                name const & mid = mvar_name(f);
+                option_ref<delayed_assignment> d = get_delayed_mvar_assignment(m_mctx, mid);
+                if (!d) return false;
+                array_ref<expr> fvars(cnstr_get(d.get_val().raw(), 0), true);
+                if (fvars.size() > get_app_num_args(e)) return false;
+                name mid_pending(cnstr_get(d.get_val().raw(), 1), true);
+                if (!m_resolvable_delayed.contains(mid_pending)) return false;
+                /* Also check args for unresolvable mvars. */
+                expr const * curr = &e;
+                while (is_app(*curr)) {
+                    if (!is_value_resolvable(app_arg(*curr))) return false;
+                    curr = &app_fn(*curr);
+                }
+                return true;
+            }
+            return is_value_resolvable(app_fn(e)) && is_value_resolvable(app_arg(e));
+        }
+        case expr_kind::Lambda: case expr_kind::Pi:
+            return is_value_resolvable(binding_domain(e)) && is_value_resolvable(binding_body(e));
+        case expr_kind::Let:
+            return is_value_resolvable(let_type(e)) && is_value_resolvable(let_value(e))
+                && is_value_resolvable(let_body(e));
+        case expr_kind::MData:
+            return is_value_resolvable(mdata_expr(e));
+        case expr_kind::Proj:
+            return is_value_resolvable(proj_expr(e));
+        }
+        lean_unreachable();
+    }
+
+    /* Pre-normalize the pending value of a delayed assignment and record
+       whether it is resolvable (assigned and mvar-free after full resolution).
+       Inner delayed assignments are processed first (via recursive normalization),
+       so m_resolvable_delayed is already populated for them. */
+    void normalize_delayed_pending(name const & mid_pending) {
+        if (auto val = get_assignment(mid_pending)) {
+            if (is_value_resolvable(*val)) {
+                m_resolvable_delayed.insert(mid_pending);
+            }
+        }
+    }
+
     expr visit_app(expr const & e) {
         expr const & f = get_app_fn(e);
         if (!is_mvar(f)) {
@@ -233,7 +280,7 @@ class instantiate_direct_fn {
         option_ref<delayed_assignment> d = get_delayed_mvar_assignment(m_mctx, mid);
         if (d) {
             name mid_pending(cnstr_get(d.get_val().raw(), 1), true);
-            get_assignment(mid_pending);
+            normalize_delayed_pending(mid_pending);
         }
         /* Leave the (possibly delayed) mvar in place, just visit args. */
         return visit_mvar_app_args(e);
@@ -248,13 +295,14 @@ class instantiate_direct_fn {
         option_ref<delayed_assignment> d = get_delayed_mvar_assignment(m_mctx, mid);
         if (d) {
             name mid_pending(cnstr_get(d.get_val().raw(), 1), true);
-            get_assignment(mid_pending);
+            normalize_delayed_pending(mid_pending);
         }
         return e; /* leave mvar in place */
     }
 
 public:
     instantiate_direct_fn(metavar_ctx & mctx):m_mctx(mctx), m_level_fn(mctx) {}
+    name_set const & resolvable_delayed() const { return m_resolvable_delayed; }
 
     expr visit(expr const & e) {
         if (!has_mvar(e))
@@ -321,6 +369,7 @@ class instantiate_delayed_fn {
     typedef lean::unordered_map<std::pair<lean_object *, unsigned>, expr, key_hasher> depth_cache;
 
     metavar_ctx & m_mctx;
+    name_set const & m_resolvable_delayed;
     name_hash_map<fvar_subst_entry> m_fvar_subst;
     unsigned m_depth;
     bool m_preserve_sharing;
@@ -339,6 +388,13 @@ class instantiate_delayed_fn {
 
     /* Global cache for fvar-free expressions — scope-independent. */
     lean::unordered_map<lean_object *, expr> m_global_cache;
+
+    /* Write-back support: when fvar_subst is empty, normalize and write back
+       mvar assignments to match the original instantiateMVars mctx side effects.
+       Downstream code (e.g. MutualDef.mkInitialUsedFVarsMap) reads stored
+       assignments and expects them to be normalized. */
+    name_set m_already_normalized;
+    std::vector<expr> m_saved;
 
     bool fvar_subst_empty() const {
         return m_fvar_subst.empty();
@@ -392,10 +448,13 @@ class instantiate_delayed_fn {
     }
 
     /* Get a direct mvar assignment. Visit it to resolve delayed mvars
-       and apply the fvar substitution. Pass 1 has already pre-normalized
-       direct chains, so we only need to handle delayed mvars and fvars.
-       No write-back: values may contain fvar-substituted terms that are
-       not suitable for storing in the mctx. */
+       and apply the fvar substitution.
+       When fvar_subst is empty, normalize and write back the result to
+       the mctx. This matches the original instantiateMVars behavior:
+       downstream code (e.g. MutualDef.mkInitialUsedFVarsMap) reads stored
+       assignments and expects inner delayed assignments to be resolved.
+       When fvar_subst is non-empty, no write-back (values contain
+       fvar-substituted terms not suitable for the mctx). */
     optional<expr> get_assignment(name const & mid) {
         option_ref<expr> r = get_mvar_assignment(m_mctx, mid);
         if (!r)
@@ -404,11 +463,20 @@ class instantiate_delayed_fn {
         if (fvar_subst_empty()) {
             if (!has_mvar(a))
                 return optional<expr>(a);
+            if (m_already_normalized.contains(mid))
+                return optional<expr>(a);
+            m_already_normalized.insert(mid);
+            expr a_new = visit(a);
+            if (!is_eqp(a, a_new)) {
+                m_saved.push_back(a);
+                assign_mvar(m_mctx, mid, a_new);
+            }
+            return optional<expr>(a_new);
         } else {
             if (!has_mvar(a) && !has_fvar(a))
                 return optional<expr>(a);
+            return optional<expr>(visit(a));
         }
-        return optional<expr>(visit(a));
     }
 
     expr visit_app_default(expr const & e) {
@@ -432,41 +500,6 @@ class instantiate_delayed_fn {
         }
         lean_assert(is_mvar(*curr));
         return mk_rev_app(*curr, args.size(), args.data());
-    }
-
-    /* Abstract an unassigned mvar under an active fvar substitution.
-       Creates a delayed assignment that captures the current substitution. */
-    expr abstract_unassigned_mvar(name const & mid) {
-        lean_object * fvars_arr = lean_mk_empty_array();
-        lean_object * values_arr = lean_mk_empty_array();
-        for (auto & entry : m_fvar_subst) {
-            name const & fid = entry.first;
-            expr fv = mk_fvar(fid);
-            fvars_arr = lean_array_push(fvars_arr, fv.steal());
-            if (m_preserve_sharing) {
-                m_result_scope = std::max(m_result_scope, entry.second.scope);
-            }
-            unsigned d = m_depth - entry.second.depth;
-            expr val = (d == 0) ? entry.second.value : lift_loose_bvars(entry.second.value, d);
-            values_arr = lean_array_push(values_arr, val.steal());
-        }
-        object_ref result(abstract_mvar_fvars(m_mctx,
-            mid, array_ref<expr>(fvars_arr), array_ref<expr>(values_arr)));
-        return expr(result.steal());
-    }
-
-    /* Visit a mvar-headed application where the mvar is unassigned and fvar_subst is active.
-       Abstract the mvar (capturing the fvar substitution) and rebuild the application. */
-    expr visit_mvar_app_abstract(expr const & e) {
-        buffer<expr> args;
-        expr const * curr = &e;
-        while (is_app(*curr)) {
-            args.push_back(visit(app_arg(*curr)));
-            curr = &app_fn(*curr);
-        }
-        lean_assert(is_mvar(*curr));
-        expr f = abstract_unassigned_mvar(mvar_name(*curr));
-        return mk_rev_app(f, args.size(), args.data());
     }
 
     expr visit_args_and_beta(expr const & f_new, expr const & e, buffer<expr> & args) {
@@ -532,7 +565,13 @@ class instantiate_delayed_fn {
             }
         }
 
-        return mk_rev_app(val_new, extra_count, args.data());
+        /* Use apply_beta instead of mk_rev_app: pass 1's beta-reduction may have
+           changed delayed mvar arguments (e.g., substituting a bvar with a concrete
+           value), so the resolved pending value may be a lambda that needs beta-
+           reduction with the extra args, matching the original's behavior. */
+        bool preserve_data = false;
+        bool zeta = true;
+        return apply_beta(val_new, extra_count, args.data(), preserve_data, zeta);
     }
 
     expr visit_app(expr const & e) {
@@ -549,27 +588,27 @@ class instantiate_delayed_fn {
         /* Check delayed assignment. */
         option_ref<delayed_assignment> d = get_delayed_mvar_assignment(m_mctx, mid);
         if (!d) {
-            /* Not assigned at all. */
-            if (fvar_subst_empty())
-                return visit_mvar_app_args(e);
-            else
-                return visit_mvar_app_abstract(e);
+            return visit_mvar_app_args(e);
         }
         array_ref<expr> fvars(cnstr_get(d.get_val().raw(), 0), true);
         name mid_pending(cnstr_get(d.get_val().raw(), 1), true);
         if (fvars.size() > get_app_num_args(e)) {
-            /* Insufficient args — can't resolve delayed assignment. */
-            if (fvar_subst_empty())
-                return visit_mvar_app_args(e);
-            else
-                return visit_mvar_app_abstract(e);
+            return visit_mvar_app_args(e);
         }
-        /* Always resolve delayed assignments. When the pending value contains
-           unassigned mvars, they will be left as-is (fvar_subst empty) or
-           handled via abstract_mvar_fvars (fvar_subst active). This is slightly
-           more aggressive than standard instantiateMVars (which leaves delayed
-           assignments unresolved when pending has unassigned mvars), but is
-           semantically correct and makes no difference when all mvars are assigned. */
+        /* Match standard instantiateMVars: only resolve the delayed assignment
+           when the pending value was determined to be resolvable by pass 1
+           (assigned and mvar-free after normalization). */
+        if (!m_resolvable_delayed.contains(mid_pending)) {
+            /* Still normalize the pending value for mctx write-back side effects.
+               The original instantiateMVars always normalizes the pending value
+               (via get_assignment(mid_pending)) even when it can't resolve.
+               Downstream code like MutualDef.mkInitialUsedFVarsMap reads stored
+               assignments and relies on inner delayed assignments being resolved. */
+            if (fvar_subst_empty()) {
+                (void)get_assignment(mid_pending);
+            }
+            return visit_mvar_app_args(e);
+        }
         buffer<expr> args;
         return visit_delayed(fvars, mid_pending, e, args);
     }
@@ -579,13 +618,7 @@ class instantiate_delayed_fn {
         if (auto r = get_assignment(mid)) {
             return *r;
         }
-        /* Not directly assigned. Match standard instantiateMVars:
-           when fvar_subst is empty, just leave the mvar as-is.
-           When fvar_subst is active, abstract to capture the substitution. */
-        if (fvar_subst_empty()) {
-            return e;
-        }
-        return abstract_unassigned_mvar(mid);
+        return e;
     }
 
     expr visit_fvar(expr const & e) {
@@ -597,8 +630,9 @@ class instantiate_delayed_fn {
     }
 
 public:
-    instantiate_delayed_fn(metavar_ctx & mctx, bool preserve_sharing)
-        : m_mctx(mctx), m_depth(0), m_preserve_sharing(preserve_sharing),
+    instantiate_delayed_fn(metavar_ctx & mctx, name_set const & resolvable_delayed, bool preserve_sharing)
+        : m_mctx(mctx), m_resolvable_delayed(resolvable_delayed),
+          m_depth(0), m_preserve_sharing(preserve_sharing),
           m_scope(0), m_result_scope(0) {
         m_cache_stack.emplace_back(); /* scope 0 */
     }
@@ -612,7 +646,7 @@ public:
                 return e;
         }
 
-        bool use_global = !has_fvar(e);
+        bool use_global = !has_fvar(e) && !has_expr_mvar(e);
         bool shared = false;
         if (is_shared(e)) {
             if (use_global) {
@@ -720,7 +754,7 @@ static object * run_instantiate_all(object * m, object * e, bool preserve_sharin
     expr e1 = pass1(expr(e));
 
     /* Pass 2: resolve delayed assignments with fused fvar substitution. */
-    instantiate_delayed_fn pass2(mctx, preserve_sharing);
+    instantiate_delayed_fn pass2(mctx, pass1.resolvable_delayed(), preserve_sharing);
     expr e2 = pass2(e1);
 
     /* (mctx, expr) */

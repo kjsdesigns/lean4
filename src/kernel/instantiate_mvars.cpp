@@ -372,12 +372,9 @@ extern "C" LEAN_EXPORT object * lean_instantiate_expr_mvars_original(object * m,
     return r;
 }
 
+extern "C" LEAN_EXPORT object * lean_instantiate_expr_mvars_all_sharing(object * m, object * e);
+
 extern "C" LEAN_EXPORT object * lean_instantiate_expr_mvars(object * m, object * e) {
-    metavar_ctx mctx(m);
-    expr e_new = instantiate_mvars_fn(mctx)(expr(e));
-    object * r = alloc_cnstr(0, 2, 0);
-    cnstr_set(r, 0, mctx.steal());
-    cnstr_set(r, 1, e_new.steal());
-    return r;
+    return lean_instantiate_expr_mvars_all_sharing(m, e);
 }
 }
