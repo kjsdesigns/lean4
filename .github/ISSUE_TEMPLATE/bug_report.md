@@ -9,7 +9,7 @@ assignees: ''
 
 ### Prerequisites
 
-Please put an X between the brackets as you perform the following steps:
+<!-- Please put an X between the brackets as you perform the following steps: -->
 
 * [ ] Check that your issue is not already filed:
       https://github.com/leanprover/lean4/issues
@@ -25,7 +25,7 @@ Please put an X between the brackets as you perform the following steps:
 
 ### Context
 
-[Broader context that the issue occured in. If there was any prior discussion on [the Lean Zulip](https://leanprover.zulipchat.com), link it here as well.]
+[Broader context that the issue occurred in. If there was any prior discussion on [the Lean Zulip](https://leanprover.zulipchat.com), link it here as well.]
 
 ### Steps to Reproduce
 
@@ -39,7 +39,7 @@ Please put an X between the brackets as you perform the following steps:
 
 ### Versions
 
-[Output of `#eval Lean.versionString`]
+[Output of `#version` or `#eval Lean.versionString`]
 [OS version, if not using live.lean-lang.org.]
 
 ### Additional Information

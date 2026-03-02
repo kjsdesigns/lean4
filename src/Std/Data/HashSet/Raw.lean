@@ -3,27 +3,31 @@ Copyright (c) 2024 Lean FRO, LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Markus Himmel
 -/
-prelude
-import Std.Data.HashMap.Raw
+module
 
-/-
+prelude
+public import Std.Data.HashMap.Raw
+
+@[expose] public section
+
+/-!
 # Hash sets with unbundled well-formedness invariant
 
-This module develops the type `Std.Data.HashSet.Raw` of dependent hash
-set with unbundled well-formedness invariant.
+This module develops the type `Std.HashSet.Raw` of hash sets with
+unbundled well-formedness invariant.
 
 This version is safe to use in nested inductive types. The well-formedness predicate is
-available as `Std.Data.HashSet.Raw.WF` and we prove in this file that all operations preserve
-well-formedness. When in doubt, prefer `HashSet` over `DHashSet.Raw`.
+available as `Std.HashSet.Raw.WF` and we prove in this file that all operations preserve
+well-formedness. When in doubt, prefer `HashSet` over `HashSet.Raw`.
 
-Lemmas about the operations on `Std.Data.HashSet.Raw` are available in the module
+Lemmas about the operations on `Std.HashSet.Raw` are available in the module
 `Std.Data.HashSet.RawLemmas`.
 -/
 
 set_option linter.missingDocs true
 set_option autoImplicit false
 
-universe u v
+universe u v w
 
 variable {α : Type u}
 
@@ -62,21 +66,40 @@ Creates a new empty hash set. The optional parameter `capacity` can be supplied 
 so that it can hold the given number of elements without reallocating. It is also possible to use
 the empty collection notations `∅` and `{}` to create an empty hash set with the default capacity.
 -/
-@[inline] def empty (capacity := 8) : Raw α :=
-  ⟨HashMap.Raw.empty capacity⟩
+@[inline] def emptyWithCapacity (capacity := 8) : Raw α :=
+  ⟨HashMap.Raw.emptyWithCapacity capacity⟩
 
 instance : EmptyCollection (Raw α) where
-  emptyCollection := empty
+  emptyCollection := emptyWithCapacity
 
 instance : Inhabited (Raw α) where
   default := ∅
 
 /--
+Two hash sets are equivalent in the sense of `Equiv` iff all their values are equal.
+-/
+structure Equiv (m₁ m₂ : Raw α) where
+  /-- Internal implementation detail of the hash map -/
+  inner : m₁.1.Equiv m₂.1
+
+@[inherit_doc] scoped infixl:50 " ~m " => Equiv
+
+/--
 Inserts the given element into the set. If the hash set already contains an element that is
 equal (with regard to `==`) to the given element, then the hash set is returned unchanged.
+
+Note: this non-replacement behavior is true for `HashSet` and `HashSet.Raw`.
+The `insert` function on `HashMap`, `DHashMap`, `HashMap.Raw` and `DHashMap.Raw` behaves
+differently: it will overwrite an existing mapping.
 -/
 @[inline] def insert [BEq α] [Hashable α] (m : Raw α) (a : α) : Raw α :=
   ⟨m.inner.insertIfNew a ()⟩
+
+instance [BEq α] [Hashable α] : Singleton α (Raw α) := ⟨fun a => (∅ : Raw α).insert a⟩
+
+instance [BEq α] [Hashable α] : Insert α (Raw α) := ⟨fun a s => s.insert a⟩
+
+instance [BEq α] [Hashable α] : LawfulSingleton α (Raw α) := ⟨fun _ => rfl⟩
 
 /--
 Checks whether an element is present in a set and inserts the element if it was not found.
@@ -100,7 +123,7 @@ Observe that this is different behavior than for lists: for lists, `∈` uses `=
   m.inner.contains a
 
 instance [BEq α] [Hashable α] : Membership α (Raw α) where
-  mem a m := a ∈ m.inner
+  mem m a := a ∈ m.inner
 
 instance [BEq α] [Hashable α] {m : Raw α} {a : α} : Decidable (a ∈ m) :=
   inferInstanceAs (Decidable (a ∈ m.inner))
@@ -114,6 +137,34 @@ instance [BEq α] [Hashable α] {m : Raw α} {a : α} : Decidable (a ∈ m) :=
   m.inner.size
 
 /--
+Checks if given key is contained and returns the key if it is, otherwise `none`.
+The result in the `some` case is guaranteed to be pointer equal to the key in the map.
+-/
+@[inline] def get? [BEq α] [Hashable α] (m : Raw α) (a : α) : Option α :=
+  m.inner.getKey? a
+
+/--
+Retrieves the key from the set that matches `a`. Ensures that such a key exists by requiring a proof
+of `a ∈ m`. The result is guaranteed to be pointer equal to the key in the set.
+-/
+@[inline] def get [BEq α] [Hashable α] (m : Raw α) (a : α) (h : a ∈ m) : α :=
+  m.inner.getKey a h
+
+/--
+Checks if given key is contained and returns the key if it is, otherwise `fallback`.
+If they key is contained the result is guaranteed to be pointer equal to the key in the set.
+-/
+@[inline] def getD [BEq α] [Hashable α] (m : Raw α) (a : α) (fallback : α) : α :=
+  m.inner.getKeyD a fallback
+
+/--
+Checks if given key is contained and returns the key if it is, otherwise panics.
+If no panic occurs the result is guaranteed to be pointer equal to the key in the set.
+-/
+@[inline] def get! [BEq α] [Hashable α] [Inhabited α] (m : Raw α) (a : α) : α :=
+  m.inner.getKey! a
+
+/--
 Returns `true` if the hash set contains no elements.
 
 Note that if your `BEq` instance is not reflexive or your `Hashable` instance is not
@@ -123,59 +174,9 @@ for all `a`.
 @[inline] def isEmpty (m : Raw α) : Bool :=
   m.inner.isEmpty
 
-section Unverified
-
-/-! We currently do not provide lemmas for the functions below. -/
-
-/-! We currently do not provide lemmas for the functions below. -/
-
-/-- Removes all elements from the hash set for which the given function returns `false`. -/
-@[inline] def filter [BEq α] [Hashable α] (f : α → Bool) (m : Raw α) : Raw α :=
-  ⟨m.inner.filter fun a _ => f a⟩
-
-/--
-Monadically computes a value by folding the given function over the elements in the hash set in some
-order.
--/
-@[inline] def foldM {m : Type v → Type v} [Monad m] {β : Type v} (f : β → α → m β) (init : β)
-    (b : Raw α) : m β :=
-  b.inner.foldM (fun b a _ => f b a) init
-
-/-- Folds the given function over the elements of the hash set in some order. -/
-@[inline] def fold {β : Type v} (f : β → α → β) (init : β) (m : Raw α) : β :=
-  m.inner.fold (fun b a _ => f b a) init
-
-/-- Carries out a monadic action on each element in the hash set in some order. -/
-@[inline] def forM {m : Type v → Type v} [Monad m] (f : α → m PUnit) (b : Raw α) : m PUnit :=
-  b.inner.forM (fun a _ => f a)
-
-/-- Support for the `for` loop construct in `do` blocks. -/
-@[inline] def forIn {m : Type v → Type v} [Monad m] {β : Type v} (f : α → β → m (ForInStep β))
-    (init : β) (b : Raw α) : m β :=
-  b.inner.forIn (fun a _ acc => f a acc) init
-
-instance {m : Type v → Type v} : ForM m (Raw α) α where
-  forM m f := m.forM f
-
-instance {m : Type v → Type v} : ForIn m (Raw α) α where
-  forIn m init f := m.forIn f init
-
 /-- Transforms the hash set into a list of elements in some order. -/
 @[inline] def toList (m : Raw α) : List α :=
   m.inner.keys
-
-/-- Transforms the hash set into an array of elements in some order. -/
-@[inline] def toArray (m : Raw α) : Array α :=
-  m.inner.keysArray
-
-/--
-Inserts multiple elements into the hash set. Note that unlike repeatedly calling `insert`, if the
-collection contains multiple elements that are equal (with regard to `==`), then the last element
-in the collection will be present in the returned hash set.
--/
-@[inline] def insertMany [BEq α] [Hashable α] {ρ : Type v} [ForIn Id ρ α] (m : Raw α) (l : ρ) :
-    Raw α :=
-  ⟨m.inner.insertManyUnit l⟩
 
 /--
 Creates a hash set from a list of elements. Note that unlike repeatedly calling `insert`, if the
@@ -184,6 +185,117 @@ in the collection will be present in the returned hash set.
 -/
 @[inline] def ofList [BEq α] [Hashable α] (l : List α) : Raw α :=
   ⟨HashMap.Raw.unitOfList l⟩
+
+/--
+Monadically computes a value by folding the given function over the elements in the hash set in some
+order.
+-/
+@[inline] def foldM {m : Type v → Type w} [Monad m] {β : Type v} (f : β → α → m β) (init : β)
+    (b : Raw α) : m β :=
+  b.inner.foldM (fun b a _ => f b a) init
+
+/-- Folds the given function over the elements of the hash set in some order. -/
+@[inline] def fold {β : Type v} (f : β → α → β) (init : β) (m : Raw α) : β :=
+  m.inner.fold (fun b a _ => f b a) init
+
+/-- Carries out a monadic action on each element in the hash set in some order. -/
+@[inline] def forM {m : Type v → Type w} [Monad m] (f : α → m PUnit) (b : Raw α) : m PUnit :=
+  b.inner.forM (fun a _ => f a)
+
+/-- Support for the `for` loop construct in `do` blocks. -/
+@[inline] def forIn {m : Type v → Type w} [Monad m] {β : Type v} (f : α → β → m (ForInStep β))
+    (init : β) (b : Raw α) : m β :=
+  b.inner.forIn (fun a _ acc => f a acc) init
+
+instance {m : Type v → Type w} [Monad m] : ForM m (Raw α) α where
+  forM m f := m.forM f
+
+instance {m : Type v → Type w} [Monad m] : ForIn m (Raw α) α where
+  forIn m init f := m.forIn f init
+
+/-- Removes all elements from the hash set for which the given function returns `false`. -/
+@[inline] def filter [BEq α] [Hashable α] (f : α → Bool) (m : Raw α) : Raw α :=
+  ⟨m.inner.filter fun a _ => f a⟩
+
+/-- Transforms the hash set into an array of elements in some order. -/
+@[inline] def toArray (m : Raw α) : Array α :=
+  m.inner.keysArray
+
+/--
+Computes the union of the given hash sets.
+
+This function always merges the smaller set into the larger set, so the expected runtime is
+`O(min(m₁.size, m₂.size))`.
+-/
+@[inline] def union [BEq α] [Hashable α] (m₁ m₂ : Raw α) : Raw α :=
+  ⟨HashMap.Raw.union m₁.inner m₂.inner⟩
+
+instance [BEq α] [Hashable α] : Union (Raw α) := ⟨union⟩
+
+/--
+Computes the intersection of the given hash sets. The result will only contain entries from the first map.
+
+This function always merges the smaller set into the larger set, so the expected runtime is
+`O(min(m₁.size, m₂.size))`.
+-/
+@[inline] def inter [BEq α] [Hashable α] (m₁ m₂ : Raw α) : Raw α :=
+  ⟨HashMap.Raw.inter m₁.inner m₂.inner⟩
+
+instance [BEq α] [Hashable α] : Inter (Raw α) := ⟨inter⟩
+
+
+/--
+Compares two hash sets using Boolean equality on keys.
+
+Returns `true` if the sets contain the same keys, `false` otherwise.
+-/
+def beq [BEq α] [Hashable α] (m₁ m₂ : Raw α) : Bool :=
+  HashMap.Raw.beq m₁.inner m₂.inner
+
+instance [BEq α] [Hashable α] : BEq (Raw α) := ⟨beq⟩
+
+/--
+Computes the difference of the given hash sets.
+
+This function always iterates through the smaller, so the expected runtime is
+`O(min(m₁.size, m₂.size))`.
+-/
+@[inline] def diff [BEq α] [Hashable α] (m₁ m₂ : Raw α) : Raw α :=
+  ⟨HashMap.Raw.diff m₁.inner m₂.inner⟩
+
+instance [BEq α] [Hashable α] : SDiff (Raw α) := ⟨diff⟩
+
+section Unverified
+
+/-! We currently do not provide lemmas for the functions below. -/
+
+/-- Check if all elements satisfy the predicate, short-circuiting if a predicate fails. -/
+@[inline] def all (m : Raw α) (p : α → Bool) : Bool := m.inner.all (fun x _ => p x)
+
+/-- Check if any element satisfies the predicate, short-circuiting if a predicate succeeds. -/
+@[inline] def any (m : Raw α) (p : α → Bool) : Bool := m.inner.any (fun x _ => p x)
+
+/-! We currently do not provide lemmas for the functions below. -/
+
+/--
+Inserts multiple mappings into the hash set by iterating over the given collection and calling
+`insert`. If the same key appears multiple times, the first occurrence takes precedence.
+
+Note: this precedence behavior is true for `HashSet` and `HashSet.Raw`. The `insertMany` function on
+`HashMap`, `DHashMap`, `HashMap.Raw` and `DHashMap.Raw` behaves differently: it will prefer the last
+appearance.
+-/
+@[inline] def insertMany [BEq α] [Hashable α] {ρ : Type v} [ForIn Id ρ α] (m : Raw α) (l : ρ) :
+    Raw α :=
+  ⟨m.inner.insertManyIfNewUnit l⟩
+
+/--
+Creates a hash set from an array of elements. Note that unlike repeatedly calling `insert`, if the
+collection contains multiple elements that are equal (with regard to `==`), then the last element
+in the collection will be present in the returned hash set.
+-/
+@[inline] def ofArray [BEq α] [Hashable α] (l : Array α) : Raw α :=
+  ⟨HashMap.Raw.unitOfArray l⟩
 
 /--
 Returns the number of buckets in the internal representation of the hash set. This function may
@@ -208,11 +320,11 @@ structure WF [BEq α] [Hashable α] (m : Raw α) : Prop where
   /-- Internal implementation detail of the hash set -/
   out : m.inner.WF
 
-theorem WF.empty [BEq α] [Hashable α] {c} : (empty c : Raw α).WF :=
-  ⟨HashMap.Raw.WF.empty⟩
+theorem WF.emptyWithCapacity [BEq α] [Hashable α] {c} : (emptyWithCapacity c : Raw α).WF :=
+  ⟨HashMap.Raw.WF.emptyWithCapacity⟩
 
-theorem WF.emptyc [BEq α] [Hashable α] : (∅ : Raw α).WF :=
-  ⟨HashMap.Raw.WF.empty⟩
+theorem WF.empty [BEq α] [Hashable α] : (∅ : Raw α).WF :=
+  WF.emptyWithCapacity
 
 theorem WF.insert [BEq α] [Hashable α] {m : Raw α} {a : α} (h : m.WF) : (m.insert a).WF :=
   ⟨HashMap.Raw.WF.insertIfNew h.out⟩
@@ -229,11 +341,20 @@ theorem WF.filter [BEq α] [Hashable α] {m : Raw α} {f : α → Bool} (h : m.W
 
 theorem WF.insertMany [BEq α] [Hashable α] {ρ : Type v} [ForIn Id ρ α] {m : Raw α} {l : ρ}
     (h : m.WF) : (m.insertMany l).WF :=
-  ⟨HashMap.Raw.WF.insertManyUnit h.out⟩
+  ⟨HashMap.Raw.WF.insertManyIfNewUnit h.out⟩
 
 theorem WF.ofList [BEq α] [Hashable α] {l : List α} :
     (ofList l : Raw α).WF :=
   ⟨HashMap.Raw.WF.unitOfList⟩
+
+theorem WF.union [BEq α] [Hashable α] {m₁ m₂ : Raw α} (h₁ : m₁.WF) (h₂ : m₂.WF) : (m₁ ∪ m₂).WF :=
+  ⟨HashMap.Raw.WF.union h₁.out h₂.out⟩
+
+theorem WF.inter [BEq α] [Hashable α] {m₁ m₂ : Raw α} (h₁ : m₁.WF) (h₂ : m₂.WF) : (m₁ ∩ m₂).WF :=
+  ⟨HashMap.Raw.WF.inter h₁.out h₂.out⟩
+
+theorem WF.diff [BEq α] [Hashable α] {m₁ m₂ : Raw α} (h₁ : m₁.WF) (h₂ : m₂.WF) : (m₁ \ m₂).WF :=
+  ⟨HashMap.Raw.WF.diff h₁.out h₂.out⟩
 
 end Raw
 

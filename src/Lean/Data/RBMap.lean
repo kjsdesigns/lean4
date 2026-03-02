@@ -3,9 +3,15 @@ Copyright (c) 2017 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura
 -/
+module
+
 prelude
-import Init.Data.Ord
-import Init.Data.Nat.Linear
+public import Init.Data.Ord.Basic
+public import Init.Data.Nat.Linear
+public import Init.Data.Array.Basic
+import Init.WFTactics
+
+public section
 
 namespace Lean
 universe u v w w'
@@ -227,7 +233,7 @@ inductive WellFormed (cmp : α → α → Ordering) : RBNode α β → Prop wher
 
 section Map
 
-@[specialize] def mapM {α : Type v} {β γ : α → Type v} {M : Type v → Type v} [Applicative M]
+@[specialize] def mapM {α : Type v} {β γ : α → Type v} {M : Type v → Type w} [Applicative M]
   (f : (a : α) → β a → M (γ a))
   : RBNode α β → M (RBNode α γ)
   | leaf => pure leaf
@@ -253,7 +259,7 @@ open Lean.RBNode
 
 /- TODO(Leo): define dRBMap -/
 
-def RBMap (α : Type u) (β : Type v) (cmp : α → α → Ordering) : Type (max u v) :=
+@[expose] def RBMap (α : Type u) (β : Type v) (cmp : α → α → Ordering) : Type (max u v) :=
   {t : RBNode α (fun _ => β) // t.WellFormed cmp }
 
 @[inline] def mkRBMap (α : Type u) (β : Type v) (cmp : α → α → Ordering) : RBMap α β cmp :=
@@ -291,15 +297,20 @@ def isSingleton (t : RBMap α β cmp) : Bool :=
 @[inline] protected def forIn [Monad m] (t : RBMap α β cmp) (init : σ) (f : (α × β) → σ → m (ForInStep σ)) : m σ :=
   t.val.forIn init (fun a b acc => f (a, b) acc)
 
-instance : ForIn m (RBMap α β cmp) (α × β) where
+instance [Monad m] : ForIn m (RBMap α β cmp) (α × β) where
   forIn := RBMap.forIn
 
 @[inline] def isEmpty : RBMap α β cmp → Bool
   | ⟨leaf, _⟩ => true
   | _         => false
 
+/-- Returns a `List` of the key/value pairs in order. -/
 @[specialize] def toList : RBMap α β cmp → List (α × β)
   | ⟨t, _⟩ => t.revFold (fun ps k v => (k, v)::ps) []
+
+/-- Returns an `Array` of the key/value pairs in order. -/
+@[specialize] def toArray : RBMap α β cmp → Array (α × β)
+  | ⟨t, _⟩ => t.fold (fun ps k v => ps.push (k, v)) #[]
 
 /-- Returns the kv pair `(a,b)` such that `a ≤ k` for all keys in the RBMap. -/
 @[inline] protected def min : RBMap α β cmp → Option (α × β)
@@ -398,6 +409,24 @@ def intersectBy {γ : Type v₁} {δ : Type v₂} (mergeFn : α → β → γ �
       match t₂.find? a with
       | some b₂ => acc.insert a <| mergeFn a b₁ b₂
       | none => acc
+
+/--
+`filter f m` returns the `RBMap` consisting of all
+"`key`/`val`"-pairs in `m` where `f key val` returns `true`.
+-/
+def filter (f : α → β → Bool) (m : RBMap α β cmp) : RBMap α β cmp :=
+  m.fold (fun r k v => if f k v then r.insert k v else r) {}
+
+/--
+`filterMap f m` filters an `RBMap` and simultaneously modifies the filtered values.
+
+It takes a function `f : α → β → Option γ` and applies `f k v` to the value with key `k`.
+The resulting entries with non-`none` value are collected to form the output `RBMap`.
+-/
+def filterMap (f : α → β → Option γ) (m : RBMap α β cmp) : RBMap α γ cmp :=
+  m.fold (fun r k v => match f k v with
+    | none => r
+    | some b => r.insert k b) {}
 
 end RBMap
 

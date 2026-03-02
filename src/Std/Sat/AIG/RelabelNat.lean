@@ -3,7 +3,14 @@ Copyright (c) 2024 Lean FRO, LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Henrik Böving
 -/
-import Std.Sat.AIG.Relabel
+module
+
+prelude
+public import Std.Sat.AIG.Relabel
+import Init.ByCases
+import Init.Omega
+
+@[expose] public section
 
 
 namespace Std
@@ -88,9 +95,9 @@ inductive Inv2 (decls : Array (Decl α)) : Nat → HashMap α Nat → Prop where
   (hmap : map[a]? = none) : Inv2 decls (idx + 1) (map.insert a val)
 | oldAtom (hinv : Inv2 decls idx map) (hlt : idx < decls.size) (hatom : decls[idx] = .atom a)
   (hmap : map[a]? = some n) : Inv2 decls (idx + 1) map
-| const (hinv : Inv2 decls idx map) (hlt : idx < decls.size) (hatom : decls[idx] = .const b) :
+| false (hinv : Inv2 decls idx map) (hlt : idx < decls.size) (hatom : decls[idx] = .false) :
   Inv2 decls (idx + 1) map
-| gate (hinv : Inv2 decls idx map) (hlt : idx < decls.size) (hatom : decls[idx] = .gate l r li ri) :
+| gate (hinv : Inv2 decls idx map) (hlt : idx < decls.size) (hatom : decls[idx] = .gate l r) :
   Inv2 decls (idx + 1) map
 
 theorem Inv2.upper_lt_size {decls : Array (Decl α)} (hinv : Inv2 decls upper map) :
@@ -108,11 +115,11 @@ theorem Inv2.property (decls : Array (Decl α)) (idx upper : Nat) (map : HashMap
   induction hinv with
   | empty => omega
   | newAtom ih1 ih2 ih3 ih4 ih5 =>
-    next idx' _ a' _ =>
+    rename_i idx' _ a' _
     replace hidx : idx ≤ idx' := by omega
     rw [HashMap.getElem?_insert]
     match heq2 : a' == a with
-    | false =>
+    | .false =>
       simp only [Bool.false_eq_true, ↓reduceIte]
       cases Nat.eq_or_lt_of_le hidx with
       | inl hidxeq =>
@@ -124,7 +131,7 @@ theorem Inv2.property (decls : Array (Decl α)) (idx upper : Nat) (map : HashMap
       exact Option.isSome_iff_exists.mp rfl
   | oldAtom ih1 ih2 ih3 ih4 ih5 =>
     simp_all only [true_implies]
-    next idx' _ _ _ =>
+    rename_i idx' _ _ _
     replace hidx : idx ≤ idx' := by omega
     cases Nat.eq_or_lt_of_le hidx with
     | inl hidxeq =>
@@ -133,14 +140,14 @@ theorem Inv2.property (decls : Array (Decl α)) (idx upper : Nat) (map : HashMap
       apply Exists.intro
       assumption
     | inr hlt => apply ih5 <;> assumption
-  | const ih1 ih2 ih3 ih4 =>
-    next idx' _ _ =>
+  | false ih1 ih2 ih3 ih4 =>
+    rename_i idx' _
     replace hidx : idx ≤ idx' := by omega
     cases Nat.eq_or_lt_of_le hidx with
-    | inl hidxeq => simp only [hidxeq, ih3] at heq
+    | inl hidxeq => simp [hidxeq, ih3] at heq
     | inr hlt => apply ih4 <;> assumption
   | gate ih1 ih2 ih3 ih4 =>
-    next idx' _ _ _ _ _ =>
+    rename_i idx' _ _ _
     replace hidx : idx ≤ idx' := by omega
     cases Nat.eq_or_lt_of_le hidx with
     | inl hidxeq => simp [hidxeq, ih3] at heq
@@ -209,14 +216,14 @@ def addAtom {decls : Array (Decl α)} {hidx} (state : State α decls idx) (a : �
     }
 
 /--
-Insert a `Decl.const` into the `State` structure.
+Insert a `Decl.false` into the `State` structure.
 -/
-def addConst {decls : Array (Decl α)} {hidx} (state : State α decls idx) (b : Bool)
-    (h : decls[idx]'hidx = .const b) :
+def addFalse {decls : Array (Decl α)} {hidx} (state : State α decls idx)
+    (h : decls[idx]'hidx = .false) :
     State α decls (idx + 1) :=
   { state with
     inv2 := by
-      apply Inv2.const
+      apply Inv2.false
       · exact state.inv2
       · assumption
   }
@@ -224,8 +231,8 @@ def addConst {decls : Array (Decl α)} {hidx} (state : State α decls idx) (b : 
 /--
 Insert a `Decl.gate` into the `State` structure.
 -/
-def addGate {decls : Array (Decl α)} {hidx} (state : State α decls idx) (lhs rhs : Nat)
-    (linv rinv : Bool) (h : decls[idx]'hidx = .gate lhs rhs linv rinv) :
+def addGate {decls : Array (Decl α)} {hidx} (state : State α decls idx) (lhs rhs : Fanin)
+    (h : decls[idx]'hidx = .gate lhs rhs) :
     State α decls (idx + 1) :=
   { state with
     inv2 := by
@@ -245,8 +252,8 @@ where
       let decl := decls[idx]
       match hdecl : decl with
       | .atom a => go decls (idx + 1) (state.addAtom a hdecl)
-      | .const b => go decls (idx + 1) (state.addConst b hdecl)
-      | .gate lhs rhs linv rinv => go decls (idx + 1) (state.addGate lhs rhs linv rinv hdecl)
+      | .false => go decls (idx + 1) (state.addFalse hdecl)
+      | .gate lhs rhs => go decls (idx + 1) (state.addGate lhs rhs hdecl)
     else
       have : idx = decls.size := by
         have := state.inv2.upper_lt_size
@@ -324,30 +331,36 @@ theorem relabelNat'_fst_eq_relabelNat {aig : AIG α} : aig.relabelNat'.fst = aig
 theorem relabelNat_size_eq_size {aig : AIG α} : aig.relabelNat.decls.size = aig.decls.size := by
   simp [relabelNat, relabelNat']
 
-/--
-`relabelNat` preserves unsatisfiablility.
--/
-theorem relabelNat_unsat_iff [Nonempty α] {aig : AIG α} {hidx1} {hidx2} :
-    (aig.relabelNat).UnsatAt idx hidx1 ↔ aig.UnsatAt idx hidx2 := by
+theorem relabelNat_unsat_iff_of_NonEmpty [Nonempty α] {aig : AIG α} {hidx1} {hidx2} :
+    (aig.relabelNat).UnsatAt idx invert hidx1 ↔ aig.UnsatAt idx invert hidx2 := by
   dsimp only [relabelNat, relabelNat']
   rw [relabel_unsat_iff]
   intro x y hx hy heq
   split at heq
-  · next hcase1 =>
+  next hcase1 =>
     split at heq
-    · next hcase2 =>
+    next hcase2 =>
       apply RelabelNat.State.ofAIG_find_unique
       · assumption
       · rw [heq]
         assumption
-    · next hcase2 =>
+    next hcase2 =>
       exfalso
       rcases RelabelNat.State.ofAIG_find_some y hy with ⟨n, hn⟩
       simp [hcase2] at hn
-  · next hcase =>
+  next hcase =>
     exfalso
     rcases RelabelNat.State.ofAIG_find_some x hx with ⟨n, hn⟩
     simp [hcase] at hn
+
+/--
+`relabelNat` preserves unsatisfiablility.
+-/
+theorem relabelNat_unsat_iff {aig : AIG α} {hidx1} {hidx2} :
+    (aig.relabelNat).UnsatAt idx invert hidx1 ↔ aig.UnsatAt idx invert hidx2 := by
+  by_cases hNonempty : Nonempty α
+  · apply relabelNat_unsat_iff_of_NonEmpty
+  · apply relabel_unsat_iff_of_not_Nonempty hNonempty
 
 namespace Entrypoint
 
@@ -374,7 +387,7 @@ def relabelNat (entry : Entrypoint α) : Entrypoint Nat :=
 /--
 `relabelNat` preserves unsatisfiablility.
 -/
-theorem relabelNat_unsat_iff {entry : Entrypoint α} [Nonempty α] :
+theorem relabelNat_unsat_iff {entry : Entrypoint α} :
     (entry.relabelNat).Unsat ↔ entry.Unsat:= by
   simp only [Unsat, relabelNat]
   rw [AIG.relabelNat_unsat_iff]

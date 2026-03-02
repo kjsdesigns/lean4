@@ -3,9 +3,16 @@ Copyright (c) 2014 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Author: Leonardo de Moura
 -/
+module
+
 prelude
-import Init.SizeOf
+public import Init.BinderNameHint
+public import Init.Grind.Tactics
 import Init.Data.Nat.Basic
+
+public section
+
+@[expose] section
 
 universe u v
 
@@ -51,13 +58,26 @@ a well founded relation, then the function terminates.
 Well-founded relations are sometimes called _Artinian_ or said to satisfy the “descending chain condition”.
 -/
 inductive WellFounded {α : Sort u} (r : α → α → Prop) : Prop where
+  /--
+  If all elements are accessible via `r`, then `r` is well-founded.
+  -/
   | intro (h : ∀ a, Acc r a) : WellFounded r
 
+/--
+A type that has a standard well-founded relation.
+
+Instances are used to prove that functions terminate using well-founded recursion by showing that
+recursive calls reduce some measure according to a well-founded relation. This relation can combine
+well-founded relations on the recursive function's parameters.
+-/
 class WellFoundedRelation (α : Sort u) where
+  /-- A well-founded relation on `α`. -/
   rel : α → α → Prop
+  /-- A proof that `rel` is, in fact, well-founded. -/
   wf  : WellFounded rel
 
 namespace WellFounded
+
 theorem apply {α : Sort u} {r : α → α → Prop} (wf : WellFounded r) (a : α) : Acc r a :=
   wf.rec (fun p => p) a
 
@@ -79,14 +99,38 @@ noncomputable def fixF (x : α) (a : Acc r x) : C x := by
   induction a with
   | intro x₁ _ ih => exact F x₁ ih
 
-theorem fixFEq (x : α) (acx : Acc r x) : fixF F x acx = F x (fun (y : α) (p : r y x) => fixF F y (Acc.inv acx p)) := by
+theorem fixF_eq (x : α) (acx : Acc r x) : fixF F x acx = F x (fun (y : α) (p : r y x) => fixF F y (Acc.inv acx p)) := by
   induction acx with
   | intro x r _ => exact rfl
+
+/-- Attaches to `x` the proof that `x` is accessible in the given well-founded relation.
+This can be used in recursive function definitions to explicitly use a different relation
+than the one inferred by default:
+
+```
+def otherWF : WellFounded Nat := …
+def foo (n : Nat) := …
+termination_by otherWF.wrap n
+```
+-/
+def wrap {α : Sort u} {r : α → α → Prop} (h : WellFounded r) (x : α) : {x : α // Acc r x} :=
+  ⟨_, h.apply x⟩
+
+@[simp]
+theorem val_wrap {α : Sort u} {r : α → α → Prop} (h : WellFounded r) (x : α) :
+    (h.wrap x).val = x := (rfl)
 
 end
 
 variable {α : Sort u} {C : α → Sort v} {r : α → α → Prop}
 
+/--
+A well-founded fixpoint. If satisfying the motive `C` for all values that are smaller according to a
+well-founded relation allows it to be satisfied for the current value, then it is satisfied for all
+values.
+
+This function is used as part of the elaboration of well-founded recursion.
+-/
 -- Well-founded fixpoint
 noncomputable def fix (hwf : WellFounded r) (F : ∀ x, (∀ y, r y x → C y) → C x) (x : α) : C x :=
   fixF F x (apply hwf x)
@@ -94,12 +138,13 @@ noncomputable def fix (hwf : WellFounded r) (F : ∀ x, (∀ y, r y x → C y) �
 -- Well-founded fixpoint satisfies fixpoint equation
 theorem fix_eq (hwf : WellFounded r) (F : ∀ x, (∀ y, r y x → C y) → C x) (x : α) :
     fix hwf F x = F x (fun y _ => fix hwf F y) :=
-  fixFEq F x (apply hwf x)
+  fixF_eq F x (apply hwf x)
 end WellFounded
 
 open WellFounded
 
 -- Empty relation is well-founded
+@[implicit_reducible]
 def emptyWf {α : Sort u} : WellFoundedRelation α where
   rel := emptyRelation
   wf  := by
@@ -128,14 +173,8 @@ end Subrelation
 namespace InvImage
 variable {α : Sort u} {β : Sort v} {r : β → β → Prop}
 
-private def accAux (f : α → β) {b : β} (ac : Acc r b) : (x : α) → f x = b → Acc (InvImage r f) x := by
-  induction ac with
-  | intro x acx ih =>
-    intro z e
-    apply Acc.intro
-    intro y lt
-    subst x
-    apply ih (f y) lt y rfl
+theorem accAux (f : α → β) {b : β} (ac : Acc r b) : (x : α) → f x = b → Acc (InvImage r f) x :=
+  Acc.recOn ac fun _ _ ih => fun _ e => Acc.intro _ (fun y lt => ih (f y) (e ▸ lt) y rfl)
 
 theorem accessible {a : α} (f : α → β) (ac : Acc r (f a)) : Acc (InvImage r f) a :=
   accAux f ac a rfl
@@ -144,6 +183,9 @@ theorem wf (f : α → β) (h : WellFounded r) : WellFounded (InvImage r f) :=
   ⟨fun a => accessible f (apply h (f a))⟩
 end InvImage
 
+/--
+The inverse image of a well-founded relation is well-founded.
+-/
 @[reducible] def invImage (f : α → β) (h : WellFoundedRelation β) : WellFoundedRelation α where
   rel := InvImage h.rel f
   wf  := InvImage.wf f h.wf
@@ -164,14 +206,19 @@ theorem Acc.transGen (h : Acc r a) : Acc (TransGen r) a := by
 theorem acc_transGen_iff : Acc (TransGen r) a ↔ Acc r a :=
   ⟨Subrelation.accessible TransGen.single, Acc.transGen⟩
 
+/--
+If `Acc r x` holds and `y` is transitively related to `x`, then `Acc r y` holds, too.
+-/
+theorem Acc.inv_of_transGen {x y : α} (h₁ : Acc r x) (h₂ : Relation.TransGen r y x) : Acc r y := by
+  simpa [acc_transGen_iff] using h₁.transGen.inv h₂
+
 theorem WellFounded.transGen (h : WellFounded r) : WellFounded (TransGen r) :=
   ⟨fun a ↦ (h.apply a).transGen⟩
 
-@[deprecated Acc.transGen (since := "2024-07-16")] abbrev TC.accessible := @Acc.transGen
-@[deprecated WellFounded.transGen (since := "2024-07-16")] abbrev TC.wf := @WellFounded.transGen
 namespace Nat
 
 -- less-than is well-founded
+@[implicit_reducible]
 def lt_wfRel : WellFoundedRelation Nat where
   rel := (· < ·)
   wf  := by
@@ -190,18 +237,27 @@ def lt_wfRel : WellFoundedRelation Nat where
       | Or.inl e => subst e; assumption
       | Or.inr e => exact Acc.inv ih e
 
-protected noncomputable def strongInductionOn
+/--
+Strong induction on the natural numbers.
+
+The induction hypothesis is that all numbers less than a given number satisfy the motive, which
+should be demonstrated for the given number.
+-/
+@[elab_as_elim] protected noncomputable def strongRecOn
     {motive : Nat → Sort u}
     (n : Nat)
     (ind : ∀ n, (∀ m, m < n → motive m) → motive n) : motive n :=
   Nat.lt_wfRel.wf.fix ind n
 
-protected noncomputable def caseStrongInductionOn
+/--
+Case analysis based on strong induction for the natural numbers.
+-/
+@[elab_as_elim] protected noncomputable def caseStrongRecOn
     {motive : Nat → Sort u}
     (a : Nat)
     (zero : motive 0)
     (ind : ∀ n, (∀ m, m ≤ n → motive m) → motive (succ n)) : motive a :=
-  Nat.strongInductionOn a fun n =>
+  Nat.strongRecOn a fun n =>
     match n with
     | 0   => fun _  => zero
     | n+1 => fun h₁ => ind n (λ _ h₂ => h₁ _ (lt_succ_of_le h₂))
@@ -214,8 +270,7 @@ abbrev measure {α : Sort u} (f : α → Nat) : WellFoundedRelation α :=
 abbrev sizeOfWFRel {α : Sort u} [SizeOf α] : WellFoundedRelation α :=
   measure sizeOf
 
-instance (priority := low) [SizeOf α] : WellFoundedRelation α :=
-  sizeOfWFRel
+attribute [instance low] sizeOfWFRel
 
 namespace Prod
 open WellFounded
@@ -225,17 +280,27 @@ variable {α : Type u} {β : Type v}
 variable  (ra  : α → α → Prop)
 variable  (rb  : β → β → Prop)
 
--- Lexicographical order based on ra and rb
+/--
+A lexicographical order based on the orders `ra` and `rb` for the elements of pairs.
+-/
 protected inductive Lex : α × β → α × β → Prop where
+  /--
+  If the first projections of two pairs are ordered, then they are lexicographically ordered.
+  -/
   | left  {a₁} (b₁) {a₂} (b₂) (h : ra a₁ a₂) : Prod.Lex (a₁, b₁) (a₂, b₂)
+  /--
+  If the first projections of two pairs are equal, then they are lexicographically ordered if the
+  second projections are ordered.
+  -/
   | right (a) {b₁ b₂} (h : rb b₁ b₂)         : Prod.Lex (a, b₁)  (a, b₂)
 
-theorem lex_def (r : α → α → Prop) (s : β → β → Prop) {p q : α × β} :
+@[grind =]
+theorem lex_def {r : α → α → Prop} {s : β → β → Prop} {p q : α × β} :
     Prod.Lex r s p q ↔ r p.1 q.1 ∨ p.1 = q.1 ∧ s p.2 q.2 :=
   ⟨fun h => by cases h <;> simp [*], fun h =>
     match p, q, h with
-    | (a, b), (c, d), Or.inl h => Lex.left _ _ h
-    | (a, b), (c, d), Or.inr ⟨e, h⟩ => by subst e; exact Lex.right _ h⟩
+    | _, _, Or.inl h => Lex.left _ _ h
+    | (_, _), (_, _), Or.inr ⟨e, h⟩ => by subst e; exact Lex.right _ h⟩
 
 namespace Lex
 
@@ -298,6 +363,7 @@ theorem RProdSubLex (a : α × β) (b : α × β) (h : RProd ra rb a b) : Prod.L
   | intro h₁ h₂ => exact Prod.Lex.left _ _ h₁
 
 -- The relational product of well founded relations is well-founded
+@[implicit_reducible]
 def rprod (ha : WellFoundedRelation α) (hb : WellFoundedRelation β) : WellFoundedRelation (α × β) where
   rel := RProd ha.rel hb.rel
   wf  := by
@@ -390,6 +456,7 @@ section
 def SkipLeft (α : Type u) {β : Type v} (s : β → β → Prop) : @PSigma α (fun _ => β) → @PSigma α (fun _ => β) → Prop :=
   RevLex emptyRelation s
 
+@[implicit_reducible]
 def skipLeft (α : Type u) {β : Type v} (hb : WellFoundedRelation β) : WellFoundedRelation (PSigma fun _ : α => β) where
   rel := SkipLeft α hb.rel
   wf  := revLex emptyWf.wf hb.wf
@@ -399,3 +466,64 @@ theorem mkSkipLeft {α : Type u} {β : Type v} {b₁ b₂ : β} {s : β → β �
 end
 
 end PSigma
+
+namespace WellFounded
+
+variable {α : Sort u}
+variable {motive : α → Sort v}
+variable (h : α → Nat)
+variable (F : (x : α) → ((y : α) → InvImage (· < ·) h y x → motive y) → motive x)
+
+/-- Helper gadget that prevents reduction of `Nat.eager n` unless `n` evaluates to a ground term. -/
+def Nat.eager (n : Nat) : Nat :=
+  if Nat.beq n n = true then n else n
+
+theorem Nat.eager_eq (n : Nat) : Nat.eager n = n := ite_self n
+
+/--
+A well-founded fixpoint operator specialized for `Nat`-valued measures. Given a measure `h`, it expects
+its higher order function argument `F` to invoke its argument only on values `y` that are smaller
+than `x` with regard to `h`.
+
+In contrast to `WellFounded.fix`, this fixpoint operator reduces on closed terms. (More precisely:
+when `h x` evaluates to a ground value)
+
+-/
+def Nat.fix : (x : α) → motive x :=
+  let rec go : ∀ (fuel : Nat) (x : α), (h x < fuel) → motive x :=
+    Nat.rec
+      (fun _ hfuel => (Nat.not_succ_le_zero _ hfuel).elim)
+      (fun _ ih x hfuel => F x (fun y hy => ih y (by exact Nat.lt_of_lt_of_le hy (Nat.le_of_lt_add_one hfuel))))
+  fun x => go (Nat.eager (h x + 1)) x (Nat.eager_eq _ ▸ Nat.lt_add_one _)
+
+protected theorem Nat.fix.go_congr (x : α) (fuel₁ fuel₂ : Nat) (h₁ : h x < fuel₁) (h₂ : h x < fuel₂) :
+    Nat.fix.go h F fuel₁ x h₁ = Nat.fix.go h F fuel₂ x h₂ := by
+  induction fuel₁ generalizing x fuel₂ with
+  | zero => contradiction
+  | succ fuel₁ ih =>
+    cases fuel₂ with
+    | zero => contradiction
+    | succ fuel₂ =>
+      exact congrArg (F x) (funext fun y => funext fun hy => ih y fuel₂ _ _ )
+
+theorem Nat.fix_eq (x : α) :
+    Nat.fix h F x = F x (fun y _ => Nat.fix h F y) := by
+  unfold Nat.fix
+  simp [Nat.eager_eq]
+  exact congrArg (F x) (funext fun _ => funext fun _ => Nat.fix.go_congr ..)
+
+end WellFounded
+
+/--
+The `wfParam` gadget is used internally during the construction of recursive functions by
+wellfounded recursion, to keep track of the parameter for which the automatic introduction
+of `List.attach` (or similar) is plausible.
+-/
+def wfParam {α : Sort u} (a : α) : α := a
+
+/--
+Reverse direction of `dite_eq_ite`. Used by the well-founded definition preprocessor to extend the
+context of a termination proof inside `if-then-else` with the condition.
+-/
+@[wf_preprocess] theorem ite_eq_dite [Decidable P] :
+    ite P a b = (dite P (fun h => binderNameHint h () a) (fun h => binderNameHint h () b)) := rfl

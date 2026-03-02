@@ -3,11 +3,14 @@ Copyright (c) 2022 Henrik Böving. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Henrik Böving
 -/
+module
+
 prelude
-import Init.Data.UInt.Log2
-import Lean.Compiler.LCNF.CompilerM
-import Lean.Compiler.LCNF.InferType
-import Lean.Compiler.LCNF.PassManager
+public import Init.Data.UInt.Log2
+public import Lean.Compiler.LCNF.InferType
+import Init.Data.UInt.Lemmas
+
+public section
 
 namespace Lean.Compiler.LCNF.Simp
 namespace ConstantFold
@@ -16,14 +19,14 @@ namespace ConstantFold
 A constant folding monad, the additional state stores auxiliary declarations
 required to build the new constant.
 -/
-abbrev FolderM := StateRefT (Array CodeDecl) CompilerM
+abbrev FolderM := StateRefT (Array (CodeDecl .pure)) CompilerM
 
 /--
 A constant folder for a specific function, takes all the arguments of a
 certain function and produces a new `Expr` + auxiliary declarations in
 the `FolderM` monad on success. If the folding fails it returns `none`.
 -/
-abbrev Folder := Array Arg → FolderM (Option LetValue)
+abbrev Folder := Array (Arg .pure) → FolderM (Option (LetValue .pure))
 
 /--
 A typeclass for detecting and producing literals of arbitrary types
@@ -41,7 +44,7 @@ class Literal (α : Type) where
   final `Expr` putting them all together into a literal of type `α`,
   where again the idea of what a literal is depends on `α`.
   -/
-  mkLit : α → FolderM LetValue
+  mkLit : α → FolderM (LetValue .pure)
 
 export Literal (getLit mkLit)
 
@@ -49,7 +52,7 @@ export Literal (getLit mkLit)
 A wrapper around `LCNF.mkAuxLetDecl` that will automatically store the
 `LetDecl` in the state of `FolderM`.
 -/
-def mkAuxLetDecl (e : LetValue) (prefixName := `_x) : FolderM FVarId := do
+def mkAuxLetDecl (e : LetValue .pure) (prefixName := `_x) : FolderM FVarId := do
   let decl ← LCNF.mkAuxLetDecl e prefixName
   modify fun s => s.push <| .let decl
   return decl.fvarId
@@ -64,22 +67,22 @@ def mkAuxLit [Literal α] (x : α) (prefixName := `_x) : FolderM FVarId := do
   mkAuxLetDecl lit prefixName
 
 partial def getNatLit (fvarId : FVarId) : CompilerM (Option Nat) := do
-  let some (.value (.natVal n)) ← findLetValue? fvarId | return none
+  let some (.lit (.nat n)) ← findLetValue? (pu := .pure) fvarId | return none
   return n
 
-def mkNatLit (n : Nat) : FolderM LetValue :=
-  return .value (.natVal n)
+def mkNatLit (n : Nat) : FolderM (LetValue .pure) :=
+  return .lit (.nat n)
 
 instance : Literal Nat where
   getLit := getNatLit
   mkLit := mkNatLit
 
 def getStringLit (fvarId : FVarId) : CompilerM (Option String) := do
-  let some (.value (.strVal s)) ← findLetValue? fvarId | return none
+  let some (.lit (.str s)) ← findLetValue? (pu := .pure) fvarId | return none
   return s
 
-def mkStringLit (n : String) : FolderM LetValue :=
-  return .value (.strVal n)
+def mkStringLit (n : String) : FolderM (LetValue .pure) :=
+  return .lit (.str n)
 
 instance : Literal String where
   getLit := getStringLit
@@ -89,7 +92,7 @@ def getBoolLit (fvarId : FVarId) : CompilerM (Option Bool) := do
   let some (.const ctor [] #[]) ← findLetValue? fvarId | return none
   return ctor == ``Bool.true
 
-def mkBoolLit (b : Bool) : FolderM LetValue :=
+def mkBoolLit (b : Bool) : FolderM (LetValue .pure) :=
   let ctor := if b then ``Bool.true else ``Bool.false
   return .const ctor [] #[]
 
@@ -97,23 +100,31 @@ instance : Literal Bool where
   getLit := getBoolLit
   mkLit := mkBoolLit
 
-private partial def getLitAux [Inhabited α] (fvarId : FVarId) (ofNat : Nat → α) (ofNatName : Name) : CompilerM (Option α) := do
+private def getLitAux (fvarId : FVarId) (ofNat : Nat → α) (ofNatName : Name) : CompilerM (Option α) := do
   let some (.const declName _ #[.fvar fvarId]) ← findLetValue? fvarId | return none
   unless declName == ofNatName do return none
   let some natLit ← getLit fvarId | return none
   return ofNat natLit
 
-def mkNatWrapperInstance [Inhabited α] (ofNat : Nat → α) (ofNatName : Name) (toNat : α → Nat) : Literal α where
+def mkNatWrapperInstance (ofNat : Nat → α) (ofNatName : Name) (toNat : α → Nat) : Literal α where
   getLit := (getLitAux · ofNat ofNatName)
   mkLit x := do
     let helperId ← mkAuxLit <| toNat x
     return .const ofNatName [] #[.fvar helperId]
 
-instance : Literal UInt8 := mkNatWrapperInstance UInt8.ofNat ``UInt8.ofNat UInt8.toNat
-instance : Literal UInt16 := mkNatWrapperInstance UInt16.ofNat ``UInt16.ofNat UInt16.toNat
-instance : Literal UInt32 := mkNatWrapperInstance UInt32.ofNat ``UInt32.ofNat UInt32.toNat
-instance : Literal UInt64 := mkNatWrapperInstance UInt64.ofNat ``UInt64.ofNat UInt64.toNat
 instance : Literal Char := mkNatWrapperInstance Char.ofNat ``Char.ofNat Char.toNat
+
+def mkUIntInstance (matchLit : LitValue → Option α) (litValueCtor : α → LitValue) : Literal α where
+  getLit fvarId := do
+    let some (.lit litVal) ← findLetValue? (pu := .pure) fvarId | return none
+    return matchLit litVal
+  mkLit x :=
+    return .lit <| litValueCtor x
+
+instance : Literal UInt8 := mkUIntInstance (fun | .uint8 x => some x | _ => none) .uint8
+instance : Literal UInt16 := mkUIntInstance (fun | .uint16 x => some x | _ => none) .uint16
+instance : Literal UInt32 := mkUIntInstance (fun | .uint32 x => some x | _ => none) .uint32
+instance : Literal UInt64 := mkUIntInstance (fun | .uint64 x => some x | _ => none) .uint64
 
 end Literals
 
@@ -152,7 +163,7 @@ let _x.26 := @Array.push _ _x.24 z
 _x.26
 ```
 -/
-def mkPseudoArrayLiteral (elements : Array FVarId) (typ : Expr) (typLevel : Level) : FolderM LetValue := do
+def mkPseudoArrayLiteral (elements : Array FVarId) (typ : Expr) (typLevel : Level) : FolderM (LetValue .pure) := do
   let sizeLit ← mkAuxLit elements.size
   let mut literal ← mkAuxLetDecl <| .const ``Array.mkEmpty [typLevel] #[.type typ, .fvar sizeLit]
   for element in elements do
@@ -203,18 +214,23 @@ def Folder.mkBinary [Literal α] [Literal β] [Literal γ] (folder : α → β �
   mkLit <| folder arg₁ arg₂
 
 def Folder.mkBinaryDecisionProcedure [Literal α] [Literal β] {r : α → β → Prop} (folder : (a : α) → (b : β) → Decidable (r a b)) : Folder := fun args => do
-  if (← getPhase) < .mono then
-    return none
   let #[.fvar fvarId₁, .fvar fvarId₂] := args | return none
   let some arg₁ ← getLit fvarId₁ | return none
   let some arg₂ ← getLit fvarId₂ | return none
-  let boolLit := folder arg₁ arg₂ |>.decide
-  mkLit boolLit
+  let result := folder arg₁ arg₂ |>.decide
+  if (← getPhase) < .mono then
+    if result then
+      return some <| .const ``Decidable.isTrue [] #[.erased, .erased]
+    else
+      return some <| .const ``Decidable.isFalse [] #[.erased, .erased]
+  else
+    mkLit result
 
 /--
 Provide a folder for an operation with a left neutral element.
 -/
-def Folder.leftNeutral [Literal α] [BEq α] (neutral : α) : Folder := fun args => do
+def Folder.leftNeutral [Literal α] [BEq α] (neutral : α) (op : α → α → α)
+    (_h : ∀ x, op neutral x = x := by simp) : Folder := fun args => do
   let #[.fvar fvarId₁, .fvar fvarId₂] := args | return none
   let some arg₁ ← getLit fvarId₁ | return none
   unless arg₁ == neutral do return none
@@ -223,7 +239,8 @@ def Folder.leftNeutral [Literal α] [BEq α] (neutral : α) : Folder := fun args
 /--
 Provide a folder for an operation with a right neutral element.
 -/
-def Folder.rightNeutral [Literal α] [BEq α] (neutral : α) : Folder := fun args => do
+def Folder.rightNeutral [Literal α] [BEq α] (neutral : α) (op : α → α → α)
+    (_h : ∀ x, op x neutral = x := by simp) : Folder := fun args => do
   let #[.fvar fvarId₁, .fvar fvarId₂] := args | return none
   let some arg₂ ← getLit fvarId₂ | return none
   unless arg₂ == neutral do return none
@@ -232,7 +249,8 @@ def Folder.rightNeutral [Literal α] [BEq α] (neutral : α) : Folder := fun arg
 /--
 Provide a folder for an operation with a left annihilator.
 -/
-def Folder.leftAnnihilator [Literal α] [BEq α] (annihilator : α) (zero : α) : Folder := fun args => do
+def Folder.leftAnnihilator [Literal α] [BEq α] (annihilator : α) (zero : α) (op : α → α → α)
+    (_h : ∀ x, op annihilator x = zero := by simp) : Folder := fun args => do
   let #[.fvar fvarId, _] := args | return none
   let some arg ← getLit fvarId | return none
   unless arg == annihilator do return none
@@ -241,7 +259,8 @@ def Folder.leftAnnihilator [Literal α] [BEq α] (annihilator : α) (zero : α) 
 /--
 Provide a folder for an operation with a right annihilator.
 -/
-def Folder.rightAnnihilator [Literal α] [BEq α] (annihilator : α) (zero : α) : Folder := fun args => do
+def Folder.rightAnnihilator [Literal α] [BEq α] (annihilator : α) (zero : α) (op : α → α → α)
+    (_h : ∀ x, op x annihilator = zero := by simp) : Folder := fun args => do
   let #[_, .fvar fvarId] := args | return none
   let some arg ← getLit fvarId | return none
   unless arg == annihilator do return none
@@ -289,14 +308,20 @@ def Folder.first (folders : Array Folder) : Folder := fun exprs => do
 /--
 Provide a folder for an operation that has the same left and right neutral element.
 -/
-def Folder.leftRightNeutral [Literal α] [BEq α] (neutral : α) : Folder :=
-  Folder.first #[Folder.leftNeutral neutral, Folder.rightNeutral neutral]
+def Folder.leftRightNeutral [Literal α] [BEq α] (neutral : α) (op : α → α → α)
+    (_h1 : ∀ x, op neutral x = x := by simp) (_h2 : ∀ x, op x neutral = x := by simp) : Folder :=
+  Folder.first #[Folder.leftNeutral neutral op _h1, Folder.rightNeutral neutral op _h2]
 
 /--
 Provide a folder for an operation that has the same left and right annihilator.
 -/
-def Folder.leftRightAnnihilator [Literal α] [BEq α] (annihilator : α) (zero : α) : Folder :=
-  Folder.first #[Folder.leftAnnihilator annihilator zero, Folder.rightAnnihilator annihilator zero]
+def Folder.leftRightAnnihilator [Literal α] [BEq α] (annihilator : α) (zero : α)
+    (op : α → α → α) (_h1 : ∀ x, op annihilator x = zero := by simp)
+    (_h2 : ∀ x, op x annihilator = zero := by simp) : Folder :=
+  Folder.first #[
+    Folder.leftAnnihilator annihilator zero op _h1,
+    Folder.rightAnnihilator annihilator zero op _h2
+  ]
 
 /--
 Literal folders for higher order datastructures.
@@ -308,31 +333,62 @@ def higherOrderLiteralFolders : List (Name × Folder) := [
 def Folder.mulShift [Literal α] [BEq α] (shiftLeft : Name) (pow2 : α → α) (log2 : α → α) : Folder :=
   Folder.first #[Folder.mulLhsShift shiftLeft pow2 log2, Folder.mulRhsShift shiftLeft pow2 log2]
 
+-- TODO: add option for controlling the limit
+def natPowThreshold := 256
+
+def foldNatPow (args : Array (Arg .pure)) : FolderM (Option (LetValue .pure)) := do
+  let #[.fvar fvarId₁, .fvar fvarId₂] := args | return none
+  let some value₁ ← getNatLit fvarId₁ | return none
+  let some value₂ ← getNatLit fvarId₂ | return none
+  if value₂ < natPowThreshold then
+    return .some (.lit (.nat (value₁ ^ value₂)))
+  else
+    return none
+
+/--
+Folder for ofNat operations on fixed-sized integer types.
+-/
+def Folder.ofNat (f : Nat → LitValue) (args : Array (Arg .pure)) : FolderM (Option (LetValue .pure)) := do
+  let #[.fvar fvarId] := args | return none
+  let some value ← getNatLit fvarId | return none
+  return some (.lit (f value))
+
+def Folder.toNat (args : Array (Arg .pure)) : FolderM (Option (LetValue .pure)) := do
+  let #[.fvar fvarId] := args | return none
+  let some (.lit lit) ← findLetValue? (pu := .pure) fvarId | return none
+  match lit with
+  | .uint8 v | .uint16 v | .uint32 v | .uint64 v | .usize v => return some (.lit (.nat v.toNat))
+  | .nat _ | .str _ => return none
+
 /--
 All arithmetic folders.
 -/
 def arithmeticFolders : List (Name × Folder) := [
   (``Nat.succ, Folder.mkUnary Nat.succ),
-  (``Nat.add,    Folder.first #[Folder.mkBinary Nat.add, Folder.leftRightNeutral 0]),
-  (``UInt8.add,  Folder.first #[Folder.mkBinary UInt8.add, Folder.leftRightNeutral (0 : UInt8)]),
-  (``UInt16.add,  Folder.first #[Folder.mkBinary UInt16.add, Folder.leftRightNeutral (0 : UInt16)]),
-  (``UInt32.add,  Folder.first #[Folder.mkBinary UInt32.add, Folder.leftRightNeutral (0 : UInt32)]),
-  (``UInt64.add,  Folder.first #[Folder.mkBinary UInt64.add, Folder.leftRightNeutral (0 : UInt64)]),
-  (``Nat.sub,    Folder.first #[Folder.mkBinary Nat.sub, Folder.leftRightNeutral 0]),
-  (``UInt8.sub,  Folder.first #[Folder.mkBinary UInt8.sub, Folder.leftRightNeutral (0 : UInt8)]),
-  (``UInt16.sub,  Folder.first #[Folder.mkBinary UInt16.sub, Folder.leftRightNeutral (0 : UInt16)]),
-  (``UInt32.sub,  Folder.first #[Folder.mkBinary UInt32.sub, Folder.leftRightNeutral (0 : UInt32)]),
-  (``UInt64.sub,  Folder.first #[Folder.mkBinary UInt64.sub, Folder.leftRightNeutral (0 : UInt64)]),
-  (``Nat.mul,    Folder.first #[Folder.mkBinary Nat.mul, Folder.leftRightNeutral 1, Folder.leftRightAnnihilator 0 0, Folder.mulShift ``Nat.shiftLeft (Nat.pow 2) Nat.log2]),
-  (``UInt8.mul,  Folder.first #[Folder.mkBinary UInt8.mul, Folder.leftRightNeutral (1 : UInt8), Folder.leftRightAnnihilator (0 : UInt8) 0, Folder.mulShift ``UInt8.shiftLeft (UInt8.shiftLeft 1 ·) UInt8.log2]),
-  (``UInt16.mul,  Folder.first #[Folder.mkBinary UInt16.mul, Folder.leftRightNeutral (1 : UInt16), Folder.leftRightAnnihilator (0 : UInt16) 0, Folder.mulShift ``UInt16.shiftLeft (UInt16.shiftLeft 1 ·) UInt16.log2]),
-  (``UInt32.mul,  Folder.first #[Folder.mkBinary UInt32.mul, Folder.leftRightNeutral (1 : UInt32), Folder.leftRightAnnihilator (0 : UInt32) 0, Folder.mulShift ``UInt32.shiftLeft (UInt32.shiftLeft 1 ·) UInt32.log2]),
-  (``UInt64.mul,  Folder.first #[Folder.mkBinary UInt64.mul, Folder.leftRightNeutral (1 : UInt64), Folder.leftRightAnnihilator (0 : UInt64) 0, Folder.mulShift ``UInt64.shiftLeft (UInt64.shiftLeft 1 ·) UInt64.log2]),
-  (``Nat.div,    Folder.first #[Folder.mkBinary Nat.div, Folder.rightNeutral 1, Folder.divShift ``Nat.shiftRight (Nat.pow 2) Nat.log2]),
-  (``UInt8.div,  Folder.first #[Folder.mkBinary UInt8.div, Folder.rightNeutral (1 : UInt8), Folder.divShift ``UInt8.shiftRight (UInt8.shiftLeft 1 ·) UInt8.log2]),
-  (``UInt16.div,  Folder.first #[Folder.mkBinary UInt16.div, Folder.rightNeutral (1 : UInt16), Folder.divShift ``UInt16.shiftRight (UInt16.shiftLeft 1 ·) UInt16.log2]),
-  (``UInt32.div,  Folder.first #[Folder.mkBinary UInt32.div, Folder.rightNeutral (1 : UInt32), Folder.divShift ``UInt32.shiftRight (UInt32.shiftLeft 1 ·) UInt32.log2]),
-  (``UInt64.div,  Folder.first #[Folder.mkBinary UInt64.div, Folder.rightNeutral (1 : UInt64), Folder.divShift ``UInt64.shiftRight (UInt64.shiftLeft 1 ·) UInt64.log2])
+  (``Nat.add,    Folder.first #[Folder.mkBinary Nat.add, Folder.leftRightNeutral 0 (· + ·)]),
+  (``UInt8.add,  Folder.first #[Folder.mkBinary UInt8.add, Folder.leftRightNeutral (0 : UInt8) (· + ·)]),
+  (``UInt16.add,  Folder.first #[Folder.mkBinary UInt16.add, Folder.leftRightNeutral (0 : UInt16) (· + ·)]),
+  (``UInt32.add,  Folder.first #[Folder.mkBinary UInt32.add, Folder.leftRightNeutral (0 : UInt32) (· + ·)]),
+  (``UInt64.add,  Folder.first #[Folder.mkBinary UInt64.add, Folder.leftRightNeutral (0 : UInt64) (· + ·)]),
+  (``Nat.sub,    Folder.first #[Folder.mkBinary Nat.sub, Folder.leftAnnihilator 0 0 (· -  ·), Folder.rightNeutral 0 (· - ·)]),
+  (``UInt8.sub,  Folder.first #[Folder.mkBinary UInt8.sub, Folder.rightNeutral (0 : UInt8) (· - ·)]),
+  (``UInt16.sub,  Folder.first #[Folder.mkBinary UInt16.sub, Folder.rightNeutral (0 : UInt16) (· - ·)]),
+  (``UInt32.sub,  Folder.first #[Folder.mkBinary UInt32.sub, Folder.rightNeutral (0 : UInt32) (· - ·)]),
+  (``UInt64.sub,  Folder.first #[Folder.mkBinary UInt64.sub, Folder.rightNeutral (0 : UInt64) (· - ·)]),
+  -- We don't convert Nat multiplication by a power of 2 into a left shift, because the fast path
+  -- for multiplication isn't any slower than a fast path for left shift that checks for overflow.
+  (``Nat.mul, Folder.first #[Folder.mkBinary Nat.mul, Folder.leftRightNeutral (1 : Nat) (· * ·), Folder.leftRightAnnihilator (0 : Nat) 0 (· * ·)]),
+  (``UInt8.mul,  Folder.first #[Folder.mkBinary UInt8.mul, Folder.leftRightNeutral (1 : UInt8) (· * ·), Folder.leftRightAnnihilator (0 : UInt8) 0 (· * ·), Folder.mulShift ``UInt8.shiftLeft (UInt8.shiftLeft 1 ·) UInt8.log2]),
+  (``UInt16.mul,  Folder.first #[Folder.mkBinary UInt16.mul, Folder.leftRightNeutral (1 : UInt16) (· * ·), Folder.leftRightAnnihilator (0 : UInt16) 0 (· * ·), Folder.mulShift ``UInt16.shiftLeft (UInt16.shiftLeft 1 ·) UInt16.log2]),
+  (``UInt32.mul,  Folder.first #[Folder.mkBinary UInt32.mul, Folder.leftRightNeutral (1 : UInt32) (· * ·), Folder.leftRightAnnihilator (0 : UInt32) 0 (· * ·), Folder.mulShift ``UInt32.shiftLeft (UInt32.shiftLeft 1 ·) UInt32.log2]),
+  (``UInt64.mul,  Folder.first #[Folder.mkBinary UInt64.mul, Folder.leftRightNeutral (1 : UInt64) (· * ·), Folder.leftRightAnnihilator (0 : UInt64) 0 (· * ·), Folder.mulShift ``UInt64.shiftLeft (UInt64.shiftLeft 1 ·) UInt64.log2]),
+  (``Nat.div,    Folder.first #[Folder.mkBinary Nat.div, Folder.rightNeutral 1 (· / ·), Folder.divShift ``Nat.shiftRight (Nat.pow 2) Nat.log2]),
+  (``UInt8.div,  Folder.first #[Folder.mkBinary UInt8.div, Folder.rightNeutral (1 : UInt8) (· / ·), Folder.divShift ``UInt8.shiftRight (UInt8.shiftLeft 1 ·) UInt8.log2]),
+  (``UInt16.div,  Folder.first #[Folder.mkBinary UInt16.div, Folder.rightNeutral (1 : UInt16) (· / ·), Folder.divShift ``UInt16.shiftRight (UInt16.shiftLeft 1 ·) UInt16.log2]),
+  (``UInt32.div,  Folder.first #[Folder.mkBinary UInt32.div, Folder.rightNeutral (1 : UInt32) (· / ·), Folder.divShift ``UInt32.shiftRight (UInt32.shiftLeft 1 ·) UInt32.log2]),
+  (``UInt64.div,  Folder.first #[Folder.mkBinary UInt64.div, Folder.rightNeutral (1 : UInt64) (· / ·), Folder.divShift ``UInt64.shiftRight (UInt64.shiftLeft 1 ·) UInt64.log2]),
+  (``Nat.pow, foldNatPow),
+  (``Nat.nextPowerOfTwo, Folder.mkUnary Nat.nextPowerOfTwo),
 ]
 
 def relationFolders : List (Name × Folder) := [
@@ -352,22 +408,48 @@ def relationFolders : List (Name × Folder) := [
   (``UInt64.decLt, Folder.mkBinaryDecisionProcedure UInt64.decLt),
   (``UInt64.decLe, Folder.mkBinaryDecisionProcedure UInt64.decLe),
   (``Bool.decEq, Folder.mkBinaryDecisionProcedure Bool.decEq),
-  (``Bool.decEq, Folder.mkBinaryDecisionProcedure String.decEq)
+  (``String.decEq, Folder.mkBinaryDecisionProcedure String.decEq)
+]
+
+def conversionFolders : List (Name × Folder) := [
+  (``UInt8.ofNat, Folder.ofNat (fun v => .uint8 (UInt8.ofNat v))),
+  (``UInt16.ofNat, Folder.ofNat (fun v => .uint16 (UInt16.ofNat v))),
+  (``UInt32.ofNat, Folder.ofNat (fun v => .uint32 (UInt32.ofNat v))),
+  (``UInt64.ofNat, Folder.ofNat (fun v => .uint64 (UInt64.ofNat v))),
+  (``USize.ofNat, Folder.ofNat (fun v => .usize (UInt64.ofNat v))),
+  (``Char.ofNat, Folder.ofNat (fun v => .uint32 (Char.ofNat v).val)),
+  (``UInt8.toNat, Folder.toNat),
+  (``UInt16.toNat, Folder.toNat),
+  (``UInt32.toNat, Folder.toNat),
+  (``UInt64.toNat, Folder.toNat),
+  (``USize.toNat, Folder.toNat),
 ]
 
 /--
 All string folders.
 -/
 def stringFolders : List (Name × Folder) := [
-  (``String.append, Folder.first #[Folder.mkBinary String.append, Folder.leftRightNeutral ""]),
+  (``String.append, Folder.first #[Folder.mkBinary String.append, Folder.leftRightNeutral "" (· ++ ·)]),
   (``String.length, Folder.mkUnary String.length),
   (``String.push, Folder.mkBinary String.push)
+]
+
+def foldTaskGet (args : Array (Arg .pure)) : FolderM (Option (LetValue .pure)) := do
+  let #[_, .fvar taskFVar] := args | return none
+  let some (.const ``Task.pure _ #[_, val]) ← findLetValue? (pu := .pure) taskFVar | return none
+  match val with
+  | .erased => return some .erased
+  | .fvar fvarId => return some (.fvar fvarId #[])
+  | _ => return none
+
+def taskFolders : List (Name × Folder) := [
+  (``Task.get, foldTaskGet)
 ]
 
 /--
 Apply all known folders to `decl`.
 -/
-def applyFolders (decl : LetDecl) (folders : SMap Name Folder) : CompilerM (Option (Array CodeDecl)) := do
+def applyFolders (decl : LetDecl .pure) (folders : SMap Name Folder) : CompilerM (Option (Array (CodeDecl .pure))) := do
   match decl.value with
   | .const name _ args =>
     if let some folder := folders.find? name then
@@ -387,7 +469,12 @@ private def getFolder (declName : Name) : CoreM Folder := do
   ofExcept <| getFolderCore (← getEnv) (← getOptions) declName
 
 def builtinFolders : SMap Name Folder :=
-  (arithmeticFolders ++ relationFolders ++ higherOrderLiteralFolders ++ stringFolders).foldl (init := {}) fun s (declName, folder) =>
+  (arithmeticFolders
+    ++ relationFolders
+    ++ conversionFolders
+    ++ higherOrderLiteralFolders
+    ++ stringFolders
+    ++ taskFolders).foldl (init := {}) fun s (declName, folder) =>
     s.insert declName folder
 
 structure FolderOleanEntry where
@@ -397,7 +484,7 @@ structure FolderOleanEntry where
 structure FolderEntry extends FolderOleanEntry where
   folder : Folder
 
-builtin_initialize folderExt : PersistentEnvExtension FolderOleanEntry FolderEntry (List FolderOleanEntry × SMap Name Folder) ←
+builtin_initialize folderExt : PersistentEnvExtension FolderOleanEntry FolderEntry (List FolderEntry × SMap Name Folder) ←
   registerPersistentEnvExtension {
     mkInitial := return ([], builtinFolders)
     addImportedFn := fun entriesArray => do
@@ -408,8 +495,12 @@ builtin_initialize folderExt : PersistentEnvExtension FolderOleanEntry FolderEnt
           let folder ← IO.ofExcept <| getFolderCore ctx.env ctx.opts folderDeclName
           folders := folders.insert declName folder
       return ([], folders.switch)
-    addEntryFn := fun (entries, map) entry => (entry.toFolderOleanEntry :: entries, map.insert entry.declName entry.folder)
-    exportEntriesFn := fun (entries, _) => entries.reverse.toArray
+    addEntryFn := fun (entries, map) entry => (entry :: entries, map.insert entry.declName entry.folder)
+    exportEntriesFn := fun (entries, _) => entries.reverse.toArray.map (·.toFolderOleanEntry)
+    asyncMode := .sync
+    replay? := some fun oldState newState _ s =>
+      let newEntries := newState.1.take (newState.1.length - oldState.1.length)
+      (newEntries ++ s.1, newEntries.foldl (init := s.2) fun s e => s.insert e.declName (newState.2.find! e.declName))
   }
 
 def registerFolder (declName : Name) (folderDeclName : Name) : CoreM Unit := do
@@ -422,7 +513,7 @@ def getFolders : CoreM (SMap Name Folder) :=
 /--
 Apply a list of default folders to `decl`
 -/
-def foldConstants (decl : LetDecl) : CompilerM (Option (Array CodeDecl)) := do
+def foldConstants (decl : LetDecl .pure) : CompilerM (Option (Array (CodeDecl .pure))) := do
   applyFolders decl (← getFolders)
 
 end ConstantFold

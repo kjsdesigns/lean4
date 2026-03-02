@@ -1,3 +1,0 @@
-unfoldReduceMatch.lean:2:0-2:7: warning: declaration uses 'sorry'
-n : Nat
-⊢ (Nat.zero.add n).succ = n.succ

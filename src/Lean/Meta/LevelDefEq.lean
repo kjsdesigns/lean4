@@ -3,11 +3,13 @@ Copyright (c) 2019 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura
 -/
+module
+
 prelude
-import Lean.Util.CollectMVars
-import Lean.Meta.Basic
-import Lean.Meta.InferType
-import Lean.Meta.DecLevel
+public import Lean.Util.CollectMVars
+public import Lean.Meta.DecLevel
+
+public section
 
 namespace Lean.Meta
 
@@ -149,8 +151,8 @@ mutual
             if r != LBool.undef then
               return r == LBool.true
             else if !(← hasAssignableLevelMVar lhs <||> hasAssignableLevelMVar rhs) then
-              let ctx ← read
-              if ctx.config.isDefEqStuckEx && (lhs.isMVar || rhs.isMVar) then do
+              let cfg ← getConfig
+              if cfg.isDefEqStuckEx && (lhs.isMVar || rhs.isMVar) then do
                 trace[Meta.isLevelDefEq.stuck] "{lhs} =?= {rhs}"
                 Meta.throwIsDefEqStuck
               else

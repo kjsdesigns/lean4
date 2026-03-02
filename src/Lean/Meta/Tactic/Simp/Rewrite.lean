@@ -3,20 +3,17 @@ Copyright (c) 2020 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura
 -/
+module
 prelude
-import Lean.Meta.ACLt
-import Lean.Meta.Match.MatchEqsExt
-import Lean.Meta.AppBuilder
-import Lean.Meta.SynthInstance
-import Lean.Meta.Tactic.Util
-import Lean.Meta.Tactic.UnifyEq
-import Lean.Meta.Tactic.Simp.Types
-import Lean.Meta.Tactic.LinearArith.Simp
-import Lean.Meta.Tactic.Simp.Simproc
-import Lean.Meta.Tactic.Simp.Attr
-
+public import Lean.Meta.ACLt
+public import Lean.Meta.Match.MatchEqsExt
+public import Lean.Meta.Tactic.UnifyEq
+public import Lean.Meta.Tactic.Simp.Arith
+public import Lean.Meta.Tactic.Simp.Attr
+public import Lean.Meta.BinderNameHint
+import Lean.Meta.WHNF
+public section
 namespace Lean.Meta.Simp
-
 /--
 Helper type for implementing `discharge?'`
 -/
@@ -41,7 +38,7 @@ def discharge?' (thmId : Origin) (x : Expr) (type : Expr) : SimpM Bool := do
     let ctx ← getContext
     if ctx.dischargeDepth >= ctx.maxDischargeDepth then
       return .maxDepth
-    else withTheReader Context (fun ctx => { ctx with dischargeDepth := ctx.dischargeDepth + 1 }) do
+    else withIncDischargeDepth do
       -- We save the state, so that `UsedTheorems` does not accumulate
       -- `simp` lemmas used during unsuccessful discharging.
       -- We use `withPreservedCache` to ensure the cache is restored after `discharge?`
@@ -108,13 +105,20 @@ where
       trace[Meta.Tactic.simp.discharge] "{← ppOrigin thmId}, failed to synthesize instance{indentExpr type}"
       return false
 
+private def useImplicitDefEqProof (thm : SimpTheorem) : SimpM Bool := do
+  if thm.rfl then
+    return (← getConfig).implicitDefEqProofs
+  else
+    return false
+
 private def tryTheoremCore (lhs : Expr) (xs : Array Expr) (bis : Array BinderInfo) (val : Expr) (type : Expr) (e : Expr) (thm : SimpTheorem) (numExtraArgs : Nat) : SimpM (Option Result) := do
   recordTriedSimpTheorem thm.origin
   let rec go (e : Expr) : SimpM (Option Result) := do
-    if (← isDefEq lhs e) then
+    trace[Debug.Meta.Tactic.simp] "trying {← ppSimpTheorem thm} to rewrite{indentExpr e}"
+    if (← withSimpMetaConfig <| isDefEq lhs e) then
       unless (← synthesizeArgs thm.origin bis xs) do
         return none
-      let proof? ← if thm.rfl then
+      let proof? ← if (← useImplicitDefEqProof thm) then
         pure none
       else
         let proof ← instantiateMVars (mkAppN val xs)
@@ -131,6 +135,9 @@ private def tryTheoremCore (lhs : Expr) (xs : Array Expr) (bis : Array BinderInf
       we seldom have assigned metavariables in goals.
       -/
       if (← instantiateMVars e) == rhs then
+        trace[Debug.Meta.Tactic.simp] "Not applying {← ppSimpTheorem thm} with type\
+          {indentExpr type}\nto{indentExpr e}\nas the result is structurally equal \
+          to the original expression"
         return none
       if thm.perm then
         /-
@@ -140,7 +147,8 @@ private def tryTheoremCore (lhs : Expr) (xs : Array Expr) (bis : Array BinderInf
         if !(← acLt rhs e .reduceSimpleOnly) then
           trace[Meta.Tactic.simp.rewrite] "{← ppSimpTheorem thm}, perm rejected {e} ==> {rhs}"
           return none
-      trace[Meta.Tactic.simp.rewrite] "{← ppSimpTheorem thm}, {e} ==> {rhs}"
+      trace[Meta.Tactic.simp.rewrite] "{← ppSimpTheorem thm}:{indentExpr e}\n==>{indentExpr rhs}"
+      let rhs ← if type.hasBinderNameHint then rhs.resolveBinderNameHint else pure rhs
       recordSimpTheorem thm.origin
       return some { expr := rhs, proof? }
     else
@@ -154,7 +162,7 @@ private def tryTheoremCore (lhs : Expr) (xs : Array Expr) (bis : Array BinderInf
      This simple approach was good enough for Mathlib 3 -/
   let mut extraArgs := #[]
   let mut e := e
-  for _ in [:numExtraArgs] do
+  for _ in *...numExtraArgs do
     extraArgs := extraArgs.push e.appArg!
     e := e.appFn!
   extraArgs := extraArgs.reverse
@@ -203,17 +211,26 @@ def rewrite? (e : Expr) (s : SimpTheoremTree) (erased : PHashSet Origin) (tag : 
 where
   /-- For `(← getConfig).index := true`, use discrimination tree structure when collecting `simp` theorem candidates. -/
   rewriteUsingIndex? : SimpM (Option Result) := do
-    let candidates ← s.getMatchWithExtra e (getDtConfig (← getConfig))
+    let candidates ← withSimpIndexConfig <| s.getMatchWithExtra e
     if candidates.isEmpty then
       trace[Debug.Meta.Tactic.simp] "no theorems found for {tag}-rewriting {e}"
       return none
     else
       let candidates := candidates.insertionSort fun e₁ e₂ => e₁.1.priority > e₂.1.priority
       for (thm, numExtraArgs) in candidates do
-        unless inErasedSet thm || (rflOnly && !thm.rfl) do
-          if let some result ← tryTheoremWithExtraArgs? e thm numExtraArgs then
-            trace[Debug.Meta.Tactic.simp] "rewrite result {e} => {result.expr}"
-            return some result
+        if inErasedSet thm then continue
+        if rflOnly then
+          unless thm.rfl do
+            if debug.tactic.simp.checkDefEqAttr.get (← getOptions) &&
+               backward.dsimp.useDefEqAttr.get (← getOptions) then
+              let isRflOld ← withOptions (backward.dsimp.useDefEqAttr.set · false) do
+                isRflProof thm.proof
+              if isRflOld then
+                logWarning m!"theorem {thm.proof} is no longer rfl"
+            continue
+        if let some result ← tryTheoremWithExtraArgs? e thm numExtraArgs then
+          trace[Debug.Meta.Tactic.simp] "rewrite result {e} => {result.expr}"
+          return some result
       return none
 
   /--
@@ -221,7 +238,7 @@ where
   Only the root symbol is taken into account. Most of the structure of the discrimination tree is ignored.
   -/
   rewriteNoIndex? : SimpM (Option Result) := do
-    let (candidates, numArgs) ← s.getMatchLiberal e (getDtConfig (← getConfig))
+    let (candidates, numArgs) ← withSimpIndexConfig <| s.getMatchLiberal e
     if candidates.isEmpty then
       trace[Debug.Meta.Tactic.simp] "no theorems found for {tag}-rewriting {e}"
       return none
@@ -245,7 +262,7 @@ where
 
   diagnoseWhenNoIndex (thm : SimpTheorem) : SimpM Unit := do
     if (← isDiagnosticsEnabled) then
-      let candidates ← s.getMatchWithExtra e (getDtConfig (← getConfig))
+      let candidates ← withSimpIndexConfig <| s.getMatchWithExtra e
       for (candidate, _) in candidates do
         if unsafe ptrEq thm candidate then
           return ()
@@ -254,19 +271,6 @@ where
 
   inErasedSet (thm : SimpTheorem) : Bool :=
     erased.contains thm.origin
-
-def simpCtorEq : Simproc := fun e => withReducibleAndInstances do
-  match e.eq? with
-  | none => return .continue
-  | some (_, lhs, rhs) =>
-    match (← constructorApp'? lhs), (← constructorApp'? rhs) with
-    | some (c₁, _), some (c₂, _) =>
-      if c₁.name != c₂.name then
-        withLocalDeclD `h e fun h =>
-          return .done { expr := mkConst ``False, proof? := (← withDefault <| mkEqFalse' (← mkLambdaFVars #[h] (← mkNoConfusion (mkConst ``False) h))) }
-      else
-        return .continue
-    | _, _ => return .continue
 
 @[inline] def simpUsingDecide : Simproc := fun e => do
   unless (← getConfig).decide do
@@ -288,19 +292,31 @@ def simpCtorEq : Simproc := fun e => withReducibleAndInstances do
 def simpArith (e : Expr) : SimpM Step := do
   unless (← getConfig).arith do
     return .continue
-  if Linear.isLinearCnstr e then
-    let some (e', h) ← Linear.Nat.simpCnstr? e
-      | return .continue
-    return .visit { expr := e', proof? := h }
-  else if Linear.isLinearTerm e then
-    if Linear.parentIsTarget (← getContext).parent? then
+  if Arith.isLinearCnstr e then
+    if let some (e', h) ← Arith.Nat.simpCnstr? e then
+      return .visit { expr := e', proof? := h }
+    if let some (e', h) ← Arith.Int.simpRel? e then
+      return .visit { expr := e', proof? := h }
+    if let some (e', h) ← Arith.Int.simpEq? e then
+      return .visit { expr := e', proof? := h }
+    return .continue
+  if let some α := Arith.isLinearTerm? e then
+    if Arith.parentIsTarget (← getContext).parent? then
       -- We mark `cache := false` to ensure we do not miss simplifications.
       return .continue (some { expr := e, cache := false })
-    let some (e', h) ← Linear.Nat.simpExpr? e
-      | return .continue
+    match_expr α with
+    | Nat =>
+      let some (e', h) ← Arith.Nat.simpExpr? e | pure ()
+      return .visit { expr := e', proof? := h }
+    | Int =>
+      let some (e', h) ← Arith.Int.simpExpr? e | pure ()
+      return .visit { expr := e', proof? := h }
+    | _ =>
+      return .continue
+  if Arith.isDvdCnstr e then
+    let some (e', h) ← Arith.Int.simpDvd? e | pure ()
     return .visit { expr := e', proof? := h }
-  else
-    return .continue
+  return .continue
 
 /--
 Given a match-application `e` with `MatcherInfo` `info`, return `some result`
@@ -317,7 +333,7 @@ def simpMatchDiscrs? (info : MatcherInfo) (e : Expr) : SimpM (Option Result) := 
   let args  := e.getAppArgsN n
   let mut r : Result := { expr := f }
   let mut modified := false
-  for i in [0 : info.numDiscrs] do
+  for i in *...info.numDiscrs do
     let arg := args[i]!
     if i < infos.size && !infos[i]!.hasFwdDeps then
       let argNew ← simp arg
@@ -333,8 +349,8 @@ def simpMatchDiscrs? (info : MatcherInfo) (e : Expr) : SimpM (Option Result) := 
       r ← mkCongrFun r argNew
   unless modified do
     return none
-  for i in [info.numDiscrs : args.size] do
-    let arg := args[i]!
+  for h : i in info.numDiscrs...args.size do
+    let arg := args[i]
     r ← mkCongrFun r arg
   return some r
 
@@ -349,7 +365,7 @@ def simpMatchCore (matcherName : Name) (e : Expr) : SimpM Step := do
 def simpMatch : Simproc := fun e => do
   unless (← getConfig).iota do
     return .continue
-  if let some e ← reduceRecMatcher? e then
+  if let some e ← withSimpMetaConfig <| reduceRecMatcher? e then
     return .visit { expr := e }
   let .const declName _ := e.getAppFn
     | return .continue
@@ -446,8 +462,7 @@ partial def preSEval (s : SimprocsArray) : Simproc :=
 def postSEval (s : SimprocsArray) : Simproc :=
   rewritePost >>
   userPostSimprocs s >>
-  sevalGround >>
-  simpCtorEq
+  sevalGround
 
 def mkSEvalMethods : CoreM Methods := do
   let s ← getSEvalSimprocs
@@ -460,10 +475,13 @@ def mkSEvalMethods : CoreM Methods := do
     wellBehavedDischarge := true
   }
 
-def mkSEvalContext : CoreM Context := do
+def mkSEvalContext : MetaM Context := do
   let s ← getSEvalTheorems
   let c ← Meta.getSimpCongrTheorems
-  return { simpTheorems := #[s], congrTheorems := c, config := { ground := true } }
+  mkContext
+    (simpTheorems := #[s])
+    (congrTheorems := c)
+    (config := { ground := true })
 
 /--
 Invoke ground/symbolic evaluator from `simp`.
@@ -515,7 +533,6 @@ def postDefault (s : SimprocsArray) : Simproc :=
   userPostSimprocs s >>
   simpGround >>
   simpArith >>
-  simpCtorEq >>
   simpUsingDecide
 
 /--
@@ -555,7 +572,7 @@ private def dischargeUsingAssumption? (e : Expr) : SimpM (Option Expr) := do
     -- well-behaved discharger. See comment at `Methods.wellBehavedDischarge`
     else if !contextual && localDecl.index >= lctxInitIndices then
       return none
-    else if (← isDefEq e localDecl.type) then
+    else if (← withSimpMetaConfig <| isDefEq e localDecl.type) then
       return some localDecl.toExpr
     else
       return none
@@ -567,7 +584,7 @@ private def dischargeUsingAssumption? (e : Expr) : SimpM (Option Expr) := do
 partial def dischargeEqnThmHypothesis? (e : Expr) : MetaM (Option Expr) := do
   assert! isEqnThmHypothesis e
   let mvar ← mkFreshExprSyntheticOpaqueMVar e
-  withReader (fun ctx => { ctx with canUnfold? := canUnfoldAtMatcher }) do
+  withCanUnfoldPred canUnfoldAtMatcher do
     if let .none ← go? mvar.mvarId! then
       instantiateMVars mvar
     else
@@ -588,15 +605,33 @@ where
     catch _  =>
       return some mvarId
 
+/--
+Discharges assumptions of the form `∀ …, a = b` using `rfl`. This is particularly useful for higher
+order assumptions of the form `∀ …, e = ?g x y` to instantiate a parameter `g` even if that does not
+appear on the lhs of the rule.
+-/
+def dischargeRfl (e : Expr) : SimpM (Option Expr) := do
+  forallTelescope e fun xs e => do
+    let some (t, a, b) := e.eq? | return .none
+    unless a.getAppFn.isMVar || b.getAppFn.isMVar do return .none
+    if (← withSimpMetaConfig <| isDefEq a b) then
+      trace[Meta.Tactic.simp.discharge] "Discharging with rfl: {e}"
+      let u ← getLevel t
+      let proof := mkApp2 (.const ``rfl [u]) t a
+      let proof ← mkLambdaFVars xs proof
+      return .some proof
+    return .none
+
+
 def dischargeDefault? (e : Expr) : SimpM (Option Expr) := do
   let e := e.cleanupAnnotations
   if isEqnThmHypothesis e then
-    if let some r ← dischargeUsingAssumption? e then
-      return some r
-    if let some r ← dischargeEqnThmHypothesis? e then
-      return some r
+    if let some r ← dischargeUsingAssumption? e then return some r
+    if let some r ← dischargeEqnThmHypothesis? e then return some r
   let r ← simp e
-  if r.expr.isTrue then
+  if let some p ← dischargeRfl r.expr then
+    return some (mkApp4 (mkConst ``Eq.mpr [levelZero]) e r.expr (← r.getProof) p)
+  else if r.expr.isTrue then
     return some (← mkOfEqTrue (← r.getProof))
   else
     return none

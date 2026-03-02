@@ -3,11 +3,12 @@ Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Josh Clune
 -/
+module
+
 prelude
-import Init.Data.Array
-import Std.Tactic.BVDecide.LRAT.Internal.Formula.Class
-import Std.Tactic.BVDecide.LRAT.Internal.Assignment
-import Std.Sat.CNF.Basic
+public import Std.Tactic.BVDecide.LRAT.Internal.Formula.Class
+
+@[expose] public section
 
 /-!
 This module contains the default implementation of the `Formula` typeclass that is used in the
@@ -45,7 +46,7 @@ can appear in the formula (hence why the parameter `n` is called `numVarsSucc` b
   semantics in an easily reversible manner.
 
 - The `ratUnits` field is empty except during the processing of RAT additions. This field serves an extremely similar role to `rupUnits` in that
-  it is used to temporarily store negated units during unit propogation. The primary difference between the `rupUnits` field and `ratUnits` field
+  it is used to temporarily store negated units during unit propagation. The primary difference between the `rupUnits` field and `ratUnits` field
   is that the `rupUnits` field is only updated twice for each RUP or RAT addition (once to add negated units and then once again to remove said
   negated units), the `ratUnits` field is updated zero times for each RUP addition and updated m times for each RAT addition where m is the number
   of negative hints in said RAT addition (i.e. the number of clauses in the formula containing the RAT addition's negated pivot literal).
@@ -54,7 +55,7 @@ can appear in the formula (hence why the parameter `n` is called `numVarsSucc` b
   (i.e. at all points in time except during a RUP or RAT addition), the `assignments` field must satisfy the `StrongAssignmentsInvariant` defined
   in Formula.Lemmas.lean. During RUP and RAT additions, the `assignments` field must satisfy the `AssignmentsInvariant` defined in Formula.Lemmas.lean.
   The reason that the `assignments` field is contained as an explicit part of the default formula (as opposed to simply being an Array that is passed
-  through the helper functions concerning unit propogation), is so that the (potentially large) Array does not need to repeatedly be allocated and
+  through the helper functions concerning unit propagation), is so that the (potentially large) Array does not need to repeatedly be allocated and
   deallocated. By having the `assignments` Array be a field of the default formula, it is easier to ensure that the Array is used linearly.
 -/
 @[ext] structure DefaultFormula (numVarsSucc : Nat) where
@@ -68,7 +69,7 @@ can appear in the formula (hence why the parameter `n` is called `numVarsSucc` b
 namespace DefaultFormula
 
 instance {n : Nat} : Inhabited (DefaultFormula n) where
-  default := ⟨#[], #[], #[], Array.mkArray n unassigned⟩
+  default := ⟨#[], #[], #[], Array.replicate n unassigned⟩
 
 /-- Note: This function is only for reasoning about semantics. Its efficiency doesn't actually matter -/
 def toList {n : Nat} (f : DefaultFormula n) : List (DefaultClause n) :=
@@ -89,15 +90,15 @@ Note: This function assumes that the provided `clauses` Array is indexed accordi
 field invariant described in the DefaultFormula doc comment.
 -/
 def ofArray {n : Nat} (clauses : Array (Option (DefaultClause n))) : DefaultFormula n :=
-  let assignments := clauses.foldl ofArray_fold_fn (Array.mkArray n unassigned)
+  let assignments := clauses.foldl ofArray_fold_fn (Array.replicate n unassigned)
   ⟨clauses, #[], #[], assignments⟩
 
 def insert {n : Nat} (f : DefaultFormula n) (c : DefaultClause n) : DefaultFormula n :=
   let ⟨clauses, rupUnits, ratUnits, assignments⟩ := f
   match isUnit c with
-    | none => ⟨clauses.push c, rupUnits, ratUnits, assignments⟩
-    | some (l, true) => ⟨clauses.push c, rupUnits, ratUnits, assignments.modify l addPosAssignment⟩
-    | some (l, false) => ⟨clauses.push c, rupUnits, ratUnits, assignments.modify l addNegAssignment⟩
+    | none => ⟨clauses.push (some c), rupUnits, ratUnits, assignments⟩
+    | some (l, true) => ⟨clauses.push (some c), rupUnits, ratUnits, assignments.modify l addPosAssignment⟩
+    | some (l, false) => ⟨clauses.push (some c), rupUnits, ratUnits, assignments.modify l addNegAssignment⟩
 
 def deleteOne {n : Nat} (f : DefaultFormula n) (id : Nat) : DefaultFormula n :=
   let ⟨clauses, rupUnits, ratUnits, assignments⟩ := f
@@ -120,15 +121,20 @@ def insertUnit : Array (Literal (PosFin n)) × Array Assignment × Bool →
     Literal (PosFin n) → Array (Literal (PosFin n)) × Array Assignment × Bool :=
   fun (units, assignments, foundContradiction) (l, b) =>
     let curAssignment := assignments[l.1]!
-    if hasAssignment b curAssignment then (units, assignments, foundContradiction)
-    else (units.push (l, b), assignments.modify l (addAssignment b), foundContradiction || curAssignment != unassigned)
+    if hasAssignment b curAssignment then
+      (units, assignments, foundContradiction)
+    else
+      let units := units.push (l, b)
+      let assignments := assignments.modify l (addAssignment b)
+      let foundContradiction := foundContradiction || curAssignment != unassigned
+      (units, assignments, foundContradiction)
 
 /--
 Returns an updated formula f and a bool which indicates whether a contradiction was found in the
 process of updating f.
 -/
-def insertRupUnits {n : Nat} (f : DefaultFormula n) (ls : CNF.Clause (PosFin n))
-    : DefaultFormula n × Bool :=
+def insertRupUnits {n : Nat} (f : DefaultFormula n) (ls : CNF.Clause (PosFin n)) :
+    DefaultFormula n × Bool :=
   let ⟨clauses, rupUnits, ratUnits, assignments⟩ := f
   let (rupUnits, assignments, foundContradiction) := ls.foldl insertUnit (rupUnits, assignments, false)
   (⟨clauses, rupUnits, ratUnits, assignments⟩, foundContradiction)
@@ -148,11 +154,13 @@ def clearUnit : Array Assignment → Literal (PosFin n) → Array Assignment
 def clearRupUnits {n : Nat} (f : DefaultFormula n) : DefaultFormula n :=
   let ⟨clauses, rupUnits, ratUnits, assignments⟩ := f
   let assignments := rupUnits.foldl clearUnit assignments
+  -- TODO: in principle we could cache the memory of rupUnits here if we had Array.clear
   ⟨clauses, #[], ratUnits, assignments⟩
 
 def clearRatUnits {n : Nat} (f : DefaultFormula n) : DefaultFormula n :=
   let ⟨clauses, rupUnits, ratUnits, assignments⟩ := f
   let assignments := ratUnits.foldl clearUnit assignments
+  -- TODO: in principle we could cache the memory of ratUnits here if we had Array.clear
   ⟨clauses, rupUnits, #[], assignments⟩
 
 /--
@@ -219,7 +227,7 @@ def performRupAdd {n : Nat} (f : DefaultFormula n) (c : DefaultClause n) (rupHin
     let (f, derivedLits, derivedEmpty, encounteredError) := performRupCheck f rupHints
     if encounteredError then
       (f, false)
-    else if not derivedEmpty then
+    else if !derivedEmpty then
       (f, false)
     else -- derivedEmpty is true and encounteredError is false
       let ⟨clauses, rupUnits, ratUnits, assignments⟩ := f
@@ -284,7 +292,7 @@ def performRatCheck {n : Nat} (f : DefaultFormula n) (negPivot : Literal (PosFin
           -- assignments should now be the same as it was before the performRupCheck call
           let f := clearRatUnits ⟨clauses, rupUnits, ratUnits, assignments⟩
           -- f should now be the same as it was before insertRatUnits
-          if encounteredError || not derivedEmpty then (f, false)
+          if encounteredError || !derivedEmpty then (f, false)
           else (f, true)
     | none => (⟨clauses, rupUnits, ratUnits, assignments⟩, false)
 
@@ -309,7 +317,7 @@ def performRatAdd {n : Nat} (f : DefaultFormula n) (c : DefaultClause n)
           if allChecksPassed then performRatCheck f (Literal.negate pivot) ratHint
           else (f, false)
         let (f, allChecksPassed) := ratHints.foldl fold_fn (f, true)
-        if not allChecksPassed then (f, false)
+        if !allChecksPassed then (f, false)
         else
           match f with
           | ⟨clauses, rupUnits, ratUnits, assignments⟩ =>

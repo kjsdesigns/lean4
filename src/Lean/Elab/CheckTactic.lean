@@ -3,11 +3,15 @@ Copyright (c) 2024 Lean FRO. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Joe Hendrix
 -/
+module
+
 prelude
-import Lean.Elab.Tactic.ElabTerm
-import Lean.Elab.Command
-import Lean.Elab.Tactic.Meta
-import Lean.Meta.CheckTactic
+public import Lean.Elab.Tactic.ElabTerm
+public import Lean.Elab.Command
+public import Lean.Elab.Tactic.Meta
+public import Lean.Meta.CheckTactic
+
+public section
 
 /-!
 Commands to validate tactic results.
@@ -38,6 +42,7 @@ def elabCheckTactic : CommandElab := fun stx => do
       | [next] => do
         let (val, _, _) ← matchCheckGoalType stx (←next.getType)
         if !(← Meta.withReducible <| isDefEq val expTerm) then
+          let (val, expTerm) ← addPPExplicitToExposeDiff val expTerm
           throwErrorAt stx
             m!"Term reduces to{indentExpr val}\nbut is expected to reduce to {indentExpr expTerm}"
       | _ => do

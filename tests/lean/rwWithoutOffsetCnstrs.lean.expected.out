@@ -1,3 +1,0 @@
-rwWithoutOffsetCnstrs.lean:5:0-5:7: warning: declaration uses 'sorry'
-m n : Nat
-⊢ (n + 1).ble n = false

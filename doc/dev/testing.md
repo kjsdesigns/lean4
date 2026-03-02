@@ -1,5 +1,9 @@
 # Test Suite
 
+**Warning:** This document is partially outdated.
+It describes the old test suite, which is currently in the process of being replaced.
+The new test suite's documentation can be found at [`tests/README.md`](../../tests/README.md).
+
 After [building Lean](../make/index.md) you can run all the tests using
 ```
 cd build/release
@@ -51,6 +55,10 @@ All these tests are included by [src/shell/CMakeLists.txt](https://github.com/le
   codes and do not check the expected output even though output is
   produced, it is ignored.
 
+  **Note:** Tests in this directory run with `-Dlinter.all=false` to reduce noise.
+  If your test needs to verify linter behavior (e.g., deprecation warnings),
+  explicitly enable the relevant linter with `set_option linter.<name> true`.
+
 - [`tests/lean/interactive`](https://github.com/leanprover/lean4/tree/master/tests/lean/interactive/): are designed to test server requests at a
   given position in the input file. Each .lean file contains comments
   that indicate how to simulate a client request at that position.
@@ -59,7 +67,7 @@ All these tests are included by [src/shell/CMakeLists.txt](https://github.com/le
     open Foo in
     theorem tst2 (h : a ≤ b) : a + 2 ≤ b + 2 :=
     Bla.
-      --^ textDocument/completion
+      --^ completion
     ```
     In this example, the test driver [`test_single.sh`](https://github.com/leanprover/lean4/tree/master/tests/lean/interactive/test_single.sh) will simulate an
     auto-completion request at `Bla.`. The expected output is stored in

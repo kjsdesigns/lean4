@@ -3,9 +3,17 @@ Copyright (c) 2019 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura
 -/
+module
+
 prelude
-import Init.Data.Array.BasicAux
+public import Init.Data.Array.BasicAux
+public import Init.Data.UInt.Basic
+public import Init.Control.Except
+public import Init.Data.Array.Basic
+import Init.Data.String.Defs
 import Init.Data.ToString.Macro
+
+public section
 
 namespace Lean
 universe u v w w'
@@ -38,7 +46,7 @@ abbrev maxDepth      : USize  := 7
 abbrev maxCollisions : Nat    := 4
 
 def mkEmptyEntriesArray {α β} : Array (Entry α β (Node α β)) :=
-  (Array.mkArray PersistentHashMap.branching.toNat PersistentHashMap.Entry.null)
+  (Array.replicate PersistentHashMap.branching.toNat PersistentHashMap.Entry.null)
 
 end PersistentHashMap
 
@@ -83,11 +91,10 @@ private theorem size_push {ks : Array α} {vs : Array β} (h : ks.size = vs.size
 partial def insertAtCollisionNodeAux [BEq α] : CollisionNode α β → Nat → α → β → CollisionNode α β
   | n@⟨Node.collision keys vals heq, _⟩, i, k, v =>
     if h : i < keys.size then
-      let idx : Fin keys.size := ⟨i, h⟩;
-      let k' := keys.get idx;
+      let k' := keys[i];
       if k == k' then
          let j : Fin vals.size := ⟨i, by rw [←heq]; assumption⟩
-         ⟨Node.collision (keys.set idx k) (vals.set j v) (size_set heq idx j k v), IsCollisionNode.mk _ _ _⟩
+         ⟨Node.collision (keys.set i k) (vals.set j v) (size_set heq ⟨i, h⟩ j k v), IsCollisionNode.mk _ _ _⟩
       else insertAtCollisionNodeAux n (i+1) k v
     else
       ⟨Node.collision (keys.push k) (vals.push v) (size_push heq k v), IsCollisionNode.mk _ _ _⟩
@@ -149,7 +156,7 @@ partial def findAtAux [BEq α] (keys : Array α) (vals : Array β) (heq : keys.s
 partial def findAux [BEq α] : Node α β → USize → α → Option β
   | Node.entries entries, h, k =>
     let j     := (mod2Shift h shift).toNat
-    match entries.get! j with
+    match entries[j]! with
     | Entry.null       => none
     | Entry.ref node   => findAux node (div2Shift h shift) k
     | Entry.entry k' v => if k == k' then some v else none
@@ -180,7 +187,7 @@ partial def findEntryAtAux [BEq α] (keys : Array α) (vals : Array β) (heq : k
 partial def findEntryAux [BEq α] : Node α β → USize → α → Option (α × β)
   | Node.entries entries, h, k =>
     let j     := (mod2Shift h shift).toNat
-    match entries.get! j with
+    match entries[j]! with
     | Entry.null       => none
     | Entry.ref node   => findEntryAux node (div2Shift h shift) k
     | Entry.entry k' v => if k == k' then some (k', v) else none
@@ -188,6 +195,28 @@ partial def findEntryAux [BEq α] : Node α β → USize → α → Option (α �
 
 def findEntry? {_ : BEq α} {_ : Hashable α} : PersistentHashMap α β → α → Option (α × β)
   | { root }, k => findEntryAux root (hash k |>.toUSize) k
+
+partial def findKeyDAtAux [BEq α] (keys : Array α) (vals : Array β) (heq : keys.size = vals.size) (i : Nat) (k : α) (k₀ : α) : α :=
+  if h : i < keys.size then
+    let k' := keys[i]
+    if k == k' then k'
+    else findKeyDAtAux keys vals heq (i+1) k k₀
+  else k₀
+
+partial def findKeyDAux [BEq α] : Node α β → USize → α → α → α
+  | .entries entries, h, k, k₀ =>
+    let j     := (mod2Shift h shift).toNat
+    match entries[j]! with
+    | .null       => k₀
+    | .ref node   => findKeyDAux node (div2Shift h shift) k k₀
+    | .entry k' _ => if k == k' then k' else k₀
+  | .collision keys vals heq, _, k, k₀ => findKeyDAtAux keys vals heq 0 k k₀
+
+/--
+A more efficient `m.findEntry? a |>.map (·.1) |>.getD a₀`
+-/
+@[inline] def findKeyD {_ : BEq α} {_ : Hashable α} (m : PersistentHashMap α β) (a : α) (a₀ : α) : α :=
+  findKeyDAux m.root (hash a |>.toUSize) a a₀
 
 partial def containsAtAux [BEq α] (keys : Array α) (vals : Array β) (heq : keys.size = vals.size) (i : Nat) (k : α) : Bool :=
   if h : i < keys.size then
@@ -199,7 +228,7 @@ partial def containsAtAux [BEq α] (keys : Array α) (vals : Array β) (heq : ke
 partial def containsAux [BEq α] : Node α β → USize → α → Bool
   | Node.entries entries, h, k =>
     let j     := (mod2Shift h shift).toNat
-    match entries.get! j with
+    match entries[j]! with
     | Entry.null       => false
     | Entry.ref node   => containsAux node (div2Shift h shift) k
     | Entry.entry k' _ => k == k'
@@ -231,18 +260,18 @@ def isUnaryNode : Node α β → Option (α × β)
 
 partial def eraseAux [BEq α] : Node α β → USize → α → Node α β
   | n@(Node.collision keys vals heq), _, k =>
-    match keys.indexOf? k with
+    match keys.finIdxOf? k with
     | some idx =>
-      let keys' := keys.feraseIdx idx
-      have keq := keys.size_feraseIdx idx
-      let vals' := vals.feraseIdx (Eq.ndrec idx heq)
-      have veq := vals.size_feraseIdx (Eq.ndrec idx heq)
+      let keys' := keys.eraseIdx idx
+      have keq := keys.size_eraseIdx idx _
+      let vals' := vals.eraseIdx (Eq.ndrec idx heq)
+      have veq := vals.size_eraseIdx (Eq.ndrec idx heq) _
       have : keys.size - 1 = vals.size - 1 := by rw [heq]
       Node.collision keys' vals' (keq.trans (this.trans veq.symm))
     | none     => n
   | n@(Node.entries entries), h, k =>
     let j       := (mod2Shift h shift).toNat
-    let entry   := entries.get! j
+    let entry   := entries[j]!
     match entry with
     | Entry.null       => n
     | Entry.entry k' _ =>
@@ -288,7 +317,7 @@ def forM {_ : BEq α} {_ : Hashable α} (map : PersistentHashMap α β) (f : α 
   map.foldlM (fun _ => f) ⟨⟩
 
 def foldl {_ : BEq α} {_ : Hashable α} (map : PersistentHashMap α β) (f : σ → α → β → σ) (init : σ) : σ :=
-  Id.run <| map.foldlM f init
+  Id.run <| map.foldlM (pure <| f · · ·) init
 
 protected def forIn {_ : BEq α} {_ : Hashable α} [Monad m]
     (map : PersistentHashMap α β) (init : σ) (f : α × β → σ → m (ForInStep σ)) : m σ := do
@@ -300,7 +329,7 @@ protected def forIn {_ : BEq α} {_ : Hashable α} [Monad m]
   match result with
   | .ok s | .error s => pure s
 
-instance {_ : BEq α} {_ : Hashable α} : ForIn m (PersistentHashMap α β) (α × β) where
+instance {_ : BEq α} {_ : Hashable α} [Monad m] : ForIn m (PersistentHashMap α β) (α × β) where
   forIn := PersistentHashMap.forIn
 
 end
@@ -322,7 +351,7 @@ def mapM {α : Type u} {β : Type v} {σ : Type u} {m : Type u → Type w} [Mona
   return { root }
 
 def map {α : Type u} {β : Type v} {σ : Type u} {_ : BEq α} {_ : Hashable α} (pm : PersistentHashMap α β) (f : β → σ) : PersistentHashMap α σ :=
-  Id.run <| pm.mapM f
+  Id.run <| pm.mapM (pure <| f ·)
 
 def toList {_ : BEq α} {_ : Hashable α} (m : PersistentHashMap α β) : List (α × β) :=
   m.foldl (init := []) fun ps k v => (k, v) :: ps

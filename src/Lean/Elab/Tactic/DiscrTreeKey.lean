@@ -3,10 +3,13 @@ Copyright (c) 2024 Matthew Robert Ballard. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Tomas Skrivan, Matthew Robert Ballard
 -/
+module
+
 prelude
-import Init.Tactics
-import Lean.Elab.Command
-import Lean.Meta.Tactic.Simp.SimpTheorems
+public import Lean.Elab.Command
+public import Lean.Meta.Tactic.Simp.SimpTheorems
+
+public section
 
 namespace Lean.Elab.Tactic.DiscrTreeKey
 
@@ -18,21 +21,19 @@ private def mkKey (e : Expr) (simp : Bool) : MetaM (Array Key) := do
   let (_, _, type) ← withReducible <| forallMetaTelescopeReducing e
   let type ← whnfR type
   if simp then
-    if let some (_, lhs, _) := type.eq? then
-      mkPath lhs simpDtConfig
-    else if let some (lhs, _) := type.iff? then
-      mkPath lhs simpDtConfig
-    else if let some (_, lhs, _) := type.ne? then
-      mkPath lhs simpDtConfig
-    else if let some p := type.not? then
-      match p.eq? with
-      | some (_, lhs, _) =>
-        mkPath lhs simpDtConfig
-      | _ => mkPath p simpDtConfig
-    else
-      mkPath type simpDtConfig
+    withSimpGlobalConfig do
+      if let some (_, lhs, _) := type.eq? then
+        mkPath lhs
+      else if let some (lhs, _) := type.iff? then
+        mkPath lhs
+      else if let some (_, lhs, rhs) := type.ne? then
+        mkPath (← mkEq lhs rhs)
+      else if let some p := type.not? then
+        mkPath p
+      else
+        mkPath type
   else
-    mkPath type {}
+    mkPath type
 
 private def getType (t : TSyntax `term) : TermElabM Expr := do
   if let `($id:ident) := t then

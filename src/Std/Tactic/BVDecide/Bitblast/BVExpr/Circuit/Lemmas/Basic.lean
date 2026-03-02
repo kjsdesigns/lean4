@@ -3,9 +3,13 @@ Copyright (c) 2024 Lean FRO, LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Henrik Böving
 -/
+module
+
 prelude
-import Std.Sat.AIG.Basic
-import Std.Tactic.BVDecide.Bitblast.BVExpr.Basic
+public import Std.Sat.AIG.Basic
+public import Std.Tactic.BVDecide.Bitblast.BVExpr.Basic
+
+@[expose] public section
 
 /-!
 This module contains basic infrastructure for converting between variable assignments of `BVExpr`
@@ -18,11 +22,11 @@ namespace Std.Tactic.BVDecide
 namespace BVExpr
 
 def Assignment.toAIGAssignment (assign : Assignment) : BVBit → Bool :=
-  fun bit => (assign.getD bit.var).bv.getLsb bit.idx
+  fun bit => (assign.get bit.var).bv.getLsbD bit.idx
 
 @[simp]
 theorem Assignment.toAIGAssignment_apply (assign : Assignment) (bit : BVBit) :
-    assign.toAIGAssignment bit = (assign.getD bit.var).bv.getLsb bit.idx := by
+    assign.toAIGAssignment bit = (assign.get bit.var).bv.getLsbD bit.idx := by
   rfl
 
 end BVExpr

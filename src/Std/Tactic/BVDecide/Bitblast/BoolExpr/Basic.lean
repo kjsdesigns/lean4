@@ -3,9 +3,12 @@ Copyright (c) 2024 Lean FRO, LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Kim Morrison
 -/
+module
+
 prelude
-import Init.Notation
-import Init.Data.Bool
+public import Init.Data.String.Basic
+
+@[expose] public section
 
 /-!
 This module contains the definition of a generic boolean substructure for SMT problems with
@@ -16,26 +19,23 @@ namespace Std.Tactic.BVDecide
 
 inductive Gate
   | and
-  | or
   | xor
   | beq
-  | imp
+  | or
 
 namespace Gate
 
 def toString : Gate → String
   | and => "&&"
-  | or  => "||"
   | xor => "^^"
   | beq => "=="
-  | imp => "→"
+  | or => "||"
 
 def eval : Gate → Bool → Bool → Bool
   | and => (· && ·)
-  | or => (· || ·)
-  | xor => _root_.xor
+  | xor => (· ^^ ·)
   | beq => (· == ·)
-  | imp => (!· || ·)
+  | or => (· || ·)
 
 end Gate
 
@@ -44,6 +44,7 @@ inductive BoolExpr (α : Type)
   | const : Bool → BoolExpr α
   | not : BoolExpr α → BoolExpr α
   | gate : Gate → BoolExpr α → BoolExpr α → BoolExpr α
+  | ite : BoolExpr α → BoolExpr α → BoolExpr α → BoolExpr α
 
 namespace BoolExpr
 
@@ -52,28 +53,22 @@ def toString [ToString α] : BoolExpr α → String
   | const b => ToString.toString b
   | not x => "!" ++ toString x
   | gate g x y => "(" ++ toString x ++ " " ++ g.toString ++ " " ++ toString y ++ ")"
+  | ite d l r => "(if " ++ toString d ++ " " ++ toString l ++ " " ++ toString r ++ ")"
 
 instance [ToString α] : ToString (BoolExpr α) := ⟨toString⟩
-
-def size : BoolExpr α → Nat
-  | .literal _
-  | .const _ => 1
-  | .not x => x.size + 1
-  | .gate _ x y => x.size + y.size + 1
-
-theorem size_pos (x : BoolExpr α) : 0 < x.size := by
-  cases x <;> simp [size] <;> omega
 
 def eval (a : α → Bool) : BoolExpr α → Bool
   | .literal l => a l
   | .const b => b
   | .not x => !eval a x
   | .gate g x y => g.eval (eval a x) (eval a y)
+  | .ite d l r => bif d.eval a then l.eval a else r.eval a
 
 @[simp] theorem eval_literal : eval a (.literal l) = a l := rfl
 @[simp] theorem eval_const : eval a (.const b) = b := rfl
 @[simp] theorem eval_not : eval a (.not x) = !eval a x := rfl
 @[simp] theorem eval_gate : eval a (.gate g x y) = g.eval (eval a x) (eval a y) := rfl
+@[simp] theorem eval_ite : eval a (.ite d l r) = bif d.eval a then l.eval a else r.eval a := rfl
 
 def Sat (a : α → Bool) (x : BoolExpr α) : Prop := eval a x = true
 def Unsat (x : BoolExpr α) : Prop := ∀ f, eval f x = false

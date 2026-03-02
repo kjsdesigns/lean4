@@ -3,8 +3,12 @@ Copyright (c) 2021 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura
 -/
+module
+
 prelude
-import Lean.Expr
+public import Lean.Expr
+
+public section
 
 namespace Lean
 
@@ -29,7 +33,7 @@ def getRecAppSyntax? (e : Expr) : Option Syntax :=
   | _                => none
 
 /--
-Checks if the `MData` is for a recursive applciation.
+Checks if the `MData` is for a recursive application.
 -/
 def MData.isRecApp (d : MData) : Bool :=
   d.contains recAppKey

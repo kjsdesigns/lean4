@@ -3,14 +3,19 @@ Copyright (c) 2024 Lean FRO, LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Henrik Böving
 -/
-import Std.Sat.AIG.CachedGatesLemmas
-import Std.Sat.AIG.LawfulVecOperator
+module
+
+prelude
+public import Std.Sat.AIG.LawfulVecOperator
+import Init.Omega
+
+@[expose] public section
 
 /-!
 Besides introducing a way to construct an if statement in an `AIG`, this module also demonstrates
 a style of writing Lean code that minimizes the risk of linearity issues on the `AIG`.
 
-The idea is to always keep one `aig` variable around that contains the `AIG` and continously
+The idea is to always keep one `aig` variable around that contains the `AIG` and continuously
 shadow it. However, applying multiple operations to the `AIG` does often require `Ref.cast` to use
 other inputs or `Ref`s created by previous operations in later ones. Applying a `Ref.cast` would
 usually require keeping around the old `AIG` to state the theorem statement. Luckily in this
@@ -95,15 +100,15 @@ theorem denote_mkIfCached {aig : AIG α} {input : TernaryInput aig} :
   rw [if_as_bool]
   unfold mkIfCached
   dsimp only
-  simp only [TernaryInput.cast, Ref.cast_eq, id_eq, Int.reduceNeg, denote_mkOrCached,
+  simp only [TernaryInput.cast, Ref.cast_eq, denote_mkOrCached,
     denote_projected_entry, denote_mkAndCached, denote_mkNotCached]
   congr 2
-  · rw [LawfulOperator.denote_mem_prefix]
+  · rw [LawfulOperator.denote_mem_prefix (LawfulOperator.lt_size ..)]
     rw [LawfulOperator.denote_mem_prefix]
     · simp
     · simp [Ref.hgate]
   · rw [LawfulOperator.denote_mem_prefix]
-  · rw [LawfulOperator.denote_mem_prefix]
+  · rw [LawfulOperator.denote_mem_prefix (LawfulOperator.lt_size_of_lt_aig_size _ _ input.rhs.hgate)]
     rw [LawfulOperator.denote_mem_prefix]
 
 namespace RefVec
@@ -115,7 +120,7 @@ structure IfInput (aig : AIG α) (w : Nat) where
 
 def ite (aig : AIG α) (input : IfInput aig w) : RefVecEntry α w :=
   let ⟨discr, lhs, rhs⟩ := input
-  go aig 0 (by omega) discr lhs rhs .empty
+  go aig 0 (by omega) discr lhs rhs (.emptyWithCapacity w)
 where
   go {w : Nat} (aig : AIG α) (curr : Nat) (hcurr : curr ≤ w) (discr : Ref aig)
       (lhs rhs : RefVec aig w) (s : RefVec aig curr) : RefVecEntry α w :=
@@ -193,15 +198,13 @@ theorem go_get_aux {w : Nat} (aig : AIG α) (curr : Nat) (hcurr : curr ≤ w) (d
   split at hgo
   · rw [← hgo]
     intros
-    rw [go_get_aux]
-    rw [AIG.RefVec.get_push_ref_lt]
-    · simp only [Ref.cast, Ref.mk.injEq]
-      rw [AIG.RefVec.get_cast]
-      · simp
-      · assumption
-    · apply go_le_size
+    rw [go_get_aux (hidx := Nat.lt_succ_of_lt hidx) (hfoo := go_le_size ..)]
+    rw [AIG.RefVec.get_push_ref_lt (hidx := hidx)]
+    simp only [Ref.cast, Ref.mk.injEq]
+    rw [AIG.RefVec.get_cast]
+    simp
   · rw [← hgo]
-    simp only [Nat.le_refl, get, Ref.gate_cast, Ref.mk.injEq, true_implies]
+    simp only [Nat.le_refl, get]
     have : curr = w := by omega
     subst this
     simp
@@ -220,12 +223,12 @@ theorem go_denote_mem_prefix {w : Nat} (aig : AIG α) (curr : Nat) (hcurr : curr
     (discr : Ref aig) (lhs rhs : RefVec aig w) (s : RefVec aig curr) (start : Nat) (hstart) :
     ⟦
       (go aig curr hcurr discr lhs rhs s).aig,
-      ⟨start, by apply Nat.lt_of_lt_of_le; exact hstart; apply go_le_size⟩,
+      ⟨start, inv, by apply Nat.lt_of_lt_of_le; exact hstart; apply go_le_size⟩,
       assign
     ⟧
       =
-    ⟦aig, ⟨start, hstart⟩, assign⟧ := by
-  apply denote.eq_of_isPrefix (entry := ⟨aig, start,hstart⟩)
+    ⟦aig, ⟨start, inv, hstart⟩, assign⟧ := by
+  apply denote.eq_of_isPrefix (entry := ⟨aig, start, inv, hstart⟩)
   apply IsPrefix.of
   · intros
     apply go_decl_eq
@@ -256,7 +259,7 @@ theorem denote_go {w : Nat} (aig : AIG α) (curr : Nat) (hcurr : curr ≤ w) (di
     | inl heq =>
       subst heq
       rw [← hgo]
-      rw [go_get]
+      rw [go_get]; case hidx => omega
       rw [AIG.RefVec.get_push_ref_eq']
       · rw [go_denote_mem_prefix]
         · simp
