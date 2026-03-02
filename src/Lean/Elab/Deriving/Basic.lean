@@ -230,7 +230,7 @@ def processDefDeriving (view : DerivingClassView) (decl : Expr) (isNoncomputable
     if let some noncompRef := noncompRef? then
       if let some cmdRef := cmdRef? then
         if let some origText := cmdRef.reprint then
-          let newText := (origText.replace "deriving instance " "deriving noncomputable instance ").trim
+          let newText := (origText.replace "deriving instance " "deriving noncomputable instance ").trimAscii
           logInfoAt cmdRef m!"Try this: {newText}"
       throwError "failed to derive instance because it depends on \
         `{.ofConstName noncompRef}`, which is noncomputable"
