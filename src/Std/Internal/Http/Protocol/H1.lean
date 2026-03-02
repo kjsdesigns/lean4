@@ -1302,22 +1302,18 @@ for header parsing.
 Unsupported methods or versions are converted into protocol failures.
 -/
 private partial def processReceivingStartLine (machine : Machine .receiving) : Machine .receiving :=
-
   let (machine, result) := parseWith machine
     (parseRequestLineRawVersion machine.config)
     (limit := some machine.config.maxStartLineLength)
     (onHardError := classifyStartLineHardError)
 
   match result with
-  | some (method?, uri, version) =>
+  | some (method, uri, version) =>
       if version == some .v11 then
-        if let some method := method? then
-          machine
-          |>.modifyReader (.setMessageHead ({ method, version := .v11, uri, headers := .empty }))
-          |>.setReaderState (.needHeader 0)
-          |> processRead
-        else
-          machine.setFailure .unsupportedMethod
+        machine
+        |>.modifyReader (.setMessageHead ({ method, version := .v11, uri, headers := .empty }))
+        |>.setReaderState (.needHeader 0)
+        |> processRead
       else
         machine.setFailure .unsupportedVersion
   | none =>
