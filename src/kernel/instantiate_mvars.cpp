@@ -362,6 +362,16 @@ public:
     expr operator()(expr const & e) { return visit(e); }
 };
 
+/* The original single-pass implementation, exposed for benchmarking. */
+extern "C" LEAN_EXPORT object * lean_instantiate_expr_mvars_original(object * m, object * e) {
+    metavar_ctx mctx(m);
+    expr e_new = instantiate_mvars_fn(mctx)(expr(e));
+    object * r = alloc_cnstr(0, 2, 0);
+    cnstr_set(r, 0, mctx.steal());
+    cnstr_set(r, 1, e_new.steal());
+    return r;
+}
+
 extern "C" LEAN_EXPORT object * lean_instantiate_expr_mvars(object * m, object * e) {
     metavar_ctx mctx(m);
     expr e_new = instantiate_mvars_fn(mctx)(expr(e));

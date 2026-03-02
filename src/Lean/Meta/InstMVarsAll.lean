@@ -11,24 +11,35 @@ public import Lean.Meta.Basic
 
 namespace Lean.Meta
 
+@[extern "lean_instantiate_expr_mvars_original"]
+private opaque instantiateMVarsOriginalImp (mctx : MetavarContext) (e : Expr) :
+  MetavarContext × Expr
+
 @[extern "lean_instantiate_expr_mvars_all"]
 private opaque instantiateAllMVarsImp (mctx : MetavarContext) (e : Expr) :
-  Option (MetavarContext × Expr)
+  MetavarContext × Expr
 
 @[extern "lean_instantiate_expr_mvars_all_sharing"]
 private opaque instantiateAllMVarsSharingImp (mctx : MetavarContext) (e : Expr) :
-  Option (MetavarContext × Expr)
+  MetavarContext × Expr
 
-/-- Like `instantiateMVars` but throws if an unassigned mvar is encountered
-    under an active fvar substitution. Use at call sites where all mvars are
-    known to be assigned — a throw indicates a wrong assumption.
+/-- The original single-pass `instantiateMVars` implementation, exposed for benchmarking
+    independently of which implementation is the default. -/
+public def instantiateMVarsOriginal (e : Expr) : MetaM Expr := do
+  if !e.hasMVar then return e
+  let (mctx, eNew) := instantiateMVarsOriginalImp (← getMCtx) e
+  modifyMCtx fun _ => mctx; return eNew
 
-    Uses a fused single-pass approach (carries fvar substitution during traversal). -/
+/-- Like `instantiateMVars` but uses a fused two-pass approach.
+    Pass 1 resolves direct mvar assignments with write-back.
+    Pass 2 resolves delayed assignments with a fused fvar substitution,
+    avoiding separate `replace_fvars` calls.
+
+    This variant may lose sharing across delayed-mvar boundaries. -/
 public def instantiateAllMVars (e : Expr) : MetaM Expr := do
   if !e.hasMVar then return e
-  match instantiateAllMVarsImp (← getMCtx) e with
-  | some (mctx, eNew) => modifyMCtx fun _ => mctx; return eNew
-  | none => throwError "instantiateAllMVars: unexpected unassigned mvar in {e}"
+  let (mctx, eNew) := instantiateAllMVarsImp (← getMCtx) e
+  modifyMCtx fun _ => mctx; return eNew
 
 /-- Like `instantiateAllMVars` but preserves sharing across delayed-mvar boundaries
     using a scope-tracked cache stack. Results that only depend on outer-scope fvar
@@ -39,8 +50,7 @@ public def instantiateAllMVars (e : Expr) : MetaM Expr := do
     cost of O(scope_depth) cache lookups instead of O(1). -/
 public def instantiateAllMVarsSharing (e : Expr) : MetaM Expr := do
   if !e.hasMVar then return e
-  match instantiateAllMVarsSharingImp (← getMCtx) e with
-  | some (mctx, eNew) => modifyMCtx fun _ => mctx; return eNew
-  | none => throwError "instantiateAllMVarsSharing: unexpected unassigned mvar in {e}"
+  let (mctx, eNew) := instantiateAllMVarsSharingImp (← getMCtx) e
+  modifyMCtx fun _ => mctx; return eNew
 
 end Lean.Meta

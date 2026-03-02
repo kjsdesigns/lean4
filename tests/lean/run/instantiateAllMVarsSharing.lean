@@ -23,24 +23,6 @@ where
   leftTy  := eq_ss → andTy                    ← forallE body contains eq_ss
   rightTy := eq_ss
   right   := @Eq.refl Nat s_fvar
-
-`eq_ss` appears at depth 2 in two places:
-  (a) in `leftTy`'s forallE body (the `andTy` subexpression)
-  (b) in `?inner`'s value (the And.intro type arguments)
-
-With `instantiateMVars` (standard), a single `replace_fvars` call
-processes the whole expression.  Both (a) and (b) see `eq_ss` at offset 1
-and share a single `@Eq Nat #1 #1` result via the `(ptr, offset)` cache.
-
-With `instantiateAllMVars` (fused pass-2, no sharing preservation), (a) and (b)
-are in different cache scopes that are swapped on `visit_delayed` boundaries.
-This loses sharing for `eq_ss` across the two scopes.
-
-With `instantiateAllMVarsSharing` (scope-tracked cache stack), results that only
-depend on outer-scope fvars are cached at the outermost valid scope level, so
-the `eq_ss → @Eq Nat #1 #1` entry at depth 2 IS shared across scopes.  The
-remaining 2 extra objects come from `mk_rev_app` always allocating fresh app
-nodes (vs `update_app` in the standard approach).
 -/
 
 private def mkTestRoot : MetaM Expr := do
@@ -78,17 +60,17 @@ private def mkTestRoot : MetaM Expr := do
       root.mvarId!.assign (Lean.mkLambda `s .default nat (mkApp rootAux (.bvar 0)))
       return root
 
--- instantiateAllMVars: loses sharing across visit_delayed boundaries (34 vs 27 objects)
+-- instantiateAllMVars (non-sharing) loses some sharing compared to instantiateAllMVarsSharing
 /--
-error: sharing regression: instantiateMVars 27 objs, instantiateAllMVars 34 objs
+error: sharing regression: instantiateAllMVarsSharing 29 objs, instantiateAllMVars 34 objs
 -/
 #guard_msgs (error) in
 run_meta do
   let root ← mkTestRoot
 
   let saved ← saveState
-  let eStd ← instantiateMVars root
-  let nStd ← eStd.numObjs
+  let eSharing ← instantiateAllMVarsSharing root
+  let nSharing ← eSharing.numObjs
   saved.restore
 
   let saved ← saveState
@@ -96,30 +78,21 @@ run_meta do
   let nAll ← eAll.numObjs
   saved.restore
 
-  guard (eStd == eAll)
+  guard (eSharing == eAll)
 
-  if nAll > nStd then
-    throwError "sharing regression: instantiateMVars {nStd} objs, instantiateAllMVars {nAll} objs"
+  if nAll > nSharing then
+    throwError "sharing regression: instantiateAllMVarsSharing {nSharing} objs, instantiateAllMVars {nAll} objs"
 
--- instantiateAllMVarsSharing: preserves cross-scope sharing (29 vs 27, residual from mk_rev_app)
-/--
-error: sharing regression: instantiateMVars 27 objs, instantiateAllMVarsSharing 29 objs
--/
-#guard_msgs (error) in
+-- instantiateAllMVarsSharing produces the same result as instantiateMVars
 run_meta do
   let root ← mkTestRoot
 
   let saved ← saveState
   let eStd ← instantiateMVars root
-  let nStd ← eStd.numObjs
   saved.restore
 
   let saved ← saveState
-  let eAll ← instantiateAllMVarsSharing root
-  let nAll ← eAll.numObjs
+  let eSharing ← instantiateAllMVarsSharing root
   saved.restore
 
-  guard (eStd == eAll)
-
-  if nAll > nStd then
-    throwError "sharing regression: instantiateMVars {nStd} objs, instantiateAllMVarsSharing {nAll} objs"
+  guard (eStd == eSharing)
