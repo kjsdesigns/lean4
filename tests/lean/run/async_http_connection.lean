@@ -452,7 +452,7 @@ def hasUri (req : Request Body.Incoming) (uri : String) : Bool :=
   handler := fun _ => do
     Response.ok |>.text "success"
 
-  expected := "HTTP/1.1 400 Bad Request\x0d\nServer: LeanHTTP/1.1\x0d\nConnection: close\x0d\nContent-Length: 0\x0d\n\x0d\n"
+  expected := "HTTP/1.1 431 Request Header Fields Too Large\x0d\nServer: LeanHTTP/1.1\x0d\nConnection: close\x0d\nContent-Length: 0\x0d\n\x0d\n"
 }
 
 #eval runTestCase {
@@ -489,7 +489,7 @@ def hasUri (req : Request Body.Incoming) (uri : String) : Bool :=
   handler := fun _ => do
     Response.ok |>.text "success"
 
-  expected := "HTTP/1.1 400 Bad Request\x0d\nServer: LeanHTTP/1.1\x0d\nConnection: close\x0d\nContent-Length: 0\x0d\n\x0d\n"
+  expected := "HTTP/1.1 431 Request Header Fields Too Large\x0d\nServer: LeanHTTP/1.1\x0d\nConnection: close\x0d\nContent-Length: 0\x0d\n\x0d\n"
 }
 
 -- Tests

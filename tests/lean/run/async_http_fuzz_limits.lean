@@ -220,7 +220,7 @@ def fuzzHeaderCountLimit (iterations : Nat) (seed0 : Nat) : IO Unit := do
     if headerCount ≤ limit then
       assertStatusPrefix s!"fuzzHeaderCount iter={i} seed={caseSeed} count={headerCount}" response "HTTP/1.1 200"
     else
-      assertStatusPrefix s!"fuzzHeaderCount iter={i} seed={caseSeed} count={headerCount}" response "HTTP/1.1 400"
+      assertStatusPrefix s!"fuzzHeaderCount iter={i} seed={caseSeed} count={headerCount}" response "HTTP/1.1 431"
 
 -- ============================================================================
 -- maxHeaderBytes — total header bytes limit
@@ -260,7 +260,7 @@ def fuzzHeaderTotalBytesLimit (iterations : Nat) (seed0 : Nat) : IO Unit := do
     if totalBytes ≤ limit then
       assertStatusPrefix s!"fuzzHeaderBytes iter={i} seed={caseSeed} total={totalBytes}" response "HTTP/1.1 200"
     else
-      assertStatusPrefix s!"fuzzHeaderBytes iter={i} seed={caseSeed} total={totalBytes}" response "HTTP/1.1 400"
+      assertStatusPrefix s!"fuzzHeaderBytes iter={i} seed={caseSeed} total={totalBytes}" response "HTTP/1.1 431"
 
 -- ============================================================================
 -- maxMessages — requests per connection
