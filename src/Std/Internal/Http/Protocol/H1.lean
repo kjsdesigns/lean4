@@ -570,12 +570,12 @@ keep-alive remains enabled.
 Unconsumed input and already-produced output are preserved. If keep-alive is
 disabled, closes reader/writer and emits `.close` instead.
 -/
-private def resetForNextMessage (machine : Machine ty) : Machine ty :=
+private def resetForNextMessage (machine : Machine dir) : Machine dir :=
 
   if machine.keepAlive then
     { machine with
       reader := {
-        state := .needStartLine,
+        state := match dir with | .receiving => .needStartLine | .sending => .pending,
         input := machine.reader.input,
         messageHead := {},
         messageCount := machine.reader.messageCount + 1,
@@ -584,7 +584,7 @@ private def resetForNextMessage (machine : Machine ty) : Machine ty :=
       writer := {
         userData := .empty,
         outputData := machine.writer.outputData,
-        state := .pending,
+        state := match dir with | .receiving => .pending | .sending => .waitingHeaders,
         knownSize := none,
         messageHead := {},
         userClosedBody := false,
@@ -643,10 +643,9 @@ private def advanceAfterHeaders (machine : Machine dir) (state : Reader.State di
   let machine := machine.addEvent (.endHeaders machine.reader.messageHead)
   let machine := if waitingContinue then machine.addEvent .continue else machine
 
-  machine
-  |>.setReaderState nextState
-  |>.setWriterState .waitingHeaders
-  |>.addEvent .needAnswer
+  match dir, nextState, machine with
+  | .receiving,nextState,  machine => machine.setReaderState nextState |>.setWriterState .waitingHeaders |>.addEvent .needAnswer
+  | .sending, nextState, machine => machine.setReaderState nextState
 
 /--
 Processes a finished header block:
@@ -736,7 +735,7 @@ private def writeHead (messageHead : Message.Head dir.swap) (machine : Machine d
 Feeds input bytes into the reader side of the machine.
 -/
 @[inline]
-def feed (machine : Machine ty) (data : ByteArray) : Machine ty :=
+def feed (machine : Machine dir) (data : ByteArray) : Machine dir :=
   if machine.isReaderClosed ∨ machine.failed then
     machine
   else
@@ -838,6 +837,12 @@ private def maybeSuppressOutgoingBody (machine : Machine dir) (message : Message
         machine
   | .sending => machine
 
+@[inline]
+private def isWriterClosed (machine : Machine dir) : Bool :=
+  match machine.writer.state with
+  | .closed => true
+  | _ => false
+
 /--
 Send the head of a message to the machine.
 -/
@@ -855,7 +860,9 @@ def send (machine : Machine dir) (message : Message.Head dir.swap) : Machine dir
     if machine.failed && !hadFailure then
       machine
     else
-      machine.setWriterState .waitingForFlush
+      match dir, machine with
+      | .sending, machine => machine.setWriterState .waitingForFlush |>.setReaderState .needStartLine
+      | .receiving, machine => machine.setWriterState .waitingForFlush
   else
     machine
 
@@ -1434,6 +1441,11 @@ body, completion, or failure handling).
 -/
 partial def processRead (machine : Machine dir) : Machine dir :=
   match machine.reader.state with
+  | .pending =>
+    if machine.isWriterClosed then
+      machine.setReaderState .closed
+    else
+      machine
   | .needStartLine =>
       processNeedStartLine machine
   | .needHeader headerCount =>
