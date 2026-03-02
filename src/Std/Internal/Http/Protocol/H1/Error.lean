@@ -86,6 +86,18 @@ inductive Error
   | badMessage
 
   /--
+  The number of header fields in the message exceeds the configured limit.
+  Maps to HTTP 431 Request Header Fields Too Large.
+  -/
+  | tooManyHeaders
+
+  /--
+  The aggregate byte size of all header fields exceeds the configured limit.
+  Maps to HTTP 431 Request Header Fields Too Large.
+  -/
+  | headersTooLarge
+
+  /--
   Generic error with message.
   -/
   | other (message : String)
@@ -104,7 +116,7 @@ instance : ToString Error where
   | .invalidChunk => "Invalid chunk"
   | .connectionClosed => "Connection closed"
   | .badMessage => "Bad message"
+  | .tooManyHeaders => "Too many headers"
+  | .headersTooLarge => "Headers too large"
   | .other msg => s!"Other error: {msg}"
 
-instance : Repr ByteSlice where
-  reprPrec x := reprPrec x.toByteArray.data

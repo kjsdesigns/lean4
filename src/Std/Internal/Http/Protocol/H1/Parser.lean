@@ -57,7 +57,7 @@ partial def manyItems {α : Type} (parser : Parser (Option α)) (maxCount : Nat)
       let acc := acc.push x
 
       if acc.size > maxCount then
-        fail s!"Too many items: {acc.size} > {maxCount}"
+        fail s!"too many items: {acc.size} > {maxCount}"
 
       go acc
   go #[]
@@ -130,7 +130,7 @@ def hexDigit : Parser UInt8 := do
     if b ≥ '0'.toUInt8 && b ≤ '9'.toUInt8 then return b - '0'.toUInt8
     else if b ≥ 'A'.toUInt8 && b ≤ 'F'.toUInt8 then return b - 'A'.toUInt8 + 10
     else return b - 'a'.toUInt8 + 10
-  else fail s!"Invalid hex digit {Char.ofUInt8 b |>.quote}"
+  else fail s!"invalid hex digit {Char.ofUInt8 b |>.quote}"
 
 partial def hex : Parser Nat := do
   let rec go (acc : Nat) (count : Nat) : Parser Nat := do
@@ -165,7 +165,7 @@ def parseHttpVersionNumber : Parser (Nat × Nat) := do
 
 def parseHttpVersion : Parser Version := do
   let (major, minor) ← parseHttpVersionNumber
-  liftOption<| Version.ofNumber? major minor
+  liftOption <| Version.ofNumber? major minor
 
 /-
 method         = token
@@ -177,22 +177,46 @@ all alternatives keeps the parser defensively correct if new methods are
 added in the future.
 -/
 def parseMethod : Parser Method :=
-  (attempt <| skipBytes "GET".toUTF8 <&> fun _ => Method.get)
-  <|> (attempt <| skipBytes "HEAD".toUTF8 <&> fun _ => Method.head)
+  (skipBytes "GET".toUTF8 <&> fun _ => Method.get)
+  <|> (skipBytes "HEAD".toUTF8 <&> fun _ => Method.head)
+  <|> (skipBytes "DELETE".toUTF8 <&> fun _ => Method.delete)
+  <|> (skipBytes "TRACE".toUTF8 <&> fun _ => Method.trace)
+  <|> (skipBytes "ACL".toUTF8 <&> fun _ => Method.acl)
+  <|> (skipBytes "QUERY".toUTF8 <&> fun _ => Method.query)
+  <|> (skipBytes "SEARCH".toUTF8 <&> fun _ => Method.search)
+  <|> (attempt <| skipBytes "BASELINE-CONTROL".toUTF8 <&> fun _ => Method.baselineControl)
+  <|> (skipBytes "BIND".toUTF8 <&> fun _ => Method.bind)
+  <|> (attempt <| skipBytes "CONNECT".toUTF8 <&> fun _ => Method.connect)
+  <|> (attempt <| skipBytes "CHECKIN".toUTF8 <&> fun _ => Method.checkin)
+  <|> (attempt <| skipBytes "CHECKOUT".toUTF8 <&> fun _ => Method.checkout)
+  <|> (skipBytes "COPY".toUTF8 <&> fun _ => Method.copy)
+  <|> (attempt <| skipBytes "LABEL".toUTF8 <&> fun _ => Method.label)
+  <|> (attempt <| skipBytes "LINK".toUTF8 <&> fun _ => Method.link)
+  <|> (skipBytes "LOCK".toUTF8 <&> fun _ => Method.lock)
+  <|> (attempt <| skipBytes "MERGE".toUTF8 <&> fun _ => Method.merge)
+  <|> (attempt <| skipBytes "MKACTIVITY".toUTF8 <&> fun _ => Method.mkactivity)
+  <|> (attempt <| skipBytes "MKCALENDAR".toUTF8 <&> fun _ => Method.mkcalendar)
+  <|> (attempt <| skipBytes "MKCOL".toUTF8 <&> fun _ => Method.mkcol)
+  <|> (attempt <| skipBytes "MKREDIRECTREF".toUTF8 <&> fun _ => Method.mkredirectref)
+  <|> (attempt <| skipBytes "MKWORKSPACE".toUTF8 <&> fun _ => Method.mkworkspace)
+  <|> (skipBytes "MOVE".toUTF8 <&> fun _ => Method.move)
+  <|> (attempt <| skipBytes "OPTIONS".toUTF8 <&> fun _ => Method.options)
+  <|> (skipBytes "ORDERPATCH".toUTF8 <&> fun _ => Method.orderpatch)
   <|> (attempt <| skipBytes "POST".toUTF8 <&> fun _ => Method.post)
   <|> (attempt <| skipBytes "PUT".toUTF8 <&> fun _ => Method.put)
-  <|> (attempt <| skipBytes "DELETE".toUTF8 <&> fun _ => Method.delete)
-  <|> (attempt <| skipBytes "CONNECT".toUTF8 <&> fun _ => Method.connect)
-  <|> (attempt <| skipBytes "OPTIONS".toUTF8 <&> fun _ => Method.options)
-  <|> (attempt <| skipBytes "TRACE".toUTF8 <&> fun _ => Method.trace)
   <|> (attempt <| skipBytes "PATCH".toUTF8 <&> fun _ => Method.patch)
-
-/--
-Parses the method token as text.
--/
-def parseMethodToken : Parser String := do
-  let raw ← parseToken 64
-  liftOption <| String.fromUTF8? raw.toByteArray
+  <|> (attempt <| skipBytes "PRI".toUTF8 <&> fun _ => Method.pri)
+  <|> (attempt <| skipBytes "PROPFIND".toUTF8 <&> fun _ => Method.propfind)
+  <|> (skipBytes "PROPPATCH".toUTF8 <&> fun _ => Method.proppatch)
+  <|> (attempt <| skipBytes "REBIND".toUTF8 <&> fun _ => Method.rebind)
+  <|> (skipBytes "REPORT".toUTF8 <&> fun _ => Method.report)
+  <|> (attempt <| skipBytes "UNBIND".toUTF8 <&> fun _ => Method.unbind)
+  <|> (attempt <| skipBytes "UNCHECKOUT".toUTF8 <&> fun _ => Method.uncheckout)
+  <|> (attempt <| skipBytes "UNLINK".toUTF8 <&> fun _ => Method.unlink)
+  <|> (attempt <| skipBytes "UNLOCK".toUTF8 <&> fun _ => Method.unlock)
+  <|> (attempt <| skipBytes "UPDATEREDIRECTREF".toUTF8 <&> fun _ => Method.updateredirectref)
+  <|> (attempt <| skipBytes "UPDATE".toUTF8 <&> fun _ => Method.update)
+  <|> (skipBytes "VERSION-CONTROL".toUTF8 <&> fun _ => Method.versionControl)
 
 def parseURI (limits : H1.Config) : Parser ByteArray := do
   let uri ← takeUntilUpTo (· == ' '.toUInt8) limits.maxUriLength
@@ -203,19 +227,28 @@ def parseURI (limits : H1.Config) : Parser ByteArray := do
   return uri.toByteArray
 
 /--
+Shared core for request-line parsing: parses `request-target SP HTTP-version CRLF`
+and returns the `RequestTarget` together with the raw major/minor version numbers.
+
+Both `parseRequestLine` and `parseRequestLineRawVersion` call this after consuming
+the method token, keeping URI validation and version parsing in one place.
+-/
+private def parseRequestLineBody (limits : H1.Config) : Parser (RequestTarget × Nat × Nat) := do
+  let rawUri ← parseURI limits <* sp
+  let uri ← match (Std.Http.URI.Parser.parseRequestTarget <* eof).run rawUri with
+  | .ok res => pure res
+  | .error res => fail res
+  let versionPair ← parseHttpVersionNumber <* crlf
+  return (uri, versionPair)
+
+/--
 Parses a request line and returns a fully-typed `Request.Head`.
 `request-line = method SP request-target SP HTTP-version`
 -/
 public def parseRequestLine (limits : H1.Config) : Parser Request.Head := do
   skipLeadingRequestEmptyLines limits
   let method ← parseMethod <* sp
-  let uri ← parseURI limits <* sp
-
-  let uri ← match (Std.Http.URI.Parser.parseRequestTarget <* eof).run uri with
-  | .ok res => pure res
-  | .error res => fail res
-
-  let (major, minor) ← parseHttpVersionNumber <* crlf
+  let (uri, (major, minor)) ← parseRequestLineBody limits
   if major == 1 ∧ minor == 1 then
     return ⟨method, .v11, uri, .empty⟩
   else
@@ -226,17 +259,11 @@ Parses a request line and returns the recognized HTTP method and version when av
 
 request-line = method SP request-target SP HTTP-version
 -/
-public def parseRequestLineRawVersion (limits : H1.Config) : Parser (Option Method × RequestTarget × Option Version) := do
+public def parseRequestLineRawVersion (limits : H1.Config) : Parser (Method × RequestTarget × Option Version) := do
   skipLeadingRequestEmptyLines limits
-  let methodToken ← parseMethodToken <* sp
-  let uri ← parseURI limits <* sp
-
-  let uri ← match (Std.Http.URI.Parser.parseRequestTarget <* eof).run uri with
-  | .ok res => pure res
-  | .error res => fail res
-
-  let (major, minor) ← parseHttpVersionNumber <* crlf
-  return (Method.ofString? methodToken, uri, Version.ofNumber? major minor)
+  let method ← parseMethod <* sp
+  let (uri, (major, minor)) ← parseRequestLineBody limits
+  return (method, uri, Version.ofNumber? major minor)
 
 -- field-line   = field-name ":" OWS field-value OWS
 def parseFieldLine (limits : H1.Config) : Parser (String × String) := do
@@ -407,20 +434,20 @@ public def parseTrailers (limits : H1.Config) : Parser (Array (String × String)
   return trailers
 
 /--
-Parses reason phrase (text after status code)
+Returns `true` if `c` is a valid reason-phrase byte (`HTAB / SP / VCHAR`, strict ASCII-only).
 -/
 @[inline]
 def isReasonPhraseByte (c : UInt8) : Bool :=
   fieldContent (Char.ofUInt8 c)
 
 /--
-Parses reason phrase (text after status code).
+Parses a reason phrase (text after status code).
 
 Allows only `HTAB / SP / VCHAR` bytes (strict ASCII-only).
 -/
 def parseReasonPhrase (limits : H1.Config) : Parser String := do
   let bytes ← takeWhileUpTo isReasonPhraseByte limits.maxReasonPhraseLength
-  liftOption<| String.fromUTF8? bytes.toByteArray
+  liftOption <| String.fromUTF8? bytes.toByteArray
 
 /--
 Parses HTTP status code (3 digits)
@@ -434,9 +461,10 @@ def parseStatusCode (limits : H1.Config) : Parser Status := do
   let phrase ← parseReasonPhrase limits <* crlf
 
   if h : IsValidReasonPhrase phrase then
-    return Status.ofCode (some ⟨phrase, h⟩) code.toUInt16
-  else
-    fail "invalid status code"
+    if let some status := Status.ofCode (some ⟨phrase, h⟩) code.toUInt16 then
+      return status
+
+  fail "invalid status code"
 
 /--
 Parses a status line and returns a fully-typed `Response.Head`.
