@@ -4,6 +4,14 @@ Released under Apache 2.0 license as described in the file LICENSE.
 
 Authors: Joachim Breitner
 */
+/* Suppress -Wdeprecated-copy triggered by mi_stl_allocator in lean::unordered_map.
+   mi_stl_allocator (from mimalloc) declares a copy constructor but not a copy
+   assignment operator, which GCC 15 / Clang flag as deprecated. */
+#if defined(__clang__)
+#pragma clang diagnostic ignored "-Wdeprecated-copy"
+#elif defined(__GNUC__)
+#pragma GCC diagnostic ignored "-Wdeprecated-copy"
+#endif
 #include <vector>
 #include <unordered_map>
 #include "util/name_set.h"
