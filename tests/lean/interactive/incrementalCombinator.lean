@@ -11,8 +11,22 @@ def case (h : a ∨ b ∨ c) : True := by
                   --^ sync
                   --^ insert: ".5"
 
+/-!
+`case` with multiple tags should *not* be accidentally incremental, leading to e.g. kernel errors.
+-/
+
 -- RESET
-def case (h : a ∨ b) : True := by
+def case2 (h : a ∨ b ∨ c) : True := by
+  cases h
+  case inl | inr =>
+    skip
+    sorry
+       --^ sync
+       --^ insert: " "
+       --^ collectDiagnostics
+
+-- RESET
+def cdot (h : a ∨ b) : True := by
   cases h
   . dbg_trace "d 0"
     dbg_trace "d 1"
@@ -59,3 +73,29 @@ def if : True := by
                 --^ insert: ".5"
   else
     skip
+
+
+/-!
+Removing an extraneous case should not stick around.
+-/
+-- RESET
+example (n : Nat) : n = n := by
+  induction n with
+  | zero => simp
+--v sync
+--v delete: "| one => sorry"
+  | one => simp
+  | succ => simp
+--^ collectDiagnostics
+
+/-!
+"Missing alternative name" should not stick around.
+-/
+-- RESET
+example (n : Nat) : n = n := by
+  induction n with
+  | zero => simp
+  |  -- insert here
+  --^ sync
+  --^ insert: "succ => sorry"
+  --^ collectDiagnostics

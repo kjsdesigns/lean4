@@ -8,9 +8,17 @@ paths containing package roots: an import `A.B.C` resolves to
 `path/A/B/C.olean` for the first entry `path` in `LEAN_PATH`
 with a directory `A/`. `import A` resolves to `path/A.olean`.
 -/
+module
+
 prelude
-import Init.System.IO
-import Init.Data.List.Control
+public import Init.System.IO
+import Init.Data.ToString.Name
+import Init.Data.String.TakeDrop
+import Init.Data.List.Monadic
+import Init.Data.Option.BasicAux
+import Init.Data.ToString.Macro
+
+public section
 
 namespace Lean
 open System
@@ -72,11 +80,9 @@ end SearchPath
 
 builtin_initialize searchPathRef : IO.Ref SearchPath ← IO.mkRef {}
 
-@[export lean_get_prefix]
 def getBuildDir : IO FilePath := do
   return (← IO.appDir).parent |>.get!
 
-@[export lean_get_libdir]
 def getLibDir (leanSysroot : FilePath) : IO FilePath := do
   let mut buildDir := leanSysroot
   -- use stage1 stdlib with stage0 executable (which should never be distributed outside of the build directory)
@@ -105,20 +111,36 @@ def initSearchPath (leanSysroot : FilePath) (sp : SearchPath := ∅) : IO Unit :
 private def initSearchPathInternal : IO Unit := do
   initSearchPath (← getBuildDir)
 
+/-- Find the compiled `.olean` of a module in the `LEAN_PATH` search path. -/
 partial def findOLean (mod : Name) : IO FilePath := do
   let sp ← searchPathRef.get
   if let some fname ← sp.findWithExt "olean" mod then
     return fname
   else
     let pkg := FilePath.mk <| mod.getRoot.toString (escape := false)
-    let mut msg := s!"unknown module prefix '{pkg}'
+    throw <| IO.userError s!"unknown module prefix '{pkg}'\n\n\
+      No directory '{pkg}' or file '{pkg}.olean' in the search path entries:\n\
+      {"\n".intercalate <| sp.map (·.toString)}"
 
-No directory '{pkg}' or file '{pkg}.olean' in the search path entries:
-{"\n".intercalate <| sp.map (·.toString)}"
-    throw <| IO.userError msg
+/-- Find the `.lean` source of a module in a `LEAN_SRC_PATH` search path. -/
+partial def findLean (sp : SearchPath) (mod : Name) : IO FilePath := do
+  if let some fname ← sp.findWithExt "lean" mod then
+    return fname
+  else
+    let pkg := FilePath.mk <| mod.getRoot.toString (escape := false)
+    throw <| IO.userError s!"unknown module prefix '{pkg}'\n\n\
+      No directory '{pkg}' or file '{pkg}.lean' in the search path entries:\n\
+      {"\n".intercalate <| sp.map (·.toString)}"
+
+def getSrcSearchPath : IO SearchPath := do
+  let srcSearchPath := (← IO.getEnv "LEAN_SRC_PATH")
+    |>.map System.SearchPath.parse
+    |>.getD []
+  let srcPath := (← IO.appDir) / ".." / "src" / "lean"
+  -- `lake/` should come first since on case-insensitive file systems, Lean thinks that `src/` also contains `Lake/`
+  return srcSearchPath ++ [srcPath / "lake", srcPath]
 
 /-- Infer module name of source file name. -/
-@[export lean_module_name_of_file]
 def moduleNameOfFileName (fname : FilePath) (rootDir : Option FilePath) : IO Name := do
   let fname ← IO.FS.realPath fname
   let rootDir ← match rootDir with
@@ -131,7 +153,7 @@ def moduleNameOfFileName (fname : FilePath) (rootDir : Option FilePath) : IO Nam
     throw $ IO.userError s!"input file '{fname}' must be contained in root directory ({rootDir})"
   -- NOTE: use `fname` instead of `fname.normalize` to preserve casing on all platforms
   let fnameSuffix := fname.toString.drop rootDir.toString.length
-  let modNameStr := FilePath.mk fnameSuffix |>.withExtension ""
+  let modNameStr := FilePath.mk fnameSuffix.copy |>.withExtension ""
   let modName    := modNameStr.components.foldl Name.mkStr Name.anonymous
   pure modName
 
@@ -160,6 +182,6 @@ def findSysroot (lean := "lean") : IO FilePath := do
     cmd := lean
     args := #["--print-prefix"]
   }
-  return out.trim
+  return out.trimAscii.copy
 
 end Lean

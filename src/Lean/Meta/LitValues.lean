@@ -3,11 +3,12 @@ Copyright (c) 2024 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura
 -/
+module
 prelude
-import Lean.Meta.Basic
-
+public import Lean.Meta.Basic
+import Init.While
+public section
 namespace Lean.Meta
-
 /-!
 Helper functions for recognizing builtin literal values.
 This module focus on recognizing the standard representation used in Lean for these literals.
@@ -49,7 +50,26 @@ def getIntValue? (e : Expr) : MetaM (Option Int) := do
   let some (n, _) ← getOfNatValue? a ``Int | return none
   return some (-↑n)
 
-/-- Return `some c` if `e` is a `Char.ofNat`-application encoding character `c`. -/
+/--
+Return `some i` if `e` `OfNat.ofNat`-application encoding a rational, or `Neg.neg`-application of one,
+or a division.
+-/
+def getRatValue? (e : Expr) : MetaM (Option Rat) := do
+  match_expr e with
+  | HDiv.hDiv _ _ _ _ a b =>
+    let some n ← getRatValueNum? a | return none
+    let some (d, _) ← getOfNatValue? b ``Rat | return none
+    return some (n / (d : Rat))
+  | _ => getRatValueNum? e
+where
+  getRatValueNum? (e : Expr) : MetaM (Option Rat) := do
+    if let some (n, _) ← getOfNatValue? e ``Rat then
+      return some (n : Rat)
+    let_expr Neg.neg _ _ a ← e | return none
+    let some (n, _) ← getOfNatValue? a ``Rat | return none
+    return some (- (n : Rat))
+
+/-- Return `some c` if `e` is a `Char.ofNat`-application that encodes the character `c`. -/
 def getCharValue? (e : Expr) : MetaM (Option Char) := do
   let_expr Char.ofNat n ← e | return none
   let some n ← getNatValue? n | return none
@@ -61,19 +81,19 @@ def getStringValue? (e : Expr) : (Option String) :=
   | .lit (.strVal s) => some s
   | _ => none
 
-/-- Return `some ⟨n, v⟩` if `e` is af `OfNat.ofNat` application encoding a `Fin n` with value `v` -/
+/-- Return `some ⟨n, v⟩` if `e` is an `OfNat.ofNat` application encoding a `Fin n` with value `v` -/
 def getFinValue? (e : Expr) : MetaM (Option ((n : Nat) × Fin n)) := OptionT.run do
   let (v, type) ← getOfNatValue? e ``Fin
   let n ← getNatValue? (← whnfD type.appArg!)
   match n with
   | 0 => failure
-  | m+1 => return ⟨m+1, Fin.ofNat v⟩
+  | m+1 => return ⟨m+1, Fin.ofNat _ v⟩
 
 /--
 Return `some ⟨n, v⟩` if `e` is:
 - an `OfNat.ofNat` application
 - a `BitVec.ofNat` application
-- a `BitVec.ofNatLt` application
+- a `BitVec.ofNatLT` application
 that encode a `BitVec n` with value `v`.
 -/
 def getBitVecValue? (e : Expr) : MetaM (Option ((n : Nat) × BitVec n)) := OptionT.run do
@@ -82,7 +102,7 @@ def getBitVecValue? (e : Expr) : MetaM (Option ((n : Nat) × BitVec n)) := Optio
     let n ← getNatValue? nExpr
     let v ← getNatValue? vExpr
     return ⟨n, BitVec.ofNat n v⟩
-  | BitVec.ofNatLt nExpr vExpr _ =>
+  | BitVec.ofNatLT nExpr vExpr _ =>
     let n ← getNatValue? nExpr
     let v ← getNatValue? vExpr
     return ⟨n, BitVec.ofNat n v⟩
@@ -172,7 +192,7 @@ def litToCtor (e : Expr) : MetaM Expr := do
     let p := mkApp4 (mkConst ``LT.lt [0]) (mkConst ``Nat) (mkConst ``instLTNat) i n
     let h := mkApp3 (mkConst ``of_decide_eq_true) p
       (mkApp2 (mkConst ``Nat.decLt) i n)
-      (mkApp2 (mkConst ``Eq.refl [1]) (mkConst ``Bool) (mkConst ``true))
+      eagerReflBoolTrue
     return mkApp3 (mkConst ``Fin.mk) n i h
   return e
 

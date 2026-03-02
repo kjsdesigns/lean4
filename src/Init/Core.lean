@@ -5,10 +5,20 @@ Authors: Leonardo de Moura
 
 notation, basic datatypes and type classes
 -/
+module
+
 prelude
-import Init.Prelude
-import Init.SizeOf
+public import Init.SizeOf
+public import Init.Tactics
+
+public section
 set_option linter.missingDocs true -- keep it documented
+
+-- BEq instance for Option defined here so it's available early in the import chain
+-- (before Init.Grind.Config and Init.MetaTypes which need BEq (Option Nat))
+deriving instance BEq for Option
+
+@[expose] section
 
 universe u v w
 
@@ -20,6 +30,31 @@ which applies to all applications of the function).
 @[simp] def inline {α : Sort u} (a : α) : α := a
 
 theorem id_def {α : Sort u} (a : α) : id a = a := rfl
+
+attribute [grind] id
+
+/--
+A helper gadget for instructing the kernel to eagerly reduce terms.
+
+When the gadget wraps the argument of an application, then when checking that
+the expected and inferred type of the argument match, the kernel will evaluate terms more eagerly.
+It is often used to wrap `Eq.refl true` proof terms as `eagerReduce (Eq.refl true)`
+when using proof by reflection.
+As an example, consider the theorem:
+```
+theorem eq_norm (ctx : Context) (p₁ p₂ : Poly) (h : (p₁.norm == p₂) = true) :
+  p₁.denote ctx = 0 → p₂.denote ctx = 0
+```
+The argument `h : (p₁.norm == p₂) = true` is a candidate for `eagerReduce`.
+When applying this theorem, we would write:
+
+```
+eq_norm ctx p q (eagerReduce (Eq.refl true)) h
+```
+to instruct the kernel to use eager reduction when establishing that `(p.norm == q) = true` is
+definitionally equal to `true = true`.
+-/
+@[expose] def eagerReduce {α : Sort u} (a : α) : α := a
 
 /--
 `flip f a b` is `f b a`. It is useful for "point-free" programming,
@@ -36,13 +71,25 @@ and `flip (·<·)` is the greater-than relation.
 
 theorem Function.comp_def {α β δ} (f : β → δ) (g : α → β) : f ∘ g = fun x => f (g x) := rfl
 
+@[simp] theorem Function.const_comp {f : α → β} {c : γ} :
+    (Function.const β c ∘ f) = Function.const α c :=
+  rfl
+@[simp] theorem Function.comp_const {f : β → γ} {b : β} :
+    (f ∘ Function.const α b) = Function.const α (f b) :=
+  rfl
+@[simp] theorem Function.true_comp {f : α → β} : ((fun _ => true) ∘ f) = fun _ => true :=
+  rfl
+@[simp] theorem Function.false_comp {f : α → β} : ((fun _ => false) ∘ f) = fun _ => false :=
+  rfl
+
+@[simp] theorem Function.comp_id (f : α → β) : f ∘ id = f := rfl
+@[simp] theorem Function.id_comp (f : α → β) : id ∘ f = f := rfl
+
 attribute [simp] namedPattern
 
 /--
 `Empty.elim : Empty → C` says that a value of any type can be constructed from
 `Empty`. This can be thought of as a compiler-checked assertion that a code path is unreachable.
-
-This is a non-dependent variant of `Empty.rec`.
 -/
 @[macro_inline] def Empty.elim {C : Sort u} : Empty → C := Empty.rec
 
@@ -52,8 +99,6 @@ instance : DecidableEq Empty := fun a => a.elim
 /--
 `PEmpty.elim : Empty → C` says that a value of any type can be constructed from
 `PEmpty`. This can be thought of as a compiler-checked assertion that a code path is unreachable.
-
-This is a non-dependent variant of `PEmpty.rec`.
 -/
 @[macro_inline] def PEmpty.elim {C : Sort _} : PEmpty → C := fun a => nomatch a
 
@@ -61,35 +106,62 @@ This is a non-dependent variant of `PEmpty.rec`.
 instance : DecidableEq PEmpty := fun a => a.elim
 
 /--
-  Thunks are "lazy" values that are evaluated when first accessed using `Thunk.get/map/bind`.
-  The value is then stored and not recomputed for all further accesses. -/
--- NOTE: the runtime has special support for the `Thunk` type to implement this behavior
+Delays evaluation. The delayed code is evaluated at most once.
+
+A thunk is code that constructs a value when it is requested via `Thunk.get`, `Thunk.map`, or
+`Thunk.bind`. The resulting value is cached, so the code is executed at most once. This is also
+known as lazy or call-by-need evaluation.
+
+The Lean runtime has special support for the `Thunk` type in order to implement the caching
+behavior.
+-/
 structure Thunk (α : Type u) : Type u where
-  /-- Constructs a new thunk from a function `Unit → α`
-  that will be called when the thunk is forced. -/
+  /--
+  Constructs a new thunk from a function `Unit → α` that will be called when the thunk is first
+  forced.
+
+  The result is cached. It is re-used when the thunk is forced again.
+  -/
   mk ::
   /-- Extract the getter function out of a thunk. Use `Thunk.get` instead. -/
-  private fn : Unit → α
+  -- The field is public so as to allow computation through it.
+  fn : Unit → α
 
 attribute [extern "lean_mk_thunk"] Thunk.mk
 
-/-- Store a value in a thunk. Note that the value has already been computed, so there is no laziness. -/
+/--
+Stores an already-computed value in a thunk.
+
+Because the value has already been computed, there is no laziness.
+-/
 @[extern "lean_thunk_pure"] protected def Thunk.pure (a : α) : Thunk α :=
   ⟨fun _ => a⟩
 
 /--
-Forces a thunk to extract the value. This will cache the result,
-so a second call to the same function will return the value in O(1)
-instead of calling the stored getter function.
+Gets the thunk's value. If the value is cached, it is returned in constant time; if not, it is
+computed.
+
+Computed values are cached, so the value is not recomputed.
 -/
 -- NOTE: we use `Thunk.get` instead of `Thunk.fn` as the accessor primitive as the latter has an additional `Unit` argument
 @[extern "lean_thunk_get_own"] protected def Thunk.get (x : @& Thunk α) : α :=
   x.fn ()
 
-/-- Map a function over a thunk. -/
+-- Ensure `Thunk.fn` is still computable even if it shouldn't be accessed directly.
+/-- Implementation detail. -/
+@[inline] def Thunk.fnImpl (x : Thunk α) : Unit → α := fun _ => x.get
+@[csimp] theorem Thunk.fn_eq_fnImpl : @Thunk.fn = @Thunk.fnImpl := rfl
+
+/--
+Constructs a new thunk that forces `x` and then applies `x` to the result. Upon forcing, the result
+of `f` is cached and the reference to the thunk `x` is dropped.
+-/
 @[inline] protected def Thunk.map (f : α → β) (x : Thunk α) : Thunk β :=
   ⟨fun _ => f x.get⟩
-/-- Constructs a thunk that applies `f` to the result of `x` when forced. -/
+
+/--
+Constructs a new thunk that applies `f` to the result of `x` when forced.
+-/
 @[inline] protected def Thunk.bind (x : Thunk α) (f : α → Thunk β) : Thunk β :=
   ⟨fun _ => (f x.get).get⟩
 
@@ -122,84 +194,118 @@ structure Iff (a b : Prop) : Prop where
 @[inherit_doc] infix:20 " <-> " => Iff
 @[inherit_doc] infix:20 " ↔ "   => Iff
 
+recommended_spelling "iff" for "↔" in [Iff, «term_↔_»]
+/-- prefer `↔` over `<->` -/
+recommended_spelling "iff" for "<->" in [Iff, «term_<->_»]
+
 /--
-`Sum α β`, or `α ⊕ β`, is the disjoint union of types `α` and `β`.
-An element of `α ⊕ β` is either of the form `.inl a` where `a : α`,
-or `.inr b` where `b : β`.
+The disjoint union of types `α` and `β`, ordinarily written `α ⊕ β`.
+
+An element of `α ⊕ β` is either an `a : α` wrapped in `Sum.inl` or a `b : β` wrapped in `Sum.inr`.
+`α ⊕ β` is not equivalent to the set-theoretic union of `α` and `β` because its values include an
+indication of which of the two types was chosen. The union of a singleton set with itself contains
+one element, while `Unit ⊕ Unit` contains distinct values `inl ()` and `inr ()`.
 -/
+@[suggest_for Either]
 inductive Sum (α : Type u) (β : Type v) where
-  /-- Left injection into the sum type `α ⊕ β`. If `a : α` then `.inl a : α ⊕ β`. -/
+  /-- Left injection into the sum type `α ⊕ β`. -/
   | inl (val : α) : Sum α β
-  /-- Right injection into the sum type `α ⊕ β`. If `b : β` then `.inr b : α ⊕ β`. -/
+  /-- Right injection into the sum type `α ⊕ β`. -/
   | inr (val : β) : Sum α β
 
 @[inherit_doc] infixr:30 " ⊕ " => Sum
 
 /--
-`PSum α β`, or `α ⊕' β`, is the disjoint union of types `α` and `β`.
-It differs from `α ⊕ β` in that it allows `α` and `β` to have arbitrary sorts
-`Sort u` and `Sort v`, instead of restricting to `Type u` and `Type v`. This means
-that it can be used in situations where one side is a proposition, like `True ⊕' Nat`.
+The disjoint union of arbitrary sorts `α` `β`, or `α ⊕' β`.
 
-The reason this is not the default is that this type lives in the universe `Sort (max 1 u v)`,
-which can cause problems for universe level unification,
-because the equation `max 1 u v = ?u + 1` has no solution in level arithmetic.
-`PSum` is usually only used in automation that constructs sums of arbitrary types.
+It differs from `α ⊕ β` in that it allows `α` and `β` to have arbitrary sorts `Sort u` and `Sort v`,
+instead of restricting them to `Type u` and `Type v`. This means that it can be used in situations
+where one side is a proposition, like `True ⊕' Nat`. However, the resulting universe level
+constraints are often more difficult to solve than those that result from `Sum`.
 -/
 inductive PSum (α : Sort u) (β : Sort v) where
-  /-- Left injection into the sum type `α ⊕' β`. If `a : α` then `.inl a : α ⊕' β`. -/
+  /-- Left injection into the sum type `α ⊕' β`.-/
   | inl (val : α) : PSum α β
-  /-- Right injection into the sum type `α ⊕' β`. If `b : β` then `.inr b : α ⊕' β`. -/
+  /-- Right injection into the sum type `α ⊕' β`. -/
   | inr (val : β) : PSum α β
 
 @[inherit_doc] infixr:30 " ⊕' " => PSum
 
-instance {α β} [Inhabited α] : Inhabited (PSum α β) := ⟨PSum.inl default⟩
+/--
+If the left type in a sum is inhabited then the sum is inhabited.
 
-instance {α β} [Inhabited β] : Inhabited (PSum α β) := ⟨PSum.inr default⟩
+This is not an instance to avoid non-canonical instances when both the left and right types are
+inhabited.
+-/
+@[reducible] def PSum.inhabitedLeft {α β} [Inhabited α] : Inhabited (PSum α β) := ⟨PSum.inl default⟩
 
 /--
-`Sigma β`, also denoted `Σ a : α, β a` or `(a : α) × β a`, is the type of dependent pairs
-whose first component is `a : α` and whose second component is `b : β a`
-(so the type of the second component can depend on the value of the first component).
-It is sometimes known as the dependent sum type, since it is the type level version
-of an indexed summation.
+If the right type in a sum is inhabited then the sum is inhabited.
+
+This is not an instance to avoid non-canonical instances when both the left and right types are
+inhabited.
+-/
+@[reducible] def PSum.inhabitedRight {α β} [Inhabited β] : Inhabited (PSum α β) := ⟨PSum.inr default⟩
+
+instance PSum.nonemptyLeft [h : Nonempty α] : Nonempty (PSum α β) :=
+  Nonempty.elim h (fun a => ⟨PSum.inl a⟩)
+
+instance PSum.nonemptyRight [h : Nonempty β] : Nonempty (PSum α β) :=
+  Nonempty.elim h (fun b => ⟨PSum.inr b⟩)
+
+/--
+Dependent pairs, in which the second element's type depends on the value of the first element. The
+type `Sigma β` is typically written `Σ a : α, β a` or `(a : α) × β a`.
+
+Although its values are pairs, `Sigma` is sometimes known as the *dependent sum type*, since it is
+the type level version of an indexed summation.
 -/
 @[pp_using_anonymous_constructor]
 structure Sigma {α : Type u} (β : α → Type v) where
-  /-- Constructor for a dependent pair. If `a : α` and `b : β a` then `⟨a, b⟩ : Sigma β`.
-  (This will usually require a type ascription to determine `β`
-  since it is not determined from `a` and `b` alone.) -/
+  /--
+  Constructs a dependent pair.
+
+  Using this constructor in a context in which the type is not known usually requires a type
+  ascription to determine `β`. This is because the desired relationship between the two values can't
+  generally be determined automatically.
+  -/
   mk ::
-  /-- The first component of a dependent pair. If `p : @Sigma α β` then `p.1 : α`. -/
+  /--
+  The first component of a dependent pair.
+  -/
   fst : α
-  /-- The second component of a dependent pair. If `p : Sigma β` then `p.2 : β p.1`. -/
+  /--
+  The second component of a dependent pair. Its type depends on the first component.
+  -/
   snd : β fst
 
 attribute [unbox] Sigma
 
 /--
-`PSigma β`, also denoted `Σ' a : α, β a` or `(a : α) ×' β a`, is the type of dependent pairs
-whose first component is `a : α` and whose second component is `b : β a`
-(so the type of the second component can depend on the value of the first component).
-It differs from `Σ a : α, β a` in that it allows `α` and `β` to have arbitrary sorts
-`Sort u` and `Sort v`, instead of restricting to `Type u` and `Type v`. This means
-that it can be used in situations where one side is a proposition, like `(p : Nat) ×' p = p`.
+Fully universe-polymorphic dependent pairs, in which the second element's type depends on the value
+of the first element and both types are allowed to be propositions. The type `PSigma β` is typically
+written `Σ' a : α, β a` or `(a : α) ×' β a`.
 
-The reason this is not the default is that this type lives in the universe `Sort (max 1 u v)`,
-which can cause problems for universe level unification,
-because the equation `max 1 u v = ?u + 1` has no solution in level arithmetic.
-`PSigma` is usually only used in automation that constructs pairs of arbitrary types.
+In practice, this generality leads to universe level constraints that are difficult to solve, so
+`PSigma` is rarely used in manually-written code. It is usually only used in automation that
+constructs pairs of arbitrary types.
+
+To pair a value with a proof that a predicate holds for it, use `Subtype`. To demonstrate that a
+value exists that satisfies a predicate, use `Exists`. A dependent pair with a proposition as its
+first component is not typically useful due to proof irrelevance: there's no point in depending on a
+specific proof because all proofs are equal anyway.
 -/
 @[pp_using_anonymous_constructor]
 structure PSigma {α : Sort u} (β : α → Sort v) where
-  /-- Constructor for a dependent pair. If `a : α` and `b : β a` then `⟨a, b⟩ : PSigma β`.
-  (This will usually require a type ascription to determine `β`
-  since it is not determined from `a` and `b` alone.) -/
+  /-- Constructs a fully universe-polymorphic dependent pair. -/
   mk ::
-  /-- The first component of a dependent pair. If `p : @Sigma α β` then `p.1 : α`. -/
+  /--
+  The first component of a dependent pair.
+  -/
   fst : α
-  /-- The second component of a dependent pair. If `p : Sigma β` then `p.2 : β p.1`. -/
+  /--
+  The second component of a dependent pair. Its type depends on the first component.
+  -/
   snd : β fst
 
 /--
@@ -233,72 +339,81 @@ inductive Exists {α : Sort u} (p : α → Prop) : Prop where
   | intro (w : α) (h : p w) : Exists p
 
 /--
-Auxiliary type used to compile `for x in xs` notation.
+An indication of whether a loop's body terminated early that's used to compile the `for x in xs`
+notation.
 
-This is the return value of the body of a `ForIn` call,
-representing the body of a for loop. It can be:
-
-* `.yield (a : α)`, meaning that we should continue the loop and `a` is the new state.
-  `.yield` is produced by `continue` and reaching the bottom of the loop body.
-* `.done (a : α)`, meaning that we should early-exit the loop with state `a`.
-  `.done` is produced by calls to `break` or `return` in the loop,
+A collection's `ForIn` or `ForIn'` instance describes how to iterate over its elements. The monadic
+action that represents the body of the loop returns a `ForInStep α`, where `α` is the local state
+used to implement features such as `let mut`.
 -/
 inductive ForInStep (α : Type u) where
-  /-- `.done a` means that we should early-exit the loop.
-  `.done` is produced by calls to `break` or `return` in the loop. -/
+  /--
+  The loop should terminate early.
+
+  `ForInStep.done` is produced by uses of `break` or `return` in the loop body.
+  -/
   | done  : α → ForInStep α
-  /-- `.yield a` means that we should continue the loop.
-  `.yield` is produced by `continue` and reaching the bottom of the loop body. -/
+  /--
+  The loop should continue with the next iteration, using the returned state.
+
+  `ForInStep.yield` is produced by `continue` and by reaching the bottom of the loop body.
+  -/
   | yield : α → ForInStep α
   deriving Inhabited
 
 /--
-`ForIn m ρ α` is the typeclass which supports `for x in xs` notation.
-Here `xs : ρ` is the type of the collection to iterate over, `x : α`
-is the element type which is made available inside the loop, and `m` is the monad
-for the encompassing `do` block.
+Monadic iteration in `do`-blocks, using the `for x in xs` notation.
+
+The parameter `m` is the monad of the `do`-block in which iteration is performed, `ρ` is the type of
+the collection being iterated over, and `α` is the type of elements.
 -/
 class ForIn (m : Type u₁ → Type u₂) (ρ : Type u) (α : outParam (Type v)) where
-  /-- `forIn x b f : m β` runs a for-loop in the monad `m` with additional state `β`.
-  This traverses over the "contents" of `x`, and passes the elements `a : α` to
-  `f : α → β → m (ForInStep β)`. `b : β` is the initial state, and the return value
-  of `f` is the new state as well as a directive `.done` or `.yield`
-  which indicates whether to abort early or continue iteration.
+  /--
+  Monadically iterates over the contents of a collection `xs`, with a local state `b` and the
+  possibility of early termination.
 
-  The expression
-  ```
-  let mut b := ...
-  for x in xs do
-    b ← foo x b
-  ```
-  in a `do` block is syntactic sugar for:
-  ```
-  let b := ...
-  let b ← forIn xs b (fun x b => do
-    let b ← foo x b
-    return .yield b)
-  ```
-  (Here `b` corresponds to the variables mutated in the loop.) -/
-  forIn {β} [Monad m] (x : ρ) (b : β) (f : α → β → m (ForInStep β)) : m β
+  Because a `do` block supports local mutable bindings along with `return`, and `break`, the monadic
+  action passed to `ForIn.forIn` takes a starting state in addition to the current element of the
+  collection and returns an updated state together with an indication of whether iteration should
+  continue or terminate. If the action returns `ForInStep.done`, then `ForIn.forIn` should stop
+  iteration and return the updated state. If the action returns `ForInStep.yield`, then
+  `ForIn.forIn` should continue iterating if there are further elements, passing the updated state
+  to the action.
+
+  More information about the translation of `for` loops into `ForIn.forIn` is available in [the Lean
+  reference manual](lean-manual://section/monad-iteration-syntax).
+  -/
+  forIn {β} (xs : ρ) (b : β) (f : α → β → m (ForInStep β)) : m β
 
 export ForIn (forIn)
 
 /--
-`ForIn' m ρ α d` is a variation on the `ForIn m ρ α` typeclass which supports the
-`for h : x in xs` notation. It is the same as `for x in xs` except that `h : x ∈ xs`
-is provided as an additional argument to the body of the for-loop.
+Monadic iteration in `do`-blocks with a membership proof, using the `for h : x in xs` notation.
+
+The parameter `m` is the monad of the `do`-block in which iteration is performed, `ρ` is the type of
+the collection being iterated over, `α` is the type of elements, and `d` is the specific membership
+predicate to provide.
 -/
-class ForIn' (m : Type u₁ → Type u₂) (ρ : Type u) (α : outParam (Type v)) (d : outParam $ Membership α ρ) where
-  /-- `forIn' x b f : m β` runs a for-loop in the monad `m` with additional state `β`.
-  This traverses over the "contents" of `x`, and passes the elements `a : α` along
-  with a proof that `a ∈ x` to `f : (a : α) → a ∈ x → β → m (ForInStep β)`.
-  `b : β` is the initial state, and the return value
-  of `f` is the new state as well as a directive `.done` or `.yield`
-  which indicates whether to abort early or continue iteration. -/
-  forIn' {β} [Monad m] (x : ρ) (b : β) (f : (a : α) → a ∈ x → β → m (ForInStep β)) : m β
+class ForIn' (m : Type u₁ → Type u₂) (ρ : Type u) (α : outParam (Type v)) (d : outParam (Membership α ρ)) where
+  /--
+  Monadically iterates over the contents of a collection `xs`, with a local state `b` and the
+  possibility of early termination. At each iteration, the body of the loop is provided with a proof
+  that the current element is in the collection.
+
+  Because a `do` block supports local mutable bindings along with `return`, and `break`, the monadic
+  action passed to `ForIn'.forIn'` takes a starting state in addition to the current element of the
+  collection with its membership proof. The action returns an updated state together with an
+  indication of whether iteration should continue or terminate. If the action returns
+  `ForInStep.done`, then `ForIn'.forIn'` should stop iteration and return the updated state. If the
+  action returns `ForInStep.yield`, then `ForIn'.forIn'` should continue iterating if there are
+  further elements, passing the updated state to the action.
+
+  More information about the translation of `for` loops into `ForIn'.forIn'` is available in [the
+  Lean reference manual](lean-manual://section/monad-iteration-syntax).
+  -/
+  forIn' {β} (x : ρ) (b : β) (f : (a : α) → a ∈ x → β → m (ForInStep β)) : m β
 
 export ForIn' (forIn')
-
 
 /--
 Auxiliary type used to compile `do` notation. It is used when compiling a do block
@@ -374,7 +489,11 @@ class HasEquiv (α : Sort u) where
   the notion of equivalence is type-dependent. -/
   Equiv : α → α → Sort v
 
+attribute [reducible] HasEquiv.Equiv
+
 @[inherit_doc] infix:50 " ≈ "  => HasEquiv.Equiv
+
+recommended_spelling "equiv" for "≈" in [HasEquiv.Equiv, «term_≈_»]
 
 /-! # set notation  -/
 
@@ -398,12 +517,12 @@ abbrev SSuperset [HasSSubset α] (a b : α) := SSubset b a
 
 /-- Notation type class for the union operation `∪`. -/
 class Union (α : Type u) where
-  /-- `a ∪ b` is the union of`a` and `b`. -/
+  /-- `a ∪ b` is the union of `a` and `b`. -/
   union : α → α → α
 
 /-- Notation type class for the intersection operation `∩`. -/
 class Inter (α : Type u) where
-  /-- `a ∩ b` is the intersection of`a` and `b`. -/
+  /-- `a ∩ b` is the intersection of `a` and `b`. -/
   inter : α → α → α
 
 /-- Notation type class for the set difference `\`. -/
@@ -426,10 +545,10 @@ infix:50 " ⊇ " => Superset
 /-- Strict superset relation: `a ⊃ b`  -/
 infix:50 " ⊃ " => SSuperset
 
-/-- `a ∪ b` is the union of`a` and `b`. -/
+/-- `a ∪ b` is the union of `a` and `b`. -/
 infixl:65 " ∪ " => Union.union
 
-/-- `a ∩ b` is the intersection of`a` and `b`. -/
+/-- `a ∩ b` is the intersection of `a` and `b`. -/
 infixl:70 " ∩ " => Inter.inter
 
 /--
@@ -437,6 +556,16 @@ infixl:70 " ∩ " => Inter.inter
 consisting of all elements in `a` that are not in `b`.
 -/
 infix:70 " \\ " => SDiff.sdiff
+
+recommended_spelling "subset" for "⊆" in [Subset, «term_⊆_»]
+recommended_spelling "ssubset" for "⊂" in [SSubset, «term_⊂_»]
+/-- prefer `⊆` over `⊇` -/
+recommended_spelling "superset" for "⊇" in [Superset, «term_⊇_»]
+/-- prefer `⊂` over `⊃` -/
+recommended_spelling "ssuperset" for "⊃" in [SSuperset, «term_⊃_»]
+recommended_spelling "union" for "∪" in [Union.union, «term_∪_»]
+recommended_spelling "inter" for "∩" in [Inter.inter, «term_∩_»]
+recommended_spelling "sdiff" for "\\" in [SDiff.sdiff, «term_\_»]
 
 /-! # collections  -/
 
@@ -448,6 +577,9 @@ class EmptyCollection (α : Type u) where
 
 @[inherit_doc] notation "{" "}" => EmptyCollection.emptyCollection
 @[inherit_doc] notation "∅"     => EmptyCollection.emptyCollection
+
+recommended_spelling "empty" for "{}" in [EmptyCollection.emptyCollection, «term{}»]
+recommended_spelling "empty" for "∅" in [EmptyCollection.emptyCollection, «term∅»]
 
 /--
 Type class for the `insert` operation.
@@ -471,10 +603,10 @@ export Singleton (singleton)
 class LawfulSingleton (α : Type u) (β : Type v) [EmptyCollection β] [Insert α β] [Singleton α β] :
     Prop where
   /-- `insert x ∅ = {x}` -/
-  insert_emptyc_eq (x : α) : (insert x ∅ : β) = singleton x
-export LawfulSingleton (insert_emptyc_eq)
+  insert_empty_eq (x : α) : (insert x ∅ : β) = singleton x
+export LawfulSingleton (insert_empty_eq)
 
-attribute [simp] insert_emptyc_eq
+attribute [simp] insert_empty_eq
 
 /-- Type class used to implement the notation `{ a ∈ c | p a }` -/
 class Sep (α : outParam <| Type u) (γ : Type v) where
@@ -492,8 +624,20 @@ The tasks have an overridden representation in the runtime.
 structure Task (α : Type u) : Type u where
   /-- `Task.pure (a : α)` constructs a task that is already resolved with value `a`. -/
   pure ::
-  /-- If `task : Task α` then `task.get : α` blocks the current thread until the
-  value is available, and then returns the result of the task. -/
+  /--
+  Blocks the current thread until the given task has finished execution, and then returns the result
+  of the task. If the current thread is itself executing a (non-dedicated) task, the maximum
+  threadpool size is temporarily increased by one while waiting so as to ensure the process cannot
+  be deadlocked by threadpool starvation. Note that when the current thread is unblocked, more tasks
+  than the configured threadpool size may temporarily be running at the same time until sufficiently
+  many tasks have finished.
+
+  `Task.map` and `Task.bind` should be preferred over `Task.get` for setting up task dependencies
+  where possible as they do not require temporarily growing the threadpool in this way. In
+  particular, calling `Task.get` in a task continuation with `(sync := true)` will panic as the
+  continuation is decidedly not "cheap" in this case and deadlocks may otherwise occur. The
+  waited-upon task should instead be returned and unwrapped using `Task.bind/IO.bindTask`.
+  -/
   get : α
   deriving Inhabited, Nonempty
 
@@ -501,7 +645,12 @@ attribute [extern "lean_task_pure"] Task.pure
 attribute [extern "lean_task_get_own"] Task.get
 
 namespace Task
-/-- Task priority. Tasks with higher priority will always be scheduled before ones with lower priority. -/
+/--
+Task priority.
+
+Tasks with higher priority will always be scheduled before tasks with lower priority. Tasks with a
+priority greater than `Task.Priority.max` are scheduled on dedicated threads.
+-/
 abbrev Priority := Nat
 
 /-- The default priority for spawned tasks, also the lowest priority: `0`. -/
@@ -509,16 +658,18 @@ def Priority.default : Priority := 0
 /--
 The highest regular priority for spawned tasks: `8`.
 
-Spawning a task with a priority higher than `Task.Priority.max` is not an error but
-will spawn a dedicated worker for the task, see `Task.Priority.dedicated`.
-Regular priority tasks are placed in a thread pool and worked on according to the priority order.
+Spawning a task with a priority higher than `Task.Priority.max` is not an error but will spawn a
+dedicated worker for the task. This is indicated using `Task.Priority.dedicated`. Regular priority
+tasks are placed in a thread pool and worked on according to their priority order.
 -/
 -- see `LEAN_MAX_PRIO`
 def Priority.max : Priority := 8
 /--
+Indicates that a task should be scheduled on a dedicated thread.
+
 Any priority higher than `Task.Priority.max` will result in the task being scheduled
 immediately on a dedicated thread. This is particularly useful for long-running and/or
-I/O-bound tasks since Lean will by default allocate no more non-dedicated workers
+I/O-bound tasks since Lean will, by default, allocate no more non-dedicated workers
 than the number of cores to reduce context switches.
 -/
 def Priority.dedicated : Priority := 9
@@ -541,7 +692,9 @@ set_option linter.unusedVariables.funArgs false in
 be available and then calls `f` on the result.
 
 `prio`, if provided, is the priority of the task.
-If `sync` is set to true, `f` is executed on the current thread if `x` has already finished.
+If `sync` is set to true, `f` is executed on the current thread if `x` has already finished and
+otherwise on the thread that `x` finished on. `prio` is ignored in this case. This should only be
+done when executing `f` is cheap and non-blocking.
 -/
 @[noinline, extern "lean_task_map"]
 protected def map (f : α → β) (x : Task α) (prio := Priority.default) (sync := false) : Task β :=
@@ -555,7 +708,9 @@ for the value of `x` to be available and then calls `f` on the result,
 resulting in a new task which is then run for a result.
 
 `prio`, if provided, is the priority of the task.
-If `sync` is set to true, `f` is executed on the current thread if `x` has already finished.
+If `sync` is set to true, `f` is executed on the current thread if `x` has already finished and
+otherwise on the thread that `x` finished on. `prio` is ignored in this case. This should only be
+done when executing `f` is cheap and non-blocking.
 -/
 @[noinline, extern "lean_task_bind"]
 protected def bind (x : Task α) (f : α → Task β) (prio := Priority.default) (sync := false) :
@@ -617,16 +772,34 @@ Unlike `x ≠ y` (which is notation for `Ne x y`), this is `Bool` valued instead
 
 @[inherit_doc] infix:50 " != " => bne
 
+macro_rules | `($x != $y) => `(binrel_no_prop% bne $x $y)
+
+recommended_spelling "bne" for "!=" in [bne, «term_!=_»]
+
+/-- `ReflBEq α` says that the `BEq` implementation is reflexive. -/
+class ReflBEq (α) [BEq α] : Prop where
+  /-- `==` is reflexive, that is, `(a == a) = true`. -/
+  protected rfl {a : α} : a == a
+
+@[simp] theorem BEq.rfl [BEq α] [ReflBEq α] {a : α} : a == a := ReflBEq.rfl
+theorem BEq.refl [BEq α] [ReflBEq α] (a : α) : a == a := BEq.rfl
+
+theorem beq_of_eq [BEq α] [ReflBEq α] {a b : α} : a = b → a == b
+  | rfl => BEq.rfl
+
+theorem not_eq_of_beq_eq_false [BEq α] [ReflBEq α] {a b : α} (h : (a == b) = false) : ¬a = b := by
+  intro h'; subst h'; have : true = false := BEq.rfl.symm.trans h; contradiction
+
 /--
-`LawfulBEq α` is a typeclass which asserts that the `BEq α` implementation
-(which supplies the `a == b` notation) coincides with logical equality `a = b`.
-In other words, `a == b` implies `a = b`, and `a == a` is true.
+A Boolean equality test coincides with propositional equality.
+
+In other words:
+ * `a == b` implies `a = b`.
+ * `a == a` is true.
 -/
-class LawfulBEq (α : Type u) [BEq α] : Prop where
+class LawfulBEq (α : Type u) [BEq α] : Prop extends ReflBEq α where
   /-- If `a == b` evaluates to `true`, then `a` and `b` are equal in the logic. -/
   eq_of_beq : {a b : α} → a == b → a = b
-  /-- `==` is reflexive, that is, `(a == a) = true`. -/
-  protected rfl : {a : α} → a == a
 
 export LawfulBEq (eq_of_beq)
 
@@ -637,6 +810,15 @@ instance : LawfulBEq Bool where
 instance [DecidableEq α] : LawfulBEq α where
   eq_of_beq := of_decide_eq_true
   rfl := of_decide_eq_self_eq_true _
+
+/--
+Non-instance for `DecidableEq` from `LawfulBEq`.
+To use this, add `attribute [local instance 5] instDecidableEqOfLawfulBEq` at the top of a file.
+-/
+def instDecidableEqOfLawfulBEq [BEq α] [LawfulBEq α] : DecidableEq α := fun x y =>
+  match h : x == y with
+  | false => .isFalse (not_eq_of_beq_eq_false h)
+  | true => .isTrue (eq_of_beq h)
 
 instance : LawfulBEq Char := inferInstance
 
@@ -693,6 +875,10 @@ and asserts that `a` and `b` are not equal.
 
 @[inherit_doc] infix:50 " ≠ "  => Ne
 
+macro_rules | `($x ≠ $y) => `(binrel% Ne $x $y)
+
+recommended_spelling "ne" for "≠" in [Ne, «term_≠_»]
+
 section Ne
 variable {α : Sort u}
 variable {a b : α} {p : Prop}
@@ -730,8 +916,8 @@ theorem Bool.of_not_eq_false : {b : Bool} → ¬ (b = false) → b = true
   | true,  _ => rfl
   | false, h => absurd rfl h
 
-theorem ne_of_beq_false [BEq α] [LawfulBEq α] {a b : α} (h : (a == b) = false) : a ≠ b := by
-  intro h'; subst h'; have : true = false := Eq.trans LawfulBEq.rfl.symm h; contradiction
+theorem ne_of_beq_false [BEq α] [ReflBEq α] {a b : α} (h : (a == b) = false) : a ≠ b :=
+  not_eq_of_beq_eq_false h
 
 theorem beq_false_of_ne [BEq α] [LawfulBEq α] {a b : α} (h : a ≠ b) : (a == b) = false :=
   have : ¬ (a == b) = true := by
@@ -742,62 +928,115 @@ section
 variable {α β φ : Sort u} {a a' : α} {b b' : β} {c : φ}
 
 /-- Non-dependent recursor for `HEq` -/
-noncomputable def HEq.ndrec.{u1, u2} {α : Sort u2} {a : α} {motive : {β : Sort u2} → β → Sort u1} (m : motive a) {β : Sort u2} {b : β} (h : HEq a b) : motive b :=
+noncomputable def HEq.ndrec.{u1, u2} {α : Sort u2} {a : α} {motive : {β : Sort u2} → β → Sort u1} (m : motive a) {β : Sort u2} {b : β} (h : a ≍ b) : motive b :=
   h.rec m
 
 /-- `HEq.ndrec` variant -/
-noncomputable def HEq.ndrecOn.{u1, u2} {α : Sort u2} {a : α} {motive : {β : Sort u2} → β → Sort u1} {β : Sort u2} {b : β} (h : HEq a b) (m : motive a) : motive b :=
+noncomputable def HEq.ndrecOn.{u1, u2} {α : Sort u2} {a : α} {motive : {β : Sort u2} → β → Sort u1} {β : Sort u2} {b : β} (h : a ≍ b) (m : motive a) : motive b :=
   h.rec m
 
+/-- `HEq.ndrec` specialized to homogeneous heterogeneous equality -/
+noncomputable def HEq.homo_ndrec.{u1, u2} {α : Sort u2} {a : α} {motive : α → Sort u1} (m : motive a) {b : α} (h : a ≍ b) : motive b :=
+  (eq_of_heq h).ndrec m
+
+/-- `HEq.ndrec` specialized to homogeneous heterogeneous equality, symmetric variant -/
+noncomputable def HEq.homo_ndrec_symm.{u1, u2} {α : Sort u2} {a : α} {motive : α → Sort u1} (m : motive a) {b : α} (h : b ≍ a) : motive b :=
+  (eq_of_heq h).ndrec_symm m
+
 /-- `HEq.ndrec` variant -/
-noncomputable def HEq.elim {α : Sort u} {a : α} {p : α → Sort v} {b : α} (h₁ : HEq a b) (h₂ : p a) : p b :=
+noncomputable def HEq.elim {α : Sort u} {a : α} {p : α → Sort v} {b : α} (h₁ : a ≍ b) (h₂ : p a) : p b :=
   eq_of_heq h₁ ▸ h₂
 
-theorem HEq.subst {p : (T : Sort u) → T → Prop} (h₁ : HEq a b) (h₂ : p α a) : p β b :=
+/-- Substitution with heterogeneous equality. -/
+theorem HEq.subst {p : (T : Sort u) → T → Prop} (h₁ : a ≍ b) (h₂ : p α a) : p β b :=
   HEq.ndrecOn h₁ h₂
 
-@[symm] theorem HEq.symm (h : HEq a b) : HEq b a :=
+/-- Heterogeneous equality is symmetric. -/
+@[symm] theorem HEq.symm (h : a ≍ b) : b ≍ a :=
   h.rec (HEq.refl a)
 
-theorem heq_of_eq (h : a = a') : HEq a a' :=
-  Eq.subst h (HEq.refl a)
 
-theorem HEq.trans (h₁ : HEq a b) (h₂ : HEq b c) : HEq a c :=
+
+/-- Heterogeneous equality is transitive. -/
+theorem HEq.trans (h₁ : a ≍ b) (h₂ : b ≍ c) : a ≍ c :=
   HEq.subst h₂ h₁
 
-theorem heq_of_heq_of_eq (h₁ : HEq a b) (h₂ : b = b') : HEq a b' :=
+/-- Heterogeneous equality precomposes with propositional equality. -/
+theorem heq_of_heq_of_eq (h₁ : a ≍ b) (h₂ : b = b') : a ≍ b' :=
   HEq.trans h₁ (heq_of_eq h₂)
 
-theorem heq_of_eq_of_heq (h₁ : a = a') (h₂ : HEq a' b) : HEq a b :=
+/-- Heterogeneous equality postcomposes with propositional equality. -/
+theorem heq_of_eq_of_heq (h₁ : a = a') (h₂ : a' ≍ b) : a ≍ b :=
   HEq.trans (heq_of_eq h₁) h₂
 
-theorem type_eq_of_heq (h : HEq a b) : α = β :=
+/-- If two terms are heterogeneously equal then their types are propositionally equal. -/
+theorem type_eq_of_heq (h : a ≍ b) : α = β :=
   h.rec (Eq.refl α)
 
 end
 
-theorem eqRec_heq {α : Sort u} {φ : α → Sort v} {a a' : α} : (h : a = a') → (p : φ a) → HEq (Eq.recOn (motive := fun x _ => φ x) h p) p
+/--
+Rewriting inside `φ` using `Eq.recOn` yields a term that's heterogeneously equal to the original
+term.
+-/
+theorem eqRec_heq {α : Sort u} {φ : α → Sort v} {a a' : α} : (h : a = a') → (p : φ a) → Eq.recOn (motive := fun x _ => φ x) h p ≍ p
   | rfl, p => HEq.refl p
 
-theorem heq_of_eqRec_eq {α β : Sort u} {a : α} {b : β} (h₁ : α = β) (h₂ : Eq.rec (motive := fun α _ => α) a h₁ = b) : HEq a b := by
+/--
+Heterogeneous equality with an `Eq.rec` application on the left is equivalent to a heterogeneous
+equality on the original term.
+-/
+theorem eqRec_heq_iff {α : Sort u} {a : α} {motive : (b : α) → a = b → Sort v}
+    {b : α} {refl : motive a (Eq.refl a)} {h : a = b} {c : motive b h}
+    : @Eq.rec α a motive refl b h ≍ c ↔ refl ≍ c :=
+  h.rec (fun _ => ⟨id, id⟩) c
+
+/--
+Heterogeneous equality with an `Eq.rec` application on the right is equivalent to a heterogeneous
+equality on the original term.
+-/
+theorem heq_eqRec_iff {α : Sort u} {a : α} {motive : (b : α) → a = b → Sort v}
+    {b : α} {refl : motive a (Eq.refl a)} {h : a = b} {c : motive b h} :
+    c ≍ @Eq.rec α a motive refl b h ↔ c ≍ refl :=
+  h.rec (fun _ => ⟨id, id⟩) c
+
+/--
+Moves an cast using `Eq.rec` from the function to the argument.
+Note: because the motive isn't reliably detected by unification,
+it needs to be provided as an explicit parameter.
+-/
+theorem apply_eqRec {α : Sort u} {a : α} (motive : (b : α) → a = b → Sort v)
+    {b : α} {h : a = b} {c : motive a (Eq.refl a) → β} {d : motive b h} :
+    @Eq.rec α a (fun b h => motive b h → β) c b h d = c (h.symm ▸ d) := by
+  cases h; rfl
+
+/--
+If casting a term with `Eq.rec` to another type makes it equal to some other term, then the two
+terms are heterogeneously equal.
+-/
+theorem heq_of_eqRec_eq {α β : Sort u} {a : α} {b : β} (h₁ : α = β) (h₂ : Eq.rec (motive := fun α _ => α) a h₁ = b) : a ≍ b := by
   subst h₁
   apply heq_of_eq
   exact h₂
 
-theorem cast_heq {α β : Sort u} : (h : α = β) → (a : α) → HEq (cast h a) a
+/--
+The result of casting a term with `cast` is heterogeneously equal to the original term.
+-/
+theorem cast_heq {α β : Sort u} : (h : α = β) → (a : α) → cast h a ≍ a
   | rfl, a => HEq.refl a
 
 variable {a b c d : Prop}
 
-theorem iff_iff_implies_and_implies (a b : Prop) : (a ↔ b) ↔ (a → b) ∧ (b → a) :=
+theorem iff_iff_implies_and_implies {a b : Prop} : (a ↔ b) ↔ (a → b) ∧ (b → a) :=
   Iff.intro (fun h => And.intro h.mp h.mpr) (fun h => Iff.intro h.left h.right)
 
-theorem Iff.refl (a : Prop) : a ↔ a :=
+@[refl] theorem Iff.refl (a : Prop) : a ↔ a :=
   Iff.intro (fun h => h) (fun h => h)
 
 protected theorem Iff.rfl {a : Prop} : a ↔ a :=
   Iff.refl a
 
+-- And, also for backward compatibility, we try `Iff.rfl.` using `exact` (see #5366)
 macro_rules | `(tactic| rfl) => `(tactic| exact Iff.rfl)
 
 theorem Iff.of_eq (h : a = b) : a ↔ b := h ▸ Iff.rfl
@@ -812,8 +1051,11 @@ instance : Trans Iff Iff Iff where
 theorem Eq.comm {a b : α} : a = b ↔ b = a := Iff.intro Eq.symm Eq.symm
 theorem eq_comm {a b : α} : a = b ↔ b = a := Eq.comm
 
+theorem HEq.comm {a : α} {b : β} : a ≍ b ↔ b ≍ a := Iff.intro HEq.symm HEq.symm
+theorem heq_comm {a : α} {b : β} : a ≍ b ↔ b ≍ a := HEq.comm
+
 @[symm] theorem Iff.symm (h : a ↔ b) : b ↔ a := Iff.intro h.mpr h.mp
-theorem Iff.comm: (a ↔ b) ↔ (b ↔ a) := Iff.intro Iff.symm Iff.symm
+theorem Iff.comm : (a ↔ b) ↔ (b ↔ a) := Iff.intro Iff.symm Iff.symm
 theorem iff_comm : (a ↔ b) ↔ (b ↔ a) := Iff.comm
 
 @[symm] theorem And.symm : a ∧ b → b ∧ a := fun ⟨ha, hb⟩ => ⟨hb, ha⟩
@@ -833,12 +1075,12 @@ theorem Exists.elim {α : Sort u} {p : α → Prop} {b : Prop}
 
 /-! # Decidable -/
 
-theorem decide_true_eq_true (h : Decidable True) : @decide True h = true :=
+@[simp] theorem decide_true (h : Decidable True) : @decide True h = true :=
   match h with
   | isTrue _  => rfl
   | isFalse h => False.elim <| h ⟨⟩
 
-theorem decide_false_eq_false (h : Decidable False) : @decide False h = false :=
+@[simp] theorem decide_false (h : Decidable False) : @decide False h = false :=
   match h with
   | isFalse _ => rfl
   | isTrue h  => False.elim h
@@ -850,11 +1092,11 @@ theorem decide_false_eq_false (h : Decidable False) : @decide False h = false :=
 theorem toBoolUsing_eq_true {p : Prop} (d : Decidable p) (h : p) : toBoolUsing d = true :=
   decide_eq_true (inst := d) h
 
-theorem ofBoolUsing_eq_true {p : Prop} {d : Decidable p} (h : toBoolUsing d = true) : p :=
-  of_decide_eq_true (inst := d) h
+theorem of_toBoolUsing_eq_true {p : Prop} {d : Decidable p} (h : toBoolUsing d = true) : p :=
+  of_decide_eq_true h
 
-theorem ofBoolUsing_eq_false {p : Prop} {d : Decidable p} (h : toBoolUsing d = false) : ¬ p :=
-  of_decide_eq_false (inst := d) h
+theorem of_toBoolUsing_eq_false {p : Prop} {d : Decidable p} (h : toBoolUsing d = false) : ¬p :=
+  of_decide_eq_false h
 
 instance : Decidable True :=
   isTrue trivial
@@ -866,9 +1108,10 @@ namespace Decidable
 variable {p q : Prop}
 
 /--
-Synonym for `dite` (dependent if-then-else). We can construct an element `q`
-(of any sort, not just a proposition) by cases on whether `p` is true or false,
-provided `p` is decidable.
+Construct a `q` if some proposition `p` is decidable, and both the truth and falsity of `p` are
+sufficient to construct a `q`.
+
+This is a synonym for `dite`, the dependent if-then-else operator.
 -/
 @[macro_inline] def byCases {q : Sort u} [dec : Decidable p] (h1 : p → q) (h2 : ¬p → q) : q :=
   match dec with
@@ -885,7 +1128,7 @@ theorem byContradiction [dec : Decidable p] (h : ¬p → False) : p :=
 theorem of_not_not [Decidable p] : ¬ ¬ p → p :=
   fun hnn => byContradiction (fun hn => absurd hn hnn)
 
-theorem not_and_iff_or_not (p q : Prop) [d₁ : Decidable p] [d₂ : Decidable q] : ¬ (p ∧ q) ↔ ¬ p ∨ ¬ q :=
+theorem not_and_iff_or_not {p q : Prop} [d₁ : Decidable p] [d₂ : Decidable q] : ¬ (p ∧ q) ↔ ¬ p ∨ ¬ q :=
   Iff.intro
     (fun h => match d₁, d₂ with
       | isTrue h₁,  isTrue h₂   => absurd (And.intro h₁ h₂) h
@@ -917,6 +1160,7 @@ end
     else isFalse (fun h => absurd (h hp) hq)
   else isTrue (fun h => absurd h hp)
 
+@[inline]
 instance {p q} [Decidable p] [Decidable q] : Decidable (p ↔ q) :=
   if hp : p then
     if hq : q then
@@ -958,18 +1202,14 @@ theorem dif_neg {c : Prop} {h : Decidable c} (hnc : ¬c) {α : Sort u} {t : c �
   | isTrue hc   => absurd hc hnc
   | isFalse _   => rfl
 
--- Remark: dite and ite are "defally equal" when we ignore the proofs.
-theorem dif_eq_if (c : Prop) {h : Decidable c} {α : Sort u} (t : α) (e : α) : dite c (fun _ => t) (fun _ => e) = ite c t e :=
-  match h with
-  | isTrue _    => rfl
-  | isFalse _   => rfl
-
-instance {c t e : Prop} [dC : Decidable c] [dT : Decidable t] [dE : Decidable e] : Decidable (if c then t else e)  :=
+@[macro_inline]
+instance {c t e : Prop} [dC : Decidable c] [dT : Decidable t] [dE : Decidable e] : Decidable (if c then t else e) :=
   match dC with
   | isTrue _   => dT
   | isFalse _  => dE
 
-instance {c : Prop} {t : c → Prop} {e : ¬c → Prop} [dC : Decidable c] [dT : ∀ h, Decidable (t h)] [dE : ∀ h, Decidable (e h)] : Decidable (if h : c then t h else e h)  :=
+@[inline]
+instance {c : Prop} {t : c → Prop} {e : ¬c → Prop} [dC : Decidable c] [dT : ∀ h, Decidable (t h)] [dE : ∀ h, Decidable (e h)] : Decidable (if h : c then t h else e h) :=
   match dC with
   | isTrue hc  => dT hc
   | isFalse hc => dE hc
@@ -993,31 +1233,34 @@ abbrev noConfusionEnum {α : Sort u} {β : Sort v} [inst : DecidableEq β] (f : 
 instance : Inhabited Prop where
   default := True
 
-deriving instance Inhabited for NonScalar, PNonScalar, True, ForInStep
-
-theorem nonempty_of_exists {α : Sort u} {p : α → Prop} : Exists (fun x => p x) → Nonempty α
-  | ⟨w, _⟩ => ⟨w⟩
+deriving instance Inhabited for NonScalar, PNonScalar, True
 
 /-! # Subsingleton -/
 
 /--
-A "subsingleton" is a type with at most one element.
-In other words, it is either empty, or has a unique element.
-All propositions are subsingletons because of proof irrelevance, but some other types
-are subsingletons as well and they inherit many of the same properties as propositions.
-`Subsingleton α` is a typeclass, so it is usually used as an implicit argument and
-inferred by typeclass inference.
+A _subsingleton_ is a type with at most one element. It is either empty or has a unique element.
+
+All propositions are subsingletons because of proof irrelevance: false propositions are empty, and
+all proofs of a true proposition are equal to one another. Some non-propositional types are also
+subsingletons.
 -/
 class Subsingleton (α : Sort u) : Prop where
-  /-- Construct a proof that `α` is a subsingleton by showing that any two elements are equal. -/
+  /-- Prove that `α` is a subsingleton by showing that any two elements are equal. -/
   intro ::
   /-- Any two elements of a subsingleton are equal. -/
   allEq : (a b : α) → a = b
 
+/--
+If a type is a subsingleton, then all of its elements are equal.
+-/
 protected theorem Subsingleton.elim {α : Sort u} [h : Subsingleton α] : (a b : α) → a = b :=
   h.allEq
 
-protected theorem Subsingleton.helim {α β : Sort u} [h₁ : Subsingleton α] (h₂ : α = β) (a : α) (b : β) : HEq a b := by
+/--
+If two types are equal and one of them is a subsingleton, then all of their elements are
+[heterogeneously equal](lean-manual://section/HEq).
+-/
+protected theorem Subsingleton.helim {α β : Sort u} [h₁ : Subsingleton α] (h₂ : α = β) (a : α) (b : β) : a ≍ b := by
   subst h₂
   apply heq_of_eq
   apply Subsingleton.elim
@@ -1054,22 +1297,21 @@ theorem recSubsingleton
   | isFalse h => h₄ h
 
 /--
-An equivalence relation `~ : α → α → Prop` is a relation that is:
+An equivalence relation `r : α → α → Prop` is a relation that is
 
-* reflexive: `x ~ x`
-* symmetric: `x ~ y` implies `y ~ x`
-* transitive: `x ~ y` and `y ~ z` implies `x ~ z`
+* reflexive: `r x x`,
+* symmetric: `r x y` implies `r y x`, and
+* transitive: `r x y` and `r y z` implies `r x z`.
 
-Equality is an equivalence relation, and equivalence relations share many of
-the properties of equality. In particular, `Quot α r` is most well behaved
-when `r` is an equivalence relation, and in this case we use `Quotient` instead.
+Equality is an equivalence relation, and equivalence relations share many of the properties of
+equality.
 -/
 structure Equivalence {α : Sort u} (r : α → α → Prop) : Prop where
-  /-- An equivalence relation is reflexive: `x ~ x` -/
+  /-- An equivalence relation is reflexive: `r x x` -/
   refl  : ∀ x, r x x
-  /-- An equivalence relation is symmetric: `x ~ y` implies `y ~ x` -/
+  /-- An equivalence relation is symmetric: `r x y` implies `r y x` -/
   symm  : ∀ {x y}, r x y → r y x
-  /-- An equivalence relation is transitive: `x ~ y` and `y ~ z` implies `x ~ z` -/
+  /-- An equivalence relation is transitive: `r x y` and `r y z` implies `r x z` -/
   trans : ∀ {x y z}, r x y → r y z → r x z
 
 /-- The empty relation is the relation on `α` which is always `False`. -/
@@ -1096,23 +1338,33 @@ transitive and contains `r`. `TransGen r a z` if and only if there exists a sequ
 `a r b r ... r z` of length at least 1 connecting `a` to `z`.
 -/
 inductive Relation.TransGen {α : Sort u} (r : α → α → Prop) : α → α → Prop
-  /-- If `r a b` then `TransGen r a b`. This is the base case of the transitive closure. -/
-  | single {a b} : r a b → TransGen r a b
-  /-- The transitive closure is transitive. -/
-  | tail {a b c} : TransGen r a b → r b c → TransGen r a c
+  /-- If `r a b`, then `TransGen r a b`. This is the base case of the transitive closure. -/
+  | single {a b : α} : r a b → TransGen r a b
+  /-- If `TransGen r a b` and `r b c`, then `TransGen r a c`.
+  This is the inductive case of the transitive closure. -/
+  | tail {a b c : α} : TransGen r a b → r b c → TransGen r a c
 
-/-- Deprecated synonym for `Relation.TransGen`. -/
-@[deprecated Relation.TransGen (since := "2024-07-16")] abbrev TC := @Relation.TransGen
+/-- The transitive closure is transitive. -/
+theorem Relation.TransGen.trans {α : Sort u} {r : α → α → Prop} {a b c} :
+    TransGen r a b → TransGen r b c → TransGen r a c := by
+  intro hab hbc
+  induction hbc with
+  | single h => exact TransGen.tail hab h
+  | tail _ h ih => exact TransGen.tail ih h
 
 /-! # Subtype -/
 
 namespace Subtype
 
-theorem existsOfSubtype {α : Type u} {p : α → Prop} : { x // p x } → Exists (fun x => p x)
+theorem exists_of_subtype {α : Type u} {p : α → Prop} : { x // p x } → Exists (fun x => p x)
   | ⟨a, h⟩ => ⟨a, h⟩
 
-variable {α : Type u} {p : α → Prop}
+variable {α : Sort u} {p : α → Prop}
 
+protected theorem ext : ∀ {a1 a2 : {x // p x}}, val a1 = val a2 → a1 = a2
+  | ⟨_, _⟩, ⟨_, _⟩, rfl => rfl
+
+@[deprecated Subtype.ext (since := "2025-10-26")]
 protected theorem eq : ∀ {a1 a2 : {x // p x}}, val a1 = val a2 → a1 = a2
   | ⟨_, _⟩, ⟨_, _⟩, rfl => rfl
 
@@ -1120,10 +1372,19 @@ theorem eta (a : {x // p x}) (h : p (val a)) : mk (val a) h = a := by
   cases a
   exact rfl
 
-instance {α : Type u} {p : α → Prop} [DecidableEq α] : DecidableEq {x : α // p x} :=
+instance {α : Type u} {p : α → Prop} [BEq α] : BEq {x : α // p x} :=
+  ⟨fun x y => x.1 == y.1⟩
+
+instance {α : Type u} {p : α → Prop} [BEq α] [ReflBEq α] : ReflBEq {x : α // p x} where
+  rfl {x} := BEq.refl x.1
+
+instance {α : Type u} {p : α → Prop} [BEq α] [LawfulBEq α] : LawfulBEq {x : α // p x} where
+  eq_of_beq h := Subtype.ext (eq_of_beq h)
+
+instance {α : Sort u} {p : α → Prop} [DecidableEq α] : DecidableEq {x : α // p x} :=
   fun ⟨a, h₁⟩ ⟨b, h₂⟩ =>
     if h : a = b then isTrue (by subst h; exact rfl)
-    else isFalse (fun h' => Subtype.noConfusion h' (fun h' => absurd h' h))
+    else isFalse (fun h' => Subtype.noConfusion rfl .rfl (heq_of_eq h') (fun h' => absurd (eq_of_heq h') h))
 
 end Subtype
 
@@ -1132,26 +1393,40 @@ end Subtype
 section
 variable {α : Type u} {β : Type v}
 
-instance Sum.inhabitedLeft [Inhabited α] : Inhabited (Sum α β) where
+@[reducible, inherit_doc PSum.inhabitedLeft]
+def Sum.inhabitedLeft [Inhabited α] : Inhabited (Sum α β) where
   default := Sum.inl default
 
-instance Sum.inhabitedRight [Inhabited β] : Inhabited (Sum α β) where
+@[reducible, inherit_doc PSum.inhabitedRight]
+def Sum.inhabitedRight [Inhabited β] : Inhabited (Sum α β) where
   default := Sum.inr default
 
-instance {α : Type u} {β : Type v} [DecidableEq α] [DecidableEq β] : DecidableEq (Sum α β) := fun a b =>
-  match a, b with
-  | Sum.inl a, Sum.inl b =>
-    if h : a = b then isTrue (h ▸ rfl)
-    else isFalse fun h' => Sum.noConfusion h' fun h' => absurd h' h
-  | Sum.inr a, Sum.inr b =>
-    if h : a = b then isTrue (h ▸ rfl)
-    else isFalse fun h' => Sum.noConfusion h' fun h' => absurd h' h
-  | Sum.inr _, Sum.inl _ => isFalse fun h => Sum.noConfusion h
-  | Sum.inl _, Sum.inr _ => isFalse fun h => Sum.noConfusion h
+instance Sum.nonemptyLeft [h : Nonempty α] : Nonempty (Sum α β) :=
+  Nonempty.elim h (fun a => ⟨Sum.inl a⟩)
+
+instance Sum.nonemptyRight [h : Nonempty β] : Nonempty (Sum α β) :=
+  Nonempty.elim h (fun b => ⟨Sum.inr b⟩)
+
+deriving instance DecidableEq for Sum
 
 end
 
 /-! # Product -/
+
+instance [h1 : Nonempty α] [h2 : Nonempty β] : Nonempty (α × β) :=
+  Nonempty.elim h1 fun x =>
+    Nonempty.elim h2 fun y =>
+      ⟨(x, y)⟩
+
+instance [h1 : Nonempty α] [h2 : Nonempty β] : Nonempty (MProd α β) :=
+  Nonempty.elim h1 fun x =>
+    Nonempty.elim h2 fun y =>
+      ⟨⟨x, y⟩⟩
+
+instance [h1 : Nonempty α] [h2 : Nonempty β] : Nonempty (PProd α β) :=
+  Nonempty.elim h1 fun x =>
+    Nonempty.elim h2 fun y =>
+      ⟨⟨x, y⟩⟩
 
 instance [Inhabited α] [Inhabited β] : Inhabited (α × β) where
   default := (default, default)
@@ -1168,13 +1443,18 @@ instance [DecidableEq α] [DecidableEq β] : DecidableEq (α × β) :=
     | isTrue e₁ =>
       match decEq b b' with
       | isTrue e₂  => isTrue (e₁ ▸ e₂ ▸ rfl)
-      | isFalse n₂ => isFalse fun h => Prod.noConfusion h fun _   e₂' => absurd e₂' n₂
-    | isFalse n₁ => isFalse fun h => Prod.noConfusion h fun e₁' _   => absurd e₁' n₁
+      | isFalse n₂ => isFalse fun h => Prod.noConfusion rfl rfl (heq_of_eq h) fun _   e₂' => absurd (eq_of_heq e₂') n₂
+    | isFalse n₁ => isFalse fun h => Prod.noConfusion rfl rfl (heq_of_eq h) fun e₁' _   => absurd (eq_of_heq e₁') n₁
 
 instance [BEq α] [BEq β] : BEq (α × β) where
   beq := fun (a₁, b₁) (a₂, b₂) => a₁ == a₂ && b₁ == b₂
 
-/-- Lexicographical order for products -/
+/--
+Lexicographical order for products.
+
+Two pairs are lexicographically ordered if their first elements are ordered or if their first
+elements are equal and their second elements are ordered.
+-/
 def Prod.lexLt [LT α] [LT β] (s : α × β) (t : α × β) : Prop :=
   s.1 < t.1 ∨ (s.1 = t.1 ∧ s.2 < t.2)
 
@@ -1190,8 +1470,11 @@ theorem Prod.lexLt_def [LT α] [LT β] (s t : α × β) : (Prod.lexLt s t) = (s.
 theorem Prod.eta (p : α × β) : (p.1, p.2) = p := rfl
 
 /--
-`Prod.map f g : α₁ × β₁ → α₂ × β₂` maps across a pair
-by applying `f` to the first component and `g` to the second.
+Transforms a pair by applying functions to both elements.
+
+Examples:
+ * `(1, 2).map (· + 1) (· * 3) = (2, 6)`
+ * `(1, 2).map toString (· * 3) = ("1", 6)`
 -/
 def Prod.map {α₁ : Type u₁} {α₂ : Type u₂} {β₁ : Type v₁} {β₂ : Type v₂}
     (f : α₁ → α₂) (g : β₁ → β₂) : α₁ × β₁ → α₂ × β₂
@@ -1199,17 +1482,38 @@ def Prod.map {α₁ : Type u₁} {α₂ : Type u₂} {β₁ : Type v₁} {β₂ 
 
 @[simp] theorem Prod.map_apply (f : α → β) (g : γ → δ) (x) (y) :
     Prod.map f g (x, y) = (f x, g y) := rfl
+
+-- We add `@[grind =]` to these in `Init.Data.Prod`.
 @[simp] theorem Prod.map_fst (f : α → β) (g : γ → δ) (x) : (Prod.map f g x).1 = f x.1 := rfl
 @[simp] theorem Prod.map_snd (f : α → β) (g : γ → δ) (x) : (Prod.map f g x).2 = g x.2 := rfl
 
 /-! # Dependent products -/
 
+instance {α : Type u} {β : α → Type v} [h₁ : DecidableEq α] [h₂ : ∀ a, DecidableEq (β a)] :
+    DecidableEq (Sigma β)
+  | ⟨a₁, b₁⟩, ⟨a₂, b₂⟩ =>
+    match a₁, b₁, a₂, b₂, h₁ a₁ a₂ with
+    | _, b₁, _, b₂, isTrue (Eq.refl _) =>
+      match b₁, b₂, h₂ _ b₁ b₂ with
+      | _, _, isTrue (Eq.refl _) => isTrue rfl
+      | _, _, isFalse n => isFalse fun h ↦
+        Sigma.noConfusion rfl .rfl (heq_of_eq h) fun _ e₂ ↦ n (eq_of_heq e₂)
+    | _, _, _, _, isFalse n => isFalse fun h ↦
+      Sigma.noConfusion rfl .rfl (heq_of_eq h) fun e₁ _ ↦ n (eq_of_heq e₁)
+
+instance {α : Sort u} {β : α → Sort v} [h₁ : DecidableEq α] [h₂ : ∀ a, DecidableEq (β a)] : DecidableEq (PSigma β)
+  | ⟨a₁, b₁⟩, ⟨a₂, b₂⟩ =>
+    match a₁, b₁, a₂, b₂, h₁ a₁ a₂ with
+    | _, b₁, _, b₂, isTrue (Eq.refl _) =>
+      match b₁, b₂, h₂ _ b₁ b₂ with
+      | _, _, isTrue (Eq.refl _) => isTrue rfl
+      | _, _, isFalse n => isFalse fun h ↦
+        PSigma.noConfusion rfl .rfl (heq_of_eq h) fun _ e₂ ↦ n (eq_of_heq e₂)
+    | _, _, _, _, isFalse n => isFalse fun h ↦
+      PSigma.noConfusion rfl .rfl (heq_of_eq h) fun e₁ _ ↦ n (eq_of_heq e₁)
+
 theorem Exists.of_psigma_prop {α : Sort u} {p : α → Prop} : (PSigma (fun x => p x)) → Exists (fun x => p x)
   | ⟨x, hx⟩ => ⟨x, hx⟩
-
-@[deprecated Exists.of_psigma_prop (since := "2024-07-27")]
-theorem ex_of_PSigma {α : Type u} {p : α → Prop} : (PSigma (fun x => p x)) → Exists (fun x => p x) :=
-  Exists.of_psigma_prop
 
 protected theorem PSigma.eta {α : Sort u} {β : α → Sort v} {a₁ a₂ : α} {b₁ : β a₁} {b₂ : β a₂}
     (h₁ : a₁ = a₂) (h₂ : Eq.ndrec b₁ h₁ = b₂) : PSigma.mk a₁ b₁ = PSigma.mk a₂ b₂ := by
@@ -1219,26 +1523,31 @@ protected theorem PSigma.eta {α : Sort u} {β : α → Sort v} {a₁ a₂ : α}
 
 /-! # Universe polymorphic unit -/
 
+theorem PUnit.ext (a b : PUnit) : a = b := by
+  cases a; cases b; exact rfl
+
+@[deprecated PUnit.ext (since := "2025-10-26")]
 theorem PUnit.subsingleton (a b : PUnit) : a = b := by
   cases a; cases b; exact rfl
 
 theorem PUnit.eq_punit (a : PUnit) : a = ⟨⟩ :=
-  PUnit.subsingleton a ⟨⟩
+  PUnit.ext a ⟨⟩
 
 instance : Subsingleton PUnit :=
-  Subsingleton.intro PUnit.subsingleton
+  Subsingleton.intro PUnit.ext
 
 instance : Inhabited PUnit where
   default := ⟨⟩
 
 instance : DecidableEq PUnit :=
-  fun a b => isTrue (PUnit.subsingleton a b)
+  fun a b => isTrue (PUnit.ext a b)
 
 /-! # Setoid -/
 
 /--
 A setoid is a type with a distinguished equivalence relation, denoted `≈`.
-This is mainly used as input to the `Quotient` type constructor.
+
+The `Quotient` type constructor requires a `Setoid` instance.
 -/
 class Setoid (α : Sort u) where
   /-- `x ≈ y` is the distinguished equivalence relation of a setoid. -/
@@ -1253,12 +1562,15 @@ namespace Setoid
 
 variable {α : Sort u} [Setoid α]
 
+/-- A setoid's equivalence relation is reflexive. -/
 theorem refl (a : α) : a ≈ a :=
   iseqv.refl a
 
+/-- A setoid's equivalence relation is symmetric. -/
 theorem symm {a b : α} (hab : a ≈ b) : b ≈ a :=
   iseqv.symm hab
 
+/-- A setoid's equivalence relation is transitive. -/
 theorem trans {a b c : α} (hab : a ≈ b) (hbc : b ≈ c) : a ≈ c :=
   iseqv.trans hab hbc
 
@@ -1268,38 +1580,13 @@ end Setoid
 /-! # Propositional extensionality -/
 
 /--
-The axiom of **propositional extensionality**. It asserts that if propositions
-`a` and `b` are logically equivalent (i.e. we can prove `a` from `b` and vice versa),
-then `a` and `b` are *equal*, meaning that we can replace `a` with `b` in all
-contexts.
+The [axiom](lean-manual://section/axioms) of **propositional extensionality**. It asserts that if
+propositions `a` and `b` are logically equivalent (that is, if `a` can be proved from `b` and vice
+versa), then `a` and `b` are *equal*, meaning `a` can be replaced with `b` in all contexts.
 
-For simple expressions like `a ∧ c ∨ d → e` we can prove that because all the logical
-connectives respect logical equivalence, we can replace `a` with `b` in this expression
-without using `propext`. However, for higher order expressions like `P a` where
-`P : Prop → Prop` is unknown, or indeed for `a = b` itself, we cannot replace `a` with `b`
-without an axiom which says exactly this.
-
-This is a relatively uncontroversial axiom, which is intuitionistically valid.
-It does however block computation when using `#reduce` to reduce proofs directly
-(which is not recommended), meaning that canonicity,
-the property that all closed terms of type `Nat` normalize to numerals,
-fails to hold when this (or any) axiom is used:
-```
-set_option pp.proofs true
-
-def foo : Nat := by
-  have : (True → True) ↔ True := ⟨λ _ => trivial, λ _ _ => trivial⟩
-  have := propext this ▸ (2 : Nat)
-  exact this
-
-#reduce foo
--- propext { mp := fun x x => True.intro, mpr := fun x => True.intro } ▸ 2
-
-#eval foo -- 2
-```
-`#eval` can evaluate it to a numeral because the compiler erases casts and
-does not evaluate proofs, so `propext`, whose return type is a proposition,
-can never block it.
+The standard logical connectives provably respect propositional extensionality. However, an axiom is
+needed for higher order expressions like `P a` where `P : Prop → Prop` is unknown, as well as for
+equality. Propositional extensionality is intuitionistically valid.
 -/
 axiom propext {a b : Prop} : (a ↔ b) → a = b
 
@@ -1312,20 +1599,49 @@ instance {p q : Prop} [d : Decidable (p ↔ q)] : Decidable (p = q) :=
   | isTrue h => isTrue (propext h)
   | isFalse h => isFalse fun heq => h (heq ▸ Iff.rfl)
 
-gen_injective_theorems% Prod
-gen_injective_theorems% PProd
-gen_injective_theorems% MProd
-gen_injective_theorems% Subtype
-gen_injective_theorems% Fin
+/-- Helper theorem for proving injectivity theorems -/
+theorem Lean.injEq_helper {P Q R : Prop} :
+  (P → Q → R) → (P ∧ Q → R) := by intro h ⟨h₁,h₂⟩; exact h h₁ h₂
+
 gen_injective_theorems% Array
-gen_injective_theorems% Sum
-gen_injective_theorems% PSum
-gen_injective_theorems% Option
-gen_injective_theorems% List
-gen_injective_theorems% Except
+gen_injective_theorems% BitVec
+gen_injective_theorems% ByteArray
+gen_injective_theorems% Char
+gen_injective_theorems% DoResultBC
+gen_injective_theorems% DoResultPR
+gen_injective_theorems% DoResultPRBC
+gen_injective_theorems% DoResultSBC
 gen_injective_theorems% EStateM.Result
+gen_injective_theorems% Except
+gen_injective_theorems% Fin
+gen_injective_theorems% ForInStep
 gen_injective_theorems% Lean.Name
 gen_injective_theorems% Lean.Syntax
+gen_injective_theorems% List
+gen_injective_theorems% MProd
+gen_injective_theorems% NonScalar
+gen_injective_theorems% Option
+gen_injective_theorems% PLift
+gen_injective_theorems% PULift
+gen_injective_theorems% PNonScalar
+gen_injective_theorems% PProd
+gen_injective_theorems% Prod
+gen_injective_theorems% PSigma
+gen_injective_theorems% PSum
+gen_injective_theorems% Sigma
+gen_injective_theorems% String
+gen_injective_theorems% String.Pos.Raw
+gen_injective_theorems% Substring.Raw
+gen_injective_theorems% Subtype
+gen_injective_theorems% Sum
+gen_injective_theorems% Task
+gen_injective_theorems% Thunk
+gen_injective_theorems% UInt16
+gen_injective_theorems% UInt32
+gen_injective_theorems% UInt64
+gen_injective_theorems% UInt8
+gen_injective_theorems% ULift
+gen_injective_theorems% USize
 
 theorem Nat.succ.inj {m n : Nat} : m.succ = n.succ → m = n :=
   fun x => Nat.noConfusion x id
@@ -1333,8 +1649,8 @@ theorem Nat.succ.inj {m n : Nat} : m.succ = n.succ → m = n :=
 theorem Nat.succ.injEq (u v : Nat) : (u.succ = v.succ) = (u = v) :=
   Eq.propIntro Nat.succ.inj (congrArg Nat.succ)
 
-@[simp] theorem beq_iff_eq [BEq α] [LawfulBEq α] (a b : α) : a == b ↔ a = b :=
-  ⟨eq_of_beq, by intro h; subst h; exact LawfulBEq.rfl⟩
+@[simp] theorem beq_iff_eq [BEq α] [LawfulBEq α] {a b : α} : a == b ↔ a = b :=
+  ⟨eq_of_beq, beq_of_eq⟩
 
 /-! # Prop lemmas -/
 
@@ -1398,14 +1714,14 @@ theorem false_of_true_eq_false  (h : True = False) : False := false_of_true_iff_
 
 theorem true_eq_false_of_false : False → (True = False) := False.elim
 
-theorem iff_def  : (a ↔ b) ↔ (a → b) ∧ (b → a) := iff_iff_implies_and_implies a b
+theorem iff_def  : (a ↔ b) ↔ (a → b) ∧ (b → a) := iff_iff_implies_and_implies
 theorem iff_def' : (a ↔ b) ↔ (b → a) ∧ (a → b) := Iff.trans iff_def And.comm
 
 theorem true_iff_false : (True ↔ False) ↔ False := iff_false_intro (·.mp  True.intro)
 theorem false_iff_true : (False ↔ True) ↔ False := iff_false_intro (·.mpr True.intro)
 
 theorem iff_not_self : ¬(a ↔ ¬a) | H => let f h := H.1 h h; f (H.2 f)
-theorem heq_self_iff_true (a : α) : HEq a a ↔ True := iff_true_intro HEq.rfl
+theorem heq_self_iff_true (a : α) : a ≍ a ↔ True := iff_true_intro HEq.rfl
 
 /-! ## implies -/
 
@@ -1426,7 +1742,7 @@ theorem imp_true_iff (α : Sort u) : (α → True) ↔ True := iff_true_intro (f
 
 theorem false_imp_iff (a : Prop) : (False → a) ↔ True := iff_true_intro False.elim
 
-theorem true_imp_iff (α : Prop) : (True → α) ↔ α := imp_iff_right True.intro
+theorem true_imp_iff {α : Prop} : (True → α) ↔ α := imp_iff_right True.intro
 
 @[simp high] theorem imp_self : (a → a) ↔ True := iff_true_intro id
 
@@ -1452,34 +1768,21 @@ theorem imp_iff_not (hb : ¬b) : a → b ↔ ¬a := imp_congr_right fun _ => iff
 
 namespace Quot
 /--
-The **quotient axiom**, or at least the nontrivial part of the quotient
-axiomatization. Quotient types are introduced by the `init_quot` command
-in `Init.Prelude` which introduces the axioms:
+The **quotient axiom**, which asserts the equality of elements related by the quotient's relation.
 
-```
-opaque Quot {α : Sort u} (r : α → α → Prop) : Sort u
+The relation `r` does not need to be an equivalence relation to use this axiom. When `r` is not an
+equivalence relation, the quotient is with respect to the equivalence relation generated by `r`.
 
-opaque Quot.mk {α : Sort u} (r : α → α → Prop) (a : α) : Quot r
+`Quot.sound` is part of the built-in primitive quotient type:
+ * `Quot` is the built-in quotient type.
+ * `Quot.mk` places elements of the underlying type `α` into the quotient.
+ * `Quot.lift` allows the definition of functions from the quotient to some other type.
+ * `Quot.ind` is used to write proofs about quotients by assuming that all elements are constructed
+   with `Quot.mk`; it is analogous to the [recursor](lean-manual://section/recursors) for a
+   structure.
 
-opaque Quot.lift {α : Sort u} {r : α → α → Prop} {β : Sort v} (f : α → β) :
-  (∀ a b : α, r a b → f a = f b) → Quot r → β
-
-opaque Quot.ind {α : Sort u} {r : α → α → Prop} {β : Quot r → Prop} :
-  (∀ a : α, β (Quot.mk r a)) → ∀ q : Quot r, β q
-```
-All of these axioms are true if we assume `Quot α r = α` and `Quot.mk` and
-`Quot.lift` are identity functions, so they do not add much. However this axiom
-cannot be explained in that way (it is false for that interpretation), so the
-real power of quotient types come from this axiom.
-
-It says that the quotient by `r` maps elements which are related by `r` to equal
-values in the quotient. Together with `Quot.lift` which says that functions
-which respect `r` can be lifted to functions on the quotient, we can deduce that
-`Quot α r` exactly consists of the equivalence classes with respect to `r`.
-
-It is important to note that `r` need not be an equivalence relation in this axiom.
-When `r` is not an equivalence relation, we are actually taking a quotient with
-respect to the equivalence relation generated by `r`.
+[Quotient types](lean-manual://section/quotients) are described in more detail in the Lean Language
+Reference.
 -/
 axiom sound : ∀ {α : Sort u} {r : α → α → Prop} {a b : α}, r a b → Quot.mk r a = Quot.mk r b
 
@@ -1497,8 +1800,17 @@ protected theorem indBeta {α : Sort u} {r : α → α → Prop} {motive : Quot 
   rfl
 
 /--
-`Quot.liftOn q f h` is the same as `Quot.lift f h q`. It just reorders
-the argument `q : Quot r` to be first.
+Lifts a function from an underlying type to a function on a quotient, requiring that it respects the
+quotient's relation.
+
+Given a relation `r : α → α → Prop` and a quotient's value `q : Quot r`, applying a `f : α → β`
+requires a proof `c` that `f` respects `r`. In this case, `Quot.liftOn q f h : β` evaluates
+to the result of applying `f` to the underlying value in `α` from `q`.
+
+`Quot.liftOn` is a version of the built-in primitive `Quot.lift` with its parameters re-ordered.
+
+[Quotient types](lean-manual://section/quotients) are described in more detail in the Lean Language
+Reference.
 -/
 protected abbrev liftOn {α : Sort u} {β : Sort v} {r : α → α → Prop}
   (q : Quot r) (f : α → β) (c : (a b : α) → r a b → f a = f b) : β :=
@@ -1539,20 +1851,42 @@ protected theorem liftIndepPr1
  exact rfl
 
 /--
-Dependent recursion principle for `Quot`. This constructor can be tricky to use,
-so you should consider the simpler versions if they apply:
-* `Quot.lift`, for nondependent functions
-* `Quot.ind`, for theorems / proofs of propositions about quotients
-* `Quot.recOnSubsingleton`, when the target type is a `Subsingleton`
-* `Quot.hrecOn`, which uses `HEq (f a) (f b)` instead of a `sound p ▸ f a = f b` assummption
+A dependent recursion principle for `Quot`. It is analogous to the
+[recursor](lean-manual://section/recursors) for a structure, and can be used when the resulting type
+is not necessarily a proposition.
+
+While it is very general, this recursor can be tricky to use. The following simpler alternatives may
+be easier to use:
+ * `Quot.lift` is useful for defining non-dependent functions.
+ * `Quot.ind` is useful for proving theorems about quotients.
+ * `Quot.recOnSubsingleton` can be used whenever the target type is a `Subsingleton`.
+ * `Quot.hrecOn` uses [heterogeneous equality](lean-manual://section/HEq) instead of rewriting with
+   `Quot.sound`.
+
+`Quot.recOn` is a version of this recursor that takes the quotient parameter first.
 -/
-protected abbrev rec
+@[elab_as_elim] protected abbrev rec
     (f : (a : α) → motive (Quot.mk r a))
     (h : (a b : α) → (p : r a b) → Eq.ndrec (f a) (sound p) = f b)
     (q : Quot r) : motive q :=
   Eq.ndrecOn (Quot.liftIndepPr1 f h q) ((lift (Quot.indep f) (Quot.indepCoherent f h) q).2)
 
-@[inherit_doc Quot.rec, elab_as_elim] protected abbrev recOn
+/--
+A dependent recursion principle for `Quot` that takes the quotient first. It is analogous to the
+[recursor](lean-manual://section/recursors) for a structure, and can be used when the resulting type
+is not necessarily a proposition.
+
+While it is very general, this recursor can be tricky to use. The following simpler alternatives may
+be easier to use:
+ * `Quot.lift` is useful for defining non-dependent functions.
+ * `Quot.ind` is useful for proving theorems about quotients.
+ * `Quot.recOnSubsingleton` can be used whenever the target type is a `Subsingleton`.
+ * `Quot.hrecOn` uses [heterogeneous equality](lean-manual://section/HEq) instead of rewriting with
+   `Quot.sound`.
+
+`Quot.rec` is a version of this recursor that takes the quotient parameter last.
+-/
+@[elab_as_elim] protected abbrev recOn
     (q : Quot r)
     (f : (a : α) → motive (Quot.mk r a))
     (h : (a b : α) → (p : r a b) → Eq.ndrec (f a) (sound p) = f b)
@@ -1560,8 +1894,13 @@ protected abbrev rec
  q.rec f h
 
 /--
-Dependent induction principle for a quotient, when the target type is a `Subsingleton`.
-In this case the quotient's side condition is trivial so any function can be lifted.
+An alternative induction principle for quotients that can be used when the target type is a
+subsingleton, in which all elements are equal.
+
+In these cases, the proof that the function respects the quotient's relation is trivial, so any
+function can be lifted.
+
+`Quot.rec` does not assume that the type is a subsingleton.
 -/
 @[elab_as_elim] protected abbrev recOnSubsingleton
     [h : (a : α) → Subsingleton (motive (Quot.mk r a))]
@@ -1573,66 +1912,119 @@ In this case the quotient's side condition is trivial so any function can be lif
   apply Subsingleton.elim
 
 /--
-Heterogeneous dependent recursion principle for a quotient.
-This may be easier to work with since it uses `HEq` instead of
-an `Eq.ndrec` in the hypothesis.
+A dependent recursion principle for `Quot` that uses [heterogeneous
+equality](lean-manual://section/HEq), analogous to a [recursor](lean-manual://section/recursors) for
+a structure.
+
+`Quot.recOn` is a version of this recursor that uses `Eq` instead of `HEq`.
 -/
 protected abbrev hrecOn
     (q : Quot r)
     (f : (a : α) → motive (Quot.mk r a))
-    (c : (a b : α) → (p : r a b) → HEq (f a) (f b))
+    (c : (a b : α) → (p : r a b) → f a ≍ f b)
     : motive q :=
-  Quot.recOn q f fun a b p => eq_of_heq <|
-    have p₁ : HEq (Eq.ndrec (f a) (sound p)) (f a) := eqRec_heq (sound p) (f a)
-    HEq.trans p₁ (c a b p)
+  Quot.recOn q f fun a b p => eq_of_heq (eqRec_heq_iff.mpr (c a b p))
 
 end
 end Quot
 
 set_option linter.unusedVariables.funArgs false in
 /--
-`Quotient α s` is the same as `Quot α r`, but it is specialized to a setoid `s`
-(that is, an equivalence relation) instead of an arbitrary relation.
-Prefer `Quotient` over `Quot` if your relation is actually an equivalence relation.
+Quotient types coarsen the propositional equality for a type so that terms related by some
+equivalence relation are considered equal. The equivalence relation is given by an instance of
+`Setoid`.
+
+Set-theoretically, `Quotient s` can seen as the set of equivalence classes of `α` modulo the
+`Setoid` instance's relation `s.r`. Functions from `Quotient s` must prove that they respect `s.r`:
+to define a function `f : Quotient s → β`, it is necessary to provide `f' : α → β` and prove that
+for all `x : α` and `y : α`, `s.r x y → f' x = f' y`. `Quotient.lift` implements this operation.
+
+The key quotient operators are:
+ * `Quotient.mk` places elements of the underlying type `α` into the quotient.
+ * `Quotient.lift` allows the definition of functions from the quotient to some other type.
+ * `Quotient.sound` asserts the equality of elements related by `r`
+ * `Quotient.ind` is used to write proofs about quotients by assuming that all elements are
+   constructed with `Quotient.mk`.
+
+`Quotient` is built on top of the primitive quotient type `Quot`, which does not require a proof
+that the relation is an equivalence relation. `Quotient` should be used instead of `Quot` for
+relations that actually are equivalence relations.
 -/
 def Quotient {α : Sort u} (s : Setoid α) :=
   @Quot α Setoid.r
 
 namespace Quotient
 
-/-- The canonical quotient map into a `Quotient`. -/
+/--
+Places an element of a type into the quotient that equates terms according to an equivalence
+relation.
+
+The setoid instance is provided explicitly. `Quotient.mk'` uses instance synthesis instead.
+
+Given `v : α`, `Quotient.mk s v : Quotient s` is like `v`, except all observations of `v`'s value
+must respect `s.r`. `Quotient.lift` allows values in a quotient to be mapped to other types, so long
+as the mapping respects `s.r`.
+-/
 @[inline]
 protected def mk {α : Sort u} (s : Setoid α) (a : α) : Quotient s :=
   Quot.mk Setoid.r a
 
 /--
-The canonical quotient map into a `Quotient`.
-(This synthesizes the setoid by typeclass inference.)
+Places an element of a type into the quotient that equates terms according to an equivalence
+relation.
+
+The equivalence relation is found by synthesizing a `Setoid` instance. `Quotient.mk` instead expects
+the instance to be provided explicitly.
+
+Given `v : α`, `Quotient.mk' v : Quotient s` is like `v`, except all observations of `v`'s value
+must respect `s.r`. `Quotient.lift` allows values in a quotient to be mapped to other types, so long
+as the mapping respects `s.r`.
+
 -/
 protected def mk' {α : Sort u} [s : Setoid α] (a : α) : Quotient s :=
   Quotient.mk s a
 
 /--
-The analogue of `Quot.sound`: If `a` and `b` are related by the equivalence relation,
-then they have equal equivalence classes.
+The **quotient axiom**, which asserts the equality of elements related in the setoid.
+
+Because `Quotient` is built on a lower-level type `Quot`, `Quotient.sound` is implemented as a
+theorem. It is derived from `Quot.sound`, the soundness axiom for the lower-level quotient type
+`Quot`.
 -/
 theorem sound {α : Sort u} {s : Setoid α} {a b : α} : a ≈ b → Quotient.mk s a = Quotient.mk s b :=
   Quot.sound
 
 /--
-The analogue of `Quot.lift`: if `f : α → β` respects the equivalence relation `≈`,
-then it lifts to a function on `Quotient s` such that `lift f h (mk a) = f a`.
+Lifts a function from an underlying type to a function on a quotient, requiring that it respects the
+quotient's equivalence relation.
+
+Given `s : Setoid α` and a quotient `Quotient s`, applying a function `f : α → β` requires a proof
+`h` that `f` respects the equivalence relation `s.r`. In this case, the function
+`Quotient.lift f h : Quotient s → β` computes the same values as `f`.
+
+`Quotient.liftOn` is a version of this operation that takes the quotient value as its first explicit
+parameter.
 -/
 protected abbrev lift {α : Sort u} {β : Sort v} {s : Setoid α} (f : α → β) : ((a b : α) → a ≈ b → f a = f b) → Quotient s → β :=
   Quot.lift f
 
-/-- The analogue of `Quot.ind`: every element of `Quotient s` is of the form `Quotient.mk s a`. -/
+/--
+A reasoning principle for quotients that allows proofs about quotients to assume that all values are
+constructed with `Quotient.mk`.
+-/
 protected theorem ind {α : Sort u} {s : Setoid α} {motive : Quotient s → Prop} : ((a : α) → motive (Quotient.mk s a)) → (q : Quotient s) → motive q :=
   Quot.ind
 
 /--
-The analogue of `Quot.liftOn`: if `f : α → β` respects the equivalence relation `≈`,
-then it lifts to a function on `Quotient s` such that `lift (mk a) f h = f a`.
+Lifts a function from an underlying type to a function on a quotient, requiring that it respects the
+quotient's equivalence relation.
+
+Given `s : Setoid α` and a quotient value `q : Quotient s`, applying a function `f : α → β` requires
+a proof `c` that `f` respects the equivalence relation `s.r`. In this case, the term
+`Quotient.liftOn q f h : β` reduces to the result of applying `f` to the underlying `α` value.
+
+`Quotient.lift` is a version of this operation that takes the quotient value last, rather than
+first.
 -/
 protected abbrev liftOn {α : Sort u} {β : Sort v} {s : Setoid α} (q : Quotient s) (f : α → β) (c : (a b : α) → a ≈ b → f a = f b) : β :=
   Quot.liftOn q f c
@@ -1653,7 +2045,21 @@ variable {α : Sort u}
 variable {s : Setoid α}
 variable {motive : Quotient s → Sort v}
 
-/-- The analogue of `Quot.rec` for `Quotient`. See `Quot.rec`. -/
+/--
+A dependent recursion principle for `Quotient`. It is analogous to the
+[recursor](lean-manual://section/recursors) for a structure, and can be used when the resulting type
+is not necessarily a proposition.
+
+While it is very general, this recursor can be tricky to use. The following simpler alternatives may
+be easier to use:
+
+ * `Quotient.lift` is useful for defining non-dependent functions.
+ * `Quotient.ind` is useful for proving theorems about quotients.
+ * `Quotient.recOnSubsingleton` can be used whenever the target type is a `Subsingleton`.
+ * `Quotient.hrecOn` uses heterogeneous equality instead of rewriting with `Quotient.sound`.
+
+`Quotient.recOn` is a version of this recursor that takes the quotient parameter first.
+-/
 @[inline, elab_as_elim]
 protected def rec
     (f : (a : α) → motive (Quotient.mk s a))
@@ -1662,7 +2068,21 @@ protected def rec
     : motive q :=
   Quot.rec f h q
 
-/-- The analogue of `Quot.recOn` for `Quotient`. See `Quot.recOn`. -/
+/--
+A dependent recursion principle for `Quotient`. It is analogous to the
+[recursor](lean-manual://section/recursors) for a structure, and can be used when the resulting type
+is not necessarily a proposition.
+
+While it is very general, this recursor can be tricky to use. The following simpler alternatives may
+be easier to use:
+
+ * `Quotient.lift` is useful for defining non-dependent functions.
+ * `Quotient.ind` is useful for proving theorems about quotients.
+ * `Quotient.recOnSubsingleton` can be used whenever the target type is a `Subsingleton`.
+ * `Quotient.hrecOn` uses heterogeneous equality instead of rewriting with `Quotient.sound`.
+
+`Quotient.rec` is a version of this recursor that takes the quotient parameter last.
+-/
 @[elab_as_elim]
 protected abbrev recOn
     (q : Quotient s)
@@ -1671,7 +2091,15 @@ protected abbrev recOn
     : motive q :=
   Quot.recOn q f h
 
-/-- The analogue of `Quot.recOnSubsingleton` for `Quotient`. See `Quot.recOnSubsingleton`. -/
+/--
+An alternative recursion or induction principle for quotients that can be used when the target type
+is a subsingleton, in which all elements are equal.
+
+In these cases, the proof that the function respects the quotient's equivalence relation is trivial,
+so any function can be lifted.
+
+`Quotient.rec` does not assume that the target type is a subsingleton.
+-/
 @[elab_as_elim]
 protected abbrev recOnSubsingleton
     [h : (a : α) → Subsingleton (motive (Quotient.mk s a))]
@@ -1680,12 +2108,18 @@ protected abbrev recOnSubsingleton
     : motive q :=
   Quot.recOnSubsingleton (h := h) q f
 
-/-- The analogue of `Quot.hrecOn` for `Quotient`. See `Quot.hrecOn`. -/
+/--
+A dependent recursion principle for `Quotient` that uses [heterogeneous
+equality](lean-manual://section/HEq), analogous to a [recursor](lean-manual://section/recursors) for
+a structure.
+
+`Quotient.recOn` is a version of this recursor that uses `Eq` instead of `HEq`.
+-/
 @[elab_as_elim]
 protected abbrev hrecOn
     (q : Quotient s)
     (f : (a : α) → motive (Quotient.mk s a))
-    (c : (a b : α) → (p : a ≈ b) → HEq (f a) (f b))
+    (c : (a b : α) → (p : a ≈ b) → f a ≍ f b)
     : motive q :=
   Quot.hrecOn q f c
 end
@@ -1695,7 +2129,13 @@ universe uA uB uC
 variable {α : Sort uA} {β : Sort uB} {φ : Sort uC}
 variable {s₁ : Setoid α} {s₂ : Setoid β}
 
-/-- Lift a binary function to a quotient on both arguments. -/
+/--
+Lifts a binary function from the underlying types to a binary function on quotients. The function
+must respect both quotients' equivalence relations.
+
+`Quotient.lift` is a version of this operation for unary functions. `Quotient.liftOn₂` is a version
+that take the quotient parameters first.
+-/
 protected abbrev lift₂
     (f : α → β → φ)
     (c : (a₁ : α) → (b₁ : β) → (a₂ : α) → (b₂ : β) → a₁ ≈ a₂ → b₁ ≈ b₂ → f a₁ b₁ = f a₂ b₂)
@@ -1706,7 +2146,13 @@ protected abbrev lift₂
   induction q₂ using Quotient.ind
   apply c; assumption; apply Setoid.refl
 
-/-- Lift a binary function to a quotient on both arguments. -/
+/--
+Lifts a binary function from the underlying types to a binary function on quotients. The function
+must respect both quotients' equivalence relations.
+
+`Quotient.liftOn` is a version of this operation for unary functions. `Quotient.lift₂` is a version
+that take the quotient parameters last.
+-/
 protected abbrev liftOn₂
     (q₁ : Quotient s₁)
     (q₂ : Quotient s₂)
@@ -1771,6 +2217,9 @@ private theorem rel.refl {s : Setoid α} (q : Quotient s) : rel q q :=
 private theorem rel_of_eq {s : Setoid α} {q₁ q₂ : Quotient s} : q₁ = q₂ → rel q₁ q₂ :=
   fun h => Eq.ndrecOn h (rel.refl q₁)
 
+/--
+If two values are equal in a quotient, then they are related by its equivalence relation.
+-/
 theorem exact {s : Setoid α} {a b : α} : Quotient.mk s a = Quotient.mk s b → a ≈ b :=
   fun h => rel_of_eq h
 
@@ -1781,7 +2230,13 @@ universe uA uB uC
 variable {α : Sort uA} {β : Sort uB}
 variable {s₁ : Setoid α} {s₂ : Setoid β}
 
-/-- Lift a binary function to a quotient on both arguments. -/
+/--
+An alternative induction or recursion operator for defining binary operations on quotients that can
+be used when the target type is a subsingleton.
+
+In these cases, the proof that the function respects the quotient's equivalence relation is trivial,
+so any function can be lifted.
+-/
 @[elab_as_elim]
 protected abbrev recOnSubsingleton₂
     {motive : Quotient s₁ → Quotient s₂ → Sort uC}
@@ -1801,11 +2256,8 @@ protected abbrev recOnSubsingleton₂
 end
 end Quotient
 
-section
-variable {α : Type u}
-variable (r : α → α → Prop)
-
-instance {α : Sort u} {s : Setoid α} [d : ∀ (a b : α), Decidable (a ≈ b)] : DecidableEq (Quotient s) :=
+instance Quotient.decidableEq {α : Sort u} {s : Setoid α} [d : ∀ (a b : α), Decidable (a ≈ b)]
+    : DecidableEq (Quotient s) :=
   fun (q₁ q₂ : Quotient s) =>
     Quotient.recOnSubsingleton₂ q₁ q₂
       fun a₁ a₂ =>
@@ -1816,16 +2268,13 @@ instance {α : Sort u} {s : Setoid α} [d : ∀ (a b : α), Decidable (a ≈ b)]
 /-! # Function extensionality -/
 
 /--
-**Function extensionality** is the statement that if two functions take equal values
-every point, then the functions themselves are equal: `(∀ x, f x = g x) → f = g`.
-It is called "extensionality" because it talks about how to prove two objects are equal
-based on the properties of the object (compare with set extensionality,
-which is `(∀ x, x ∈ s ↔ x ∈ t) → s = t`).
+**Function extensionality.** If two functions return equal results for all possible arguments, then
+they are equal.
 
-This is often an axiom in dependent type theory systems, because it cannot be proved
-from the core logic alone. However in lean's type theory this follows from the existence
-of quotient types (note the `Quot.sound` in the proof, as well as the `show` line
-which makes use of the definitional equality `Quot.lift f h (Quot.mk x) = f x`).
+It is called “extensionality” because it provides a way to prove two objects equal based on the
+properties of the underlying mathematical functions, rather than based on the syntax used to denote
+them. Function extensionality is a theorem that can be [proved using quotient
+types](lean-manual://section/quotient-funext).
 -/
 theorem funext {α : Sort u} {β : α → Sort v} {f g : (x : α) → β x}
     (h : ∀ x, f x = g x) : f = g := by
@@ -1834,37 +2283,80 @@ theorem funext {α : Sort u} {β : α → Sort v} {f g : (x : α) → β x}
     Quot.liftOn f
       (fun (f : ∀ (x : α), β x) => f x)
       (fun _ _ h => h x)
-  show extfunApp (Quot.mk eqv f) = extfunApp (Quot.mk eqv g)
+  change extfunApp (Quot.mk eqv f) = extfunApp (Quot.mk eqv g)
   exact congrArg extfunApp (Quot.sound h)
 
-instance {α : Sort u} {β : α → Sort v} [∀ a, Subsingleton (β a)] : Subsingleton (∀ a, β a) where
+/--
+Like `Quot.liftOn q f h` but allows `f a` to "know" that `q = Quot.mk r a`.
+-/
+protected abbrev Quot.pliftOn {α : Sort u} {r : α → α → Prop}
+    (q : Quot r)
+    (f : (a : α) → q = Quot.mk r a → β)
+    (h : ∀ (a b : α) (h h'), r a b → f a h = f b h') : β :=
+  q.rec (motive := fun q' => q = q' → β) f
+    (fun a b p => funext fun h' =>
+      (apply_eqRec (motive := fun b _ => q = b)).trans
+        (@h a b (h'.trans (sound p).symm) h' p)) rfl
+
+/--
+Like `Quotient.liftOn q f h` but allows `f a` to "know" that `q = Quotient.mk s a`.
+-/
+protected abbrev Quotient.pliftOn {α : Sort u} {s : Setoid α}
+    (q : Quotient s)
+    (f : (a : α) → q = Quotient.mk s a → β)
+    (h : ∀ (a b : α) (h h'), a ≈ b → f a h = f b h') : β :=
+  Quot.pliftOn q f h
+
+instance Pi.instSubsingleton {α : Sort u} {β : α → Sort v} [∀ a, Subsingleton (β a)] :
+    Subsingleton (∀ a, β a) where
   allEq f g := funext fun a => Subsingleton.elim (f a) (g a)
 
 /-! # Squash -/
 
+theorem equivalence_true (α : Sort u) : Equivalence fun _ _ : α => True :=
+  ⟨fun _ => trivial, fun _ => trivial, fun _ _ => trivial⟩
+
+/-- Always-true relation as a `Setoid`. -/
+protected def Setoid.trivial (α : Sort u) : Setoid α :=
+  ⟨_, equivalence_true α⟩
+
 /--
-`Squash α` is the quotient of `α` by the always true relation.
-It is empty if `α` is empty, otherwise it is a singleton.
-(Thus it is unconditionally a `Subsingleton`.)
-It is the "universal `Subsingleton`" mapped from `α`.
+The quotient of `α` by the universal relation. The elements of `Squash α` are those of `α`, but all
+of them are equal and cannot be distinguished.
 
-It is similar to `Nonempty α`, which has the same properties, but unlike
-`Nonempty` this is a `Type u`, that is, it is "data", and the compiler
-represents an element of `Squash α` the same as `α` itself
-(as compared to `Nonempty α`, whose elements are represented by a dummy value).
+`Squash α` is a `Subsingleton`: it is empty if `α` is empty, otherwise it has just one element. It
+is the “universal `Subsingleton`” mapped from `α`.
 
-`Squash.lift` will extract a value in any subsingleton `β` from a function on `α`,
-while `Nonempty.rec` can only do the same when `β` is a proposition.
+`Nonempty α` also has these properties. It is a proposition, which means that its elements (i.e.
+proofs) are erased from compiled code and represented by a dummy value. `Squash α` is a `Type u`,
+and its representation in compiled code is identical to that of `α`.
+
+Consequently, `Squash.lift` may extract an `α` value into any subsingleton type `β`, while
+`Nonempty.rec` can only do the same when `β` is a proposition.
+
+`Squash` is defined in terms of `Quotient`, so `Squash` can be used when a `Quotient` argument is
+expected.
 -/
-def Squash (α : Type u) := Quot (fun (_ _ : α) => True)
+def Squash (α : Sort u) := Quotient (Setoid.trivial α)
 
-/-- The canonical quotient map into `Squash α`. -/
-def Squash.mk {α : Type u} (x : α) : Squash α := Quot.mk _ x
+/--
+Places a value into its squash type, in which it cannot be distinguished from any other.
+-/
+def Squash.mk {α : Sort u} (x : α) : Squash α := Quot.mk _ x
 
-theorem Squash.ind {α : Type u} {motive : Squash α → Prop} (h : ∀ (a : α), motive (Squash.mk a)) : ∀ (q : Squash α), motive q :=
+/--
+A reasoning principle that allows proofs about squashed types to assume that all values are
+constructed with `Squash.mk`.
+-/
+theorem Squash.ind {α : Sort u} {motive : Squash α → Prop} (h : ∀ (a : α), motive (Squash.mk a)) : ∀ (q : Squash α), motive q :=
   Quot.ind h
 
-/-- If `β` is a subsingleton, then a function `α → β` lifts to `Squash α → β`. -/
+/--
+Extracts a squashed value into any subsingleton type.
+
+If `β` is a subsingleton, a function `α → β` cannot distinguish between elements of `α` and thus
+automatically respects the universal relation that `Squash` quotients with.
+-/
 @[inline] def Squash.lift {α β} [Subsingleton β] (s : Squash α) (f : α → β) : β :=
   Quot.lift f (fun _ _ _ => Subsingleton.elim _ _) s
 
@@ -1875,23 +2367,16 @@ instance : Subsingleton (Squash α) where
     apply Quot.sound
     trivial
 
-/-! # Relations -/
-
-/--
-`Antisymm (·≤·)` says that `(·≤·)` is antisymmetric, that is, `a ≤ b → b ≤ a → a = b`.
--/
-class Antisymm {α : Sort u} (r : α → α → Prop) : Prop where
-  /-- An antisymmetric relation `(·≤·)` satisfies `a ≤ b → b ≤ a → a = b`. -/
-  antisymm {a b : α} : r a b → r b a → a = b
-
 namespace Lean
 /-! # Kernel reduction hints -/
 
 /--
 Depends on the correctness of the Lean compiler, interpreter, and all `[implemented_by ...]` and `[extern ...]` annotations.
 -/
+@[deprecated "in-kernel native reduction is deprecated; assert native evaluations with axioms instead" (since := "2026-02-01")]
 axiom trustCompiler : True
 
+set_option linter.deprecated false in
 /--
 When the kernel tries to reduce a term `Lean.reduceBool c`, it will invoke the Lean interpreter to evaluate `c`.
 The kernel will not use the interpreter if `c` is not a constant.
@@ -1903,7 +2388,7 @@ free variables. The frontend automatically declares a fresh auxiliary constant `
 
 Warning: by using this feature, the Lean compiler and interpreter become part of your trusted code base.
 This is extra 30k lines of code. More importantly, you will probably not be able to check your development using
-external type checkers (e.g., Trepplein) that do not implement this feature.
+external type checkers that do not implement this feature.
 Keep in mind that if you are using Lean as programming language, you are already trusting the Lean compiler and interpreter.
 So, you are mainly losing the capability of type checking your development using external checkers.
 
@@ -1911,11 +2396,13 @@ Recall that the compiler trusts the correctness of all `[implemented_by ...]` an
 If an extern function is executed, then the trusted code base will also include the implementation of the associated
 foreign function.
 -/
+@[deprecated "in-kernel native reduction is deprecated; assert native evaluations with axioms instead" (since := "2026-02-01")]
 opaque reduceBool (b : Bool) : Bool :=
   -- This ensures that `#print axioms` will track use of `reduceBool`.
   have := trustCompiler
   b
 
+set_option linter.deprecated false in
 /--
 Similar to `Lean.reduceBool` for closed `Nat` terms.
 
@@ -1923,12 +2410,14 @@ Remark: we do not have plans for supporting a generic `reduceValue {α} (a : α)
 The main issue is that it is non-trivial to convert an arbitrary runtime object back into a Lean expression.
 We believe `Lean.reduceBool` enables most interesting applications (e.g., proof by reflection).
 -/
+@[deprecated "in-kernel native reduction is deprecated; assert native evaluations with axioms instead" (since := "2026-02-01")]
 opaque reduceNat (n : Nat) : Nat :=
   -- This ensures that `#print axioms` will track use of `reduceNat`.
   have := trustCompiler
   n
 
 
+set_option linter.deprecated false in
 /--
 The axiom `ofReduceBool` is used to perform proofs by reflection. See `reduceBool`.
 
@@ -1938,22 +2427,31 @@ decidability instance can be evaluated to `true` using the lean compiler / inter
 
 Warning: by using this feature, the Lean compiler and interpreter become part of your trusted code base.
 This is extra 30k lines of code. More importantly, you will probably not be able to check your development using
-external type checkers (e.g., Trepplein) that do not implement this feature.
+external type checkers that do not implement this feature.
 Keep in mind that if you are using Lean as programming language, you are already trusting the Lean compiler and interpreter.
 So, you are mainly losing the capability of type checking your development using external checkers.
 -/
+@[deprecated "in-kernel native reduction is deprecated; assert native evaluations with axioms instead" (since := "2026-02-01")]
 axiom ofReduceBool (a b : Bool) (h : reduceBool a = b) : a = b
 
+set_option linter.deprecated false in
 /--
 The axiom `ofReduceNat` is used to perform proofs by reflection. See `reduceBool`.
 
 Warning: by using this feature, the Lean compiler and interpreter become part of your trusted code base.
 This is extra 30k lines of code. More importantly, you will probably not be able to check your development using
-external type checkers (e.g., Trepplein) that do not implement this feature.
+external type checkers that do not implement this feature.
 Keep in mind that if you are using Lean as programming language, you are already trusting the Lean compiler and interpreter.
 So, you are mainly losing the capability of type checking your development using external checkers.
 -/
+@[deprecated "in-kernel native reduction is deprecated; assert native evaluations with axioms instead" (since := "2026-02-01")]
 axiom ofReduceNat (a b : Nat) (h : reduceNat a = b) : a = b
+
+
+/--
+The term `opaqueId x` will not be reduced by the kernel.
+-/
+opaque opaqueId {α : Sort u} (x : α) : α := x
 
 end Lean
 
@@ -1997,34 +2495,34 @@ class IdempotentOp (op : α → α → α) : Prop where
   idempotent : (x : α) → op x x = x
 
 /--
-`LeftIdentify op o` indicates `o` is a left identity of `op`.
+`LeftIdentity op o` indicates `o` is a left identity of `op`.
 
 This class does not require a proof that `o` is an identity, and
-is used primarily for infering the identity using class resoluton.
+is used primarily for inferring the identity using class resolution.
 -/
 class LeftIdentity (op : α → β → β) (o : outParam α) : Prop
 
 /--
-`LawfulLeftIdentify op o` indicates `o` is a verified left identity of
+`LawfulLeftIdentity op o` indicates `o` is a verified left identity of
 `op`.
 -/
-class LawfulLeftIdentity (op : α → β → β) (o : outParam α) extends LeftIdentity op o : Prop where
+class LawfulLeftIdentity (op : α → β → β) (o : outParam α) : Prop extends LeftIdentity op o where
   /-- Left identity `o` is an identity. -/
   left_id : ∀ a, op o a = a
 
 /--
-`RightIdentify op o` indicates `o` is a right identity `o` of `op`.
+`RightIdentity op o` indicates `o` is a right identity `o` of `op`.
 
 This class does not require a proof that `o` is an identity, and is used
-primarily for infering the identity using class resoluton.
+primarily for inferring the identity using class resolution.
 -/
 class RightIdentity (op : α → β → α) (o : outParam β) : Prop
 
 /--
-`LawfulRightIdentify op o` indicates `o` is a verified right identity of
+`LawfulRightIdentity op o` indicates `o` is a verified right identity of
 `op`.
 -/
-class LawfulRightIdentity (op : α → β → α) (o : outParam β) extends RightIdentity op o : Prop where
+class LawfulRightIdentity (op : α → β → α) (o : outParam β) : Prop extends RightIdentity op o where
   /-- Right identity `o` is an identity. -/
   right_id : ∀ a, op a o = a
 
@@ -2032,15 +2530,15 @@ class LawfulRightIdentity (op : α → β → α) (o : outParam β) extends Righ
 `Identity op o` indicates `o` is a left and right identity of `op`.
 
 This class does not require a proof that `o` is an identity, and is used
-primarily for infering the identity using class resoluton.
+primarily for inferring the identity using class resolution.
 -/
-class Identity (op : α → α → α) (o : outParam α) extends LeftIdentity op o, RightIdentity op o : Prop
+class Identity (op : α → α → α) (o : outParam α) : Prop extends LeftIdentity op o, RightIdentity op o
 
 /--
 `LawfulIdentity op o` indicates `o` is a verified left and right
 identity of `op`.
 -/
-class LawfulIdentity (op : α → α → α) (o : outParam α) extends Identity op o, LawfulLeftIdentity op o, LawfulRightIdentity op o : Prop
+class LawfulIdentity (op : α → α → α) (o : outParam α) : Prop extends Identity op o, LawfulLeftIdentity op o, LawfulRightIdentity op o
 
 /--
 `LawfulCommIdentity` can simplify defining instances of `LawfulIdentity`
@@ -2051,7 +2549,7 @@ This class is intended for simplifying defining instances of
 `LawfulIdentity` and functions needed commutative operations with
 identity should just add a `LawfulIdentity` constraint.
 -/
-class LawfulCommIdentity (op : α → α → α) (o : outParam α) [hc : Commutative op] extends LawfulIdentity op o : Prop where
+class LawfulCommIdentity (op : α → α → α) (o : outParam α) [hc : Commutative op] : Prop extends LawfulIdentity op o where
   left_id a := Eq.trans (hc.comm o a) (right_id a)
   right_id a := Eq.trans (hc.comm a o) (left_id a)
 
@@ -2059,4 +2557,47 @@ instance : Commutative Or := ⟨fun _ _ => propext or_comm⟩
 instance : Commutative And := ⟨fun _ _ => propext and_comm⟩
 instance : Commutative Iff := ⟨fun _ _ => propext iff_comm⟩
 
+/-- `Refl r` means the binary relation `r` is reflexive, that is, `r x x` always holds. -/
+class Refl (r : α → α → Prop) : Prop where
+  /-- A reflexive relation satisfies `r a a`. -/
+  refl : ∀ a, r a a
+
+/-- `Antisymm r` says that `r` is antisymmetric, that is, `r a b → r b a → a = b`. -/
+class Antisymm (r : α → α → Prop) : Prop where
+  /-- An antisymmetric relation `r` satisfies `r a b → r b a → a = b`. -/
+  antisymm (a b : α) : r a b → r b a → a = b
+
+/-- `Asymm r` means that the binary relation `r` is asymmetric, that is, `r a b → ¬ r b a`. -/
+class Asymm (r : α → α → Prop) : Prop where
+  /-- An asymmetric relation satisfies `r a b → ¬ r b a`. -/
+  asymm : ∀ a b, r a b → ¬r b a
+
+/-- `Symm r` means that the binary relation `r` is symmetric, that is, `r a b → r b a`.  -/
+class Symm (r : α → α → Prop) : Prop where
+  /-- A symmetric relation satisfies `r a b → r b a`. -/
+  symm : ∀ a b, r a b → r b a
+
+/-- `Total X r` means that the binary relation `r` on `X` is total, that is, `r a b` or `r b a`. -/
+class Total (r : α → α → Prop) : Prop where
+  /-- A total relation satisfies `r a b` or `r b a`. -/
+  total : ∀ a b, r a b ∨ r b a
+
+/-- `Irrefl r` means the binary relation `r` is irreflexive, that is, `r x x` never holds. -/
+class Irrefl (r : α → α → Prop) : Prop where
+  /-- An irreflexive relation satisfies `¬ r a a`. -/
+  irrefl : ∀ a, ¬r a a
+
+/-- `Trichotomous r` says that `r` is trichotomous, that is, `¬ r a b → ¬ r b a → a = b`. -/
+class Trichotomous (r : α → α → Prop) : Prop where
+  /-- An trichotomous relation `r` satisfies `¬ r a b → ¬ r b a → a = b`. -/
+  trichotomous (a b : α) : ¬ r a b → ¬ r b a → a = b
+
 end Std
+
+@[simp] theorem flip_flip {α : Sort u} {β : Sort v} {φ : Sort w} {f : α → β → φ} :
+    flip (flip f) = f := by
+  apply funext
+  intro a
+  apply funext
+  intro b
+  rw [flip, flip]

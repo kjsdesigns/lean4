@@ -5,14 +5,15 @@ Authors: Daniel Selsam, Leonardo de Moura
 
 Type class instance synthesizer using tabled resolution.
 -/
+module
 prelude
-import Init.Data.Array.InsertionSort
-import Lean.Meta.Basic
-import Lean.Meta.Instances
-import Lean.Meta.AbstractMVars
-import Lean.Meta.Check
-import Lean.Util.Profile
+public import Init.Data.Array.InsertionSort
+public import Lean.Meta.Instances
+public import Lean.Meta.AbstractMVars
+public import Lean.Meta.Check
+import Init.While
 
+public section
 namespace Lean.Meta
 
 register_builtin_option synthInstance.maxHeartbeats : Nat := {
@@ -27,7 +28,6 @@ register_builtin_option synthInstance.maxSize : Nat := {
 
 register_builtin_option backward.synthInstance.canonInstances : Bool := {
   defValue := true
-  group    := "backward compatibility"
   descr := "use optimization that relies on 'morally canonical' instances during type class resolution"
 }
 
@@ -135,7 +135,7 @@ partial def normExpr (e : Expr) : M Expr := do
     | .const _ us      => return e.updateConst! (← us.mapM normLevel)
     | .sort u          => return e.updateSort! (← normLevel u)
     | .app f a         => return e.updateApp! (← normExpr f) (← normExpr a)
-    | .letE _ t v b _  => return e.updateLet! (← normExpr t) (← normExpr v) (← normExpr b)
+    | .letE _ t v b _  => return e.updateLetE! (← normExpr t) (← normExpr v) (← normExpr b)
     | .forallE _ d b _ => return e.updateForallE! (← normExpr d) (← normExpr b)
     | .lam _ d b _     => return e.updateLambdaE! (← normExpr d) (← normExpr b)
     | .mdata _ b       => return e.updateMData! (← normExpr b)
@@ -186,7 +186,7 @@ structure State where
   result?        : Option AbstractMVarsResult    := none
   generatorStack : Array GeneratorNode           := #[]
   resumeStack    : Array (ConsumerNode × Answer) := #[]
-  tableEntries   : Std.HashMap Expr TableEntry       := {}
+  tableEntries   : Std.HashMap Expr TableEntry   := {}
 
 abbrev SynthM := ReaderT Context $ StateRefT State MetaM
 
@@ -207,14 +207,18 @@ def getInstances (type : Expr) : MetaM (Array Instance) := do
     | none   => throwError "type class instance expected{indentExpr type}"
     | some className =>
       let globalInstances ← getGlobalInstancesIndex
-      let result ← globalInstances.getUnify type tcDtConfig
+      let result ← globalInstances.getUnify type
       -- Using insertion sort because it is stable and the array `result` should be mostly sorted.
       -- Most instances have default priority.
       let result := result.insertionSort fun e₁ e₂ => e₁.priority < e₂.priority
       let erasedInstances ← getErasedInstances
+      let env ← getEnv
       let mut result ← result.filterMapM fun e => match e.val with
         | .const constName us =>
           if erasedInstances.contains constName then
+            return none
+          else if env.isExporting && !env.contains constName then
+            -- private instances must not leak into public scope
             return none
           else
             return some {
@@ -227,7 +231,7 @@ def getInstances (type : Expr) : MetaM (Array Instance) := do
           let synthOrder ← forallTelescopeReducing (← inferType linst.fvar) fun xs _ => do
             if xs.isEmpty then return #[]
             let mut order := #[]
-            for i in [:xs.size], x in xs do
+            for i in *...xs.size, x in xs do
               if (← getFVarLocalDecl x).binderInfo == .instImplicit then
                 order := order.push i
             return order
@@ -442,7 +446,7 @@ private def hasUnusedArguments : Expr → Bool
 
 /--
   If the type of the metavariable `mvar` has unused argument, return a pair `(α, transformer)`
-  where `α` is a new type without the unused arguments and the `transformer` is a function for coverting a
+  where `α` is a new type without the unused arguments and the `transformer` is a function for converting a
   solution with type `α` into a value that can be assigned to `mvar`.
   Example: suppose `mvar` has type `(a : A) → (b : B a) → (c : C a) → D a c`, the result is the pair
   ```
@@ -534,7 +538,7 @@ def consume (cNode : ConsumerNode) : SynthM Unit := do
          tableEntries := s.tableEntries.insert key { entry with waiters := entry.waiters.push waiter } }
 
 def getTop : SynthM GeneratorNode :=
-  return (← get).generatorStack.back
+  return (← get).generatorStack.back!
 
 @[inline] def modifyTop (f : GeneratorNode → GeneratorNode) : SynthM Unit :=
   modify fun s => { s with generatorStack := s.generatorStack.modify (s.generatorStack.size - 1) f }
@@ -547,7 +551,7 @@ def generate : SynthM Unit := do
   else
     let key  := gNode.key
     let idx  := gNode.currInstanceIdx - 1
-    let inst := gNode.instances.get! idx
+    let inst := gNode.instances[idx]!
     let mctx := gNode.mctx
     let mvar := gNode.mvar
     /- See comment at `typeHasMVars` -/
@@ -578,7 +582,7 @@ def generate : SynthM Unit := do
       return none
 
 def getNextToResume : SynthM (ConsumerNode × Answer) := do
-  let r := (← get).resumeStack.back
+  let r := (← get).resumeStack.back!
   modify fun s => { s with resumeStack := s.resumeStack.pop }
   return r
 
@@ -655,43 +659,120 @@ If it succeeds, and metavariables ?m_i have been assigned, we try to unify
 the original type `C a_1 ... a_n` with the normalized one.
 -/
 
-private def preprocess (type : Expr) : MetaM Expr :=
-  forallTelescopeReducing type fun xs type => do
-    let type ← whnf type
-    mkForallFVars xs type
+/-- Result kind for `preprocess` -/
+private inductive PreprocessKind where
+  | /--
+    Target type does not have metavariables.
+    We use the type to construct the cache key even if the class has output parameters.
+    Reason: we want to avoid the normalization step in this case.
+    -/
+    noMVars
+  | /-- Target type has metavariables, and class does not have output parameters. -/
+    mvarsNoOutputParams
+  | /-- Target type has metavariables, and class has output parameters. -/
+    mvarsOutputParams
 
-private partial def preprocessArgs (type : Expr) (i : Nat) (args : Array Expr) (outParamsPos : Array Nat) : MetaM (Array Expr) := do
-  if h : i < args.size then
-    let type ← whnf type
-    match type with
-    | .forallE _ d b _ => do
-      let arg := args.get ⟨i, h⟩
-      /-
-      We should not simply check `d.isOutParam`. See `checkOutParam` and issue #1852.
-      If an instance implicit argument depends on an `outParam`, it is treated as an `outParam` too.
-      -/
-      let arg ← if outParamsPos.contains i then mkFreshExprMVar d else pure arg
-      let args := args.set ⟨i, h⟩ arg
-      preprocessArgs (b.instantiate1 arg) (i+1) args outParamsPos
-    | _ =>
-      throwError "type class resolution failed, insufficient number of arguments" -- TODO improve error message
-  else
-    return args
+/-- Return type for `preprocess` -/
+private structure PreprocessResult where
+  type         : Expr
+  cacheKeyType : Expr := type
+  kind         : PreprocessKind
 
-private def preprocessOutParam (type : Expr) : MetaM Expr :=
+/--
+Returns `{ type, cacheKeyType, hasOutParams }`, where `type` is the normalized type, and `cacheKeyType`
+is part of the key for the type class resolution cache. If the class associated with `type`
+does not have output parameters, then, `cacheKeyType` is `type`.
+If it has, we replace arguments corresponding with output parameters with wildcard terms.
+
+For example, the cache key for a query like
+`HAppend.{0, 0, ?u} (BitVec 8) (BitVec 8) ?m` should be independent of the specific
+metavariable IDs in output parameter positions. To achieve this, output parameter arguments
+are erased from the cache key. However, universe levels that only appear in output parameter
+types (e.g., `?u` corresponding to the result type's universe) must also be erased to avoid
+cache misses when the same query is issued with different universe metavariable IDs.
+-/
+private def preprocess (type : Expr) : MetaM PreprocessResult :=
+  let keyExprWildcard := mkFVar { name := `__wild__  }
+  let keyLevelWildcard := mkLevelParam `__wild__
+  forallTelescopeReducing type fun xs typeBody => do
+    let typeBody ← whnf typeBody
+    let type ← mkForallFVars xs typeBody
+    if !type.hasMVar then return { type, kind := .noMVars }
+    /-
+    **Note**: Workaround for classes such as `class ToLevel.{u}`. They do not have any parameters,
+    the universe parameter inference engine at `Class.lean` assumes `u` is an output parameter,
+    but this is not correct. We can remove this check after we update `Class.lean` and perform an
+    update stage0
+    -/
+    if typeBody.isConst then return { type, kind := .mvarsNoOutputParams }
+    let c := typeBody.getAppFn
+    let .const declName us := c | return { type, kind := .mvarsNoOutputParams }
+    let env ← getEnv
+    let some outParamsPos := getOutParamPositions? env declName | return { type, kind := .mvarsNoOutputParams }
+    let some outLevelParamPos := getOutLevelParamPositions? env declName | unreachable!
+    if outParamsPos.isEmpty && outLevelParamPos.isEmpty then return { type, kind := .mvarsNoOutputParams }
+    let c := if outLevelParamPos.isEmpty then c else
+      let rec normLevels (us : List Level) (i : Nat) : List Level :=
+        match us with
+        | [] => []
+        | u :: us =>
+          let u := if i ∈ outLevelParamPos then keyLevelWildcard else u
+          u :: normLevels us (i+1)
+      mkConst declName (normLevels us 0)
+    let rec norm (e : Expr) (i : Nat) : Expr :=
+      match e with
+      | .app f a =>
+        let a := if i ∈ outParamsPos then keyExprWildcard else a
+        mkApp (norm f (i-1)) a
+      | _ => c
+    let typeBody := norm typeBody (typeBody.getAppNumArgs - 1)
+    let cacheKeyType ← mkForallFVars xs typeBody
+    return { type, cacheKeyType, kind := .mvarsOutputParams }
+
+private partial def preprocessOutParam (type : Expr) : MetaM Expr :=
   forallTelescope type fun xs typeBody => do
-    match typeBody.getAppFn with
-    | c@(.const declName _) =>
-      let env ← getEnv
-      if let some outParamsPos := getOutParamPositions? env declName then
-        unless outParamsPos.isEmpty do
-          let args := typeBody.getAppArgs
-          let cType ← inferType c
-          let args ← preprocessArgs cType 0 args outParamsPos
-          return (← mkForallFVars xs (mkAppN c args))
-      return type
-    | _ =>
-      return type
+    /- **Note**: See similar test at preprocess. -/
+    if typeBody.isConst then return type
+    let c := typeBody.getAppFn
+    let .const declName us := c | return type
+    let env ← getEnv
+    let some outParamsPos := getOutParamPositions? env declName | return type
+    let some outLevelParamPos := getOutLevelParamPositions? env declName | unreachable!
+    if outParamsPos.isEmpty && outLevelParamPos.isEmpty then return type
+    let c ← if outLevelParamPos.isEmpty then pure c else
+      -- Replace universe parameters corresponding to output parameters with fresh universe metavariables.
+      let rec preprocessLevels (us : List Level) (i : Nat) : MetaM (List Level) := do
+        match us with
+        | [] => return []
+        | u :: us =>
+          let u ← if i ∈ outLevelParamPos then mkFreshLevelMVar else pure u
+          let us ← preprocessLevels us (i+1)
+          return u :: us
+      pure <| mkConst declName (← preprocessLevels us 0)
+    let rec preprocessArgs (type : Expr) (i : Nat) (args : Array Expr) : MetaM (Array Expr) := do
+      if h : i < args.size then
+        let type ← whnf type
+        match type with
+        | .forallE _ d b _ => do
+          let arg := args[i]
+          /-
+          We should not simply check `d.isOutParam`. See `checkOutParam` and issue #1852.
+          If an instance implicit argument depends on an `outParam`, it is treated as an `outParam` too.
+          -/
+          let arg ← if outParamsPos.contains i then mkFreshExprMVar d else pure arg
+          let args := args.set i arg
+          preprocessArgs (b.instantiate1 arg) (i+1) args
+        | _ =>
+          throwError "type class resolution failed, insufficient number of arguments" -- TODO improve error message
+      else
+        return args
+    let args := typeBody.getAppArgs
+    if outParamsPos.isEmpty then
+      mkForallFVars xs (mkAppN c args)
+    else
+      let cType ← inferType c
+      let args ← preprocessArgs cType 0 args
+      mkForallFVars xs (mkAppN c args)
 
 /-!
   Remark: when `maxResultSize? == none`, the configuration option `synthInstance.maxResultSize` is used.
@@ -700,16 +781,28 @@ private def preprocessOutParam (type : Expr) : MetaM Expr :=
 
 private def assignOutParams (type : Expr) (result : Expr) : MetaM Bool := do
   let resultType ← inferType result
-  /- Output parameters of local instances may be marked as `syntheticOpaque` by the application-elaborator.
-      We use `withAssignableSyntheticOpaque` to make sure this kind of parameter can be assigned by the following `isDefEq`.
-      TODO: rewrite this check to avoid `withAssignableSyntheticOpaque`. -/
+  /-
+  Output parameters of local instances may be marked as `syntheticOpaque` by the application-elaborator.
+  We use `withAssignableSyntheticOpaque` to make sure this kind of parameter can be assigned by the following `isDefEq`.
+  TODO: rewrite this check to avoid `withAssignableSyntheticOpaque`.
+
+  **Note**: We tried to remove `withDefault` at the following `isDefEq` because it was a potential performance footgun. TC is supposed to unfold only `reducible` definitions and `instances`.
+  We reverted the change because it triggered thousands of failures related to the `OrderDual` type. Example:
+  ```
+  variable {ι : Type}
+  def OrderDual (α : Type) : Type := α
+  instance [I : DecidableEq ι] : DecidableEq (OrderDual ι) := inferInstance -- Failure
+  ```
+  Mathlib developers are currently trying to refactor the `OrderDual` declaration,
+  but it will take time. We will try to remove the `withDefault` again after the refactoring.
+  -/
   let defEq ← withDefault <| withAssignableSyntheticOpaque <| isDefEq type resultType
   unless defEq do
     trace[Meta.synthInstance] "{crossEmoji} result type{indentExpr resultType}\nis not definitionally equal to{indentExpr type}"
   return defEq
 
 /--
-Auxiliary function for converting the `AbstractMVarsResult` returned by `SynthIntance.main` into an `Expr`.
+Auxiliary function for converting the `AbstractMVarsResult` returned by `SynthInstance.main` into an `Expr`.
 -/
 private def applyAbstractResult? (type : Expr) (abstResult? : Option AbstractMVarsResult) : MetaM (Option Expr) := do
   let some abstResult := abstResult? | return none
@@ -745,14 +838,14 @@ private def applyAbstractResult? (type : Expr) (abstResult? : Option AbstractMVa
   return some result
 
 /--
-Auxiliary function for converting a cached `AbstractMVarsResult` returned by `SynthIntance.main` into an `Expr`.
+Auxiliary function for converting a cached `AbstractMVarsResult` returned by `SynthInstance.main` into an `Expr`.
 This function tries to avoid the potentially expensive `check` at `applyCachedAbstractResult?`.
 -/
 private def applyCachedAbstractResult? (type : Expr) (abstResult? : Option AbstractMVarsResult) : MetaM (Option Expr) := do
   let some abstResult := abstResult? | return none
   if abstResult.numMVars == 0 && abstResult.paramNames.isEmpty then
     /-
-    Result does not instroduce new metavariables, thus we don't need to perform (again)
+    Result does not introduce new metavariables, thus we don't need to perform (again)
     the `check` at `applyAbstractResult?`.
     This is an optimization.
     -/
@@ -763,43 +856,73 @@ private def applyCachedAbstractResult? (type : Expr) (abstResult? : Option Abstr
     applyAbstractResult? type abstResult?
 
 /-- Helper function for caching synthesized type class instances. -/
-private def cacheResult (cacheKey : SynthInstanceCacheKey) (abstResult? : Option AbstractMVarsResult) (result? : Option Expr) : MetaM Unit := do
-  match result? with
+private def cacheResult (cacheKey : SynthInstanceCacheKey) (kind : PreprocessKind) (abstResult? : Option AbstractMVarsResult) (result? : Option Expr) : MetaM Unit := do
+  -- **TODO**: simplify this function.
+  match abstResult? with
   | none => modify fun s => { s with cache.synthInstance := s.cache.synthInstance.insert cacheKey none }
-  | some result =>
-    let some abstResult := abstResult? | return ()
-    if abstResult.numMVars == 0 && abstResult.paramNames.isEmpty then
-      -- See `applyCachedAbstractResult?` If new metavariables have **not** been introduced,
-      -- we don't need to perform extra checks again when reusing result.
-      modify fun s => { s with cache.synthInstance := s.cache.synthInstance.insert cacheKey (some { expr := result, paramNames := #[], numMVars := 0 }) }
+  | some abstResult =>
+    if abstResult.numMVars == 0 && abstResult.paramNames.isEmpty && kind matches .noMVars | .mvarsNoOutputParams then
+      match result? with
+      | none => modify fun s => { s with cache.synthInstance := s.cache.synthInstance.insert cacheKey none }
+      | some result =>
+        -- See `applyCachedAbstractResult?` If new metavariables have **not** been introduced,
+        -- we don't need to perform extra checks again when reusing result.
+        modify fun s => { s with cache.synthInstance := s.cache.synthInstance.insert cacheKey (some { expr := result, paramNames := #[], mvars := #[] }) }
     else
       modify fun s => { s with cache.synthInstance := s.cache.synthInstance.insert cacheKey (some abstResult) }
 
-def synthInstance? (type : Expr) (maxResultSize? : Option Nat := none) : MetaM (Option Expr) := do profileitM Exception "typeclass inference" (← getOptions) (decl := type.getAppFn.constName?.getD .anonymous) do
+def synthInstanceCore? (type : Expr) (maxResultSize? : Option Nat := none) : MetaM (Option Expr) := do
   let opts ← getOptions
   let maxResultSize := maxResultSize?.getD (synthInstance.maxSize.get opts)
   withTraceNode `Meta.synthInstance
     (return m!"{exceptOptionEmoji ·} {← instantiateMVars type}") do
   withConfig (fun config => { config with isDefEqStuckEx := true, transparency := TransparencyMode.instances,
                                           foApprox := true, ctxApprox := true, constApprox := false, univApprox := false }) do
-  withReader (fun ctx => { ctx with inTypeClassResolution := true }) do
+  withInTypeClassResolution do
     let localInsts ← getLocalInstances
     let type ← instantiateMVars type
-    let type ← preprocess type
-    let cacheKey := { localInsts, type, synthPendingDepth := (← read).synthPendingDepth }
+    let { type, cacheKeyType, kind } ← preprocess type
+    let cacheKey := { localInsts, type := cacheKeyType, synthPendingDepth := (← read).synthPendingDepth }
     match (← get).cache.synthInstance.find? cacheKey with
     | some abstResult? =>
+      trace[Meta.synthInstance.cache] "cached: {type}"
       let result? ← applyCachedAbstractResult? type abstResult?
       trace[Meta.synthInstance] "result {result?} (cached)"
       return result?
     | none =>
+      trace[Meta.synthInstance.cache] "new: {type}"
       let abstResult? ← withNewMCtxDepth (allowLevelAssignments := true) do
-        let normType ← preprocessOutParam type
-        SynthInstance.main normType maxResultSize
+        match kind with
+        | .noMVars =>
+          /-
+          **Note**: The expensive `preprocessOutParam` step is morally **not** needed here because
+          the output params should be uniquely determined by the input params. During type class
+          resolution, definitional equality only unfolds `[reducible]` and `[implicit_reducible]`
+          declarations. This is a contract with our users to ensure performance is reasonable.
+          However, the same `OrderDual` declaration that creates problems for `assignOutParams`
+          also prevents us from using this optimization. As an example, suppose we are trying to
+          synthesize
+          ```
+          FunLike F (OrderDual α) (OrderDual β)
+          ```
+          where the last two arguments of `FunLike` are output parameters. This term has no
+          metavariables, and it seems natural to skip `preprocessOutParam`, which would replace
+          the last two arguments with metavariables. However, if we don't replace them,
+          TC resolution fails because it cannot unfold `OrderDual` since it is semireducible.
+
+          **Note**: We should remove `preprocessOutParam` from the following line as soon as
+          Mathlib refactors `OrderDual`.
+          -/
+          SynthInstance.main (← preprocessOutParam type) maxResultSize
+        | .mvarsNoOutputParams => SynthInstance.main type maxResultSize
+        | .mvarsOutputParams => SynthInstance.main (← preprocessOutParam type) maxResultSize
       let result? ← applyAbstractResult? type abstResult?
       trace[Meta.synthInstance] "result {result?}"
-      cacheResult cacheKey abstResult? result?
+      cacheResult cacheKey kind abstResult? result?
       return result?
+
+def synthInstance? (type : Expr) (maxResultSize? : Option Nat := none) : MetaM (Option Expr) := do profileitM Exception "typeclass inference" (← getOptions) (decl := type.getAppFn.constName?.getD .anonymous) do
+  synthInstanceCore? type maxResultSize?
 
 /--
   Return `LOption.some r` if succeeded, `LOption.none` if it failed, and `LOption.undef` if
@@ -839,7 +962,7 @@ private def synthPendingImp (mvarId : MVarId) : MetaM Bool := withIncRecDepth <|
         recordSynthPendingFailure mvarDecl.type
         return false
       else
-        withReader (fun ctx => { ctx with synthPendingDepth := ctx.synthPendingDepth + 1 }) do
+        withIncSynthPending do
           trace[Meta.synthPending] "synthPending {mkMVar mvarId}"
           let val? ← catchInternalId isDefEqStuckExceptionId (synthInstance? mvarDecl.type (maxResultSize? := none)) (fun _ => pure none)
           match val? with
@@ -852,14 +975,19 @@ private def synthPendingImp (mvarId : MVarId) : MetaM Bool := withIncRecDepth <|
               mvarId.assign val
               return true
 
+register_builtin_option trace.Meta.synthInstance : Bool := {
+  defValue := false
+  descr := "track the backtracking attempt to synthesize type class instances"
+}
+
 builtin_initialize
   registerTraceClass `Meta.synthPending
-  registerTraceClass `Meta.synthInstance
   registerTraceClass `Meta.synthInstance.instances (inherited := true)
   registerTraceClass `Meta.synthInstance.tryResolve (inherited := true)
   registerTraceClass `Meta.synthInstance.answer (inherited := true)
   registerTraceClass `Meta.synthInstance.resume (inherited := true)
   registerTraceClass `Meta.synthInstance.unusedArgs
   registerTraceClass `Meta.synthInstance.newAnswer
+  registerTraceClass `Meta.synthInstance.cache
 
 end Lean.Meta

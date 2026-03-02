@@ -3,9 +3,13 @@ Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Josh Clune
 -/
+module
+
 prelude
-import Init.Data.Hashable
-import Init.Data.ToString
+public import Init.Data.Hashable
+public import Init.Data.ToString
+
+@[expose] public section
 
 namespace Std
 namespace Sat
@@ -21,16 +25,8 @@ namespace Literal
 /--
 Flip the polarity of `l`.
 -/
-def negate (l : Literal α) : Literal α := (l.1, not l.2)
-
-/--
-Output `l` as a DIMACS literal identifier.
--/
-def dimacs [ToString α] (l : Literal α) : String :=
-  if l.2 then
-    s!"{l.1}"
-  else
-    s!"-{l.1}"
+@[inline, grind =]
+def negate (l : Literal α) : Literal α := (l.1, !l.2)
 
 end Literal
 

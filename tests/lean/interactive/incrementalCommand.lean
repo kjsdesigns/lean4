@@ -35,12 +35,13 @@ open Lean Elab Command in
 elab "wrap" num c:command : command => do
   elabCommand c
 
+   --v sync
    --v change: "1" "2"
 wrap 1 def wrapped := by
   dbg_trace "w"
 
 /-!
-The example used to result in nothing but "declaration uses 'sorry'" (and using the downstream
+The example used to result in nothing but "declaration uses `sorry`" (and using the downstream
 "unreachable tactic" linter, the `simp` would be flagged) as `simp` among other elaborators
 accidentally swallowed the interrupt exception.
 -/
@@ -67,3 +68,42 @@ import Init.Prelude
                  --^ insert: " "
                  --^ collectDiagnostics
 #eval "import"
+
+/-!
+`where` should not break incrementality
+(used to fail with "(kernel) declaration has metavariables '_example'")
+-/
+-- RESET
+example : False := by
+  trivial
+where
+  bar : True := by
+    trivial
+         --^ sync
+         --^ insert: " "
+         --^ collectDiagnostics
+
+/-!
+A reuse bug led to deletions after the header skipping a prefix of the next command on further edits
+-/
+-- RESET
+--asdf
+--^ delete: "a"
+--^ sync
+def f := 1  -- used to raise "unexpected identifier" after edit below because we would start parsing
+            -- on "ef"
+def g := 2
+   --^ insert: "g"
+   --^ collectDiagnostics
+
+/-!
+Example showing that we need to reparse at least two commands preceding a change; see note
+[Incremental Parsing].
+-/
+-- RESET
+structure Signature where
+  /-- a docstring -/
+  Sort : Type
+    --^ sync
+    --^ insert: "s"
+    --^ collectDiagnostics

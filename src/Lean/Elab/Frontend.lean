@@ -3,18 +3,21 @@ Copyright (c) 2019 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura, Sebastian Ullrich
 -/
+module
+
 prelude
-import Lean.Language.Lean
-import Lean.Util.Profile
-import Lean.Server.References
-import Lean.Util.Profiler
+public import Lean.Language.Lean
+public import Lean.Server.References
+public import Lean.Util.Profiler
+
+public section
 
 namespace Lean.Elab.Frontend
 
 structure State where
   commandState : Command.State
   parserState  : Parser.ModuleParserState
-  cmdPos       : String.Pos
+  cmdPos       : String.Pos.Raw
   commands     : Array Syntax := #[]
 deriving Nonempty
 
@@ -33,7 +36,6 @@ def setCommandState (commandState : Command.State) : FrontendM Unit :=
     cmdPos       := s.cmdPos
     fileName     := ctx.inputCtx.fileName
     fileMap      := ctx.inputCtx.fileMap
-    tacticCache? := none
     snap?        := none
     cancelTk?    := none
   }
@@ -43,10 +45,7 @@ def setCommandState (commandState : Command.State) : FrontendM Unit :=
 
 def elabCommandAtFrontend (stx : Syntax) : FrontendM Unit := do
   runCommandElabM do
-    let initMsgs ← modifyGet fun st => (st.messages, { st with messages := {} })
     Command.elabCommandTopLevel stx
-    let mut msgs := (← get).messages
-    modify ({ · with messages := initMsgs ++ msgs })
 
 def updateCmdPos : FrontendM Unit := do
   modify fun s => { s with cmdPos := s.parserState.pos }
@@ -102,7 +101,7 @@ partial def IO.processCommandsIncrementally (inputCtx : Parser.InputContext)
 where
   go initialSnap t commands :=
     let snap := t.get
-    let commands := commands.push snap.data.stx
+    let commands := commands.push snap
     if let some next := snap.nextCmdSnap? then
       go initialSnap next.task commands
     else
@@ -111,13 +110,15 @@ where
       let messages := toSnapshotTree initialSnap
         |>.getAll.map (·.diagnostics.msgLog)
         |>.foldl (· ++ ·) {}
-      let trees := toSnapshotTree initialSnap
-        |>.getAll.map (·.infoTree?) |>.filterMap id |>.toPArray'
+      -- In contrast to messages, we should collect info trees only from the top-level command
+      -- snapshots as they subsume any info trees reported incrementally by their children.
+      let trees := commands.map (·.elabSnap.infoTreeSnap.get.infoTree?) |>.filterMap id |>.toPArray'
       return {
-        commandState := { snap.data.finishedSnap.get.cmdState with messages, infoState.trees := trees }
-        parserState := snap.data.parserState
-        cmdPos := snap.data.parserState.pos
-        inputCtx, initialSnap, commands
+        commandState := { snap.elabSnap.resultSnap.get.cmdState with messages, infoState.trees := trees }
+        parserState := snap.parserState
+        cmdPos := snap.parserState.pos
+        commands := commands.map (·.stx)
+        inputCtx, initialSnap
       }
 
 def IO.processCommands (inputCtx : Parser.InputContext) (parserState : Parser.ModuleParserState)
@@ -131,43 +132,90 @@ def process (input : String) (env : Environment) (opts : Options) (fileName : Op
   let s ← IO.processCommands inputCtx { : Parser.ModuleParserState } (Command.mkState env {} opts)
   pure (s.commandState.env, s.commandState.messages)
 
-@[export lean_run_frontend]
 def runFrontend
     (input : String)
     (opts : Options)
     (fileName : String)
     (mainModuleName : Name)
     (trustLevel : UInt32 := 0)
-    (ileanFileName? : Option String := none)
+    (oleanFileName? : Option System.FilePath := none)
+    (ileanFileName? : Option System.FilePath := none)
     (jsonOutput : Bool := false)
-    : IO (Environment × Bool) := do
+    (errorOnKinds : Array Name := #[])
+    (plugins : Array System.FilePath := #[])
+    (printStats : Bool := false)
+    (setup? : Option ModuleSetup := none)
+    : IO (Option Environment) := do
   let startTime := (← IO.monoNanosNow).toFloat / 1000000000
   let inputCtx := Parser.mkInputContext input fileName
-  let opts := Language.Lean.internal.minimalSnapshots.set opts true
+  let opts := Lean.internal.cmdlineSnapshots.setIfNotSet opts true
+  -- default to async elaboration; see also `Elab.async` docs
+  let opts := Elab.async.setIfNotSet opts true
   let ctx := { inputCtx with }
+  let setup stx := do
+    if let some setup := setup? then
+      liftM <| setup.dynlibs.forM Lean.loadDynlib
+      return .ok {
+        trustLevel
+        package? := setup.package?
+        mainModuleName := setup.name
+        isModule := strictOr setup.isModule stx.isModule
+        imports := setup.imports?.getD stx.imports
+        plugins := plugins ++ setup.plugins
+        importArts := setup.importArts
+        -- override cmdline options with setup options
+        opts := opts.mergeBy (fun _ _ hOpt => hOpt) setup.options.toOptions
+      }
+    else
+      return .ok {
+        imports := stx.imports
+        isModule := stx.isModule
+        mainModuleName, opts, trustLevel, plugins
+      }
   let processor := Language.Lean.process
-  let snap ← processor (fun _ => pure <| .ok { mainModuleName, opts, trustLevel }) none ctx
+  let snap ← processor setup none ctx
   let snaps := Language.toSnapshotTree snap
-  snaps.runAndReport opts jsonOutput
+  let severityOverrides := errorOnKinds.foldl (·.insert · .error) {}
+
+  -- reporting should be done before any early exit from the function
+  let hasErrors ← snaps.runAndReport opts jsonOutput severityOverrides
+
+  let some cmdState := Language.Lean.waitForFinalCmdState? snap
+    | return none
+  let env := cmdState.env
+  let finalOpts := cmdState.scopes[0]!.opts
+
+  -- stats should be displayed even if there are (non-import) errors
+  if printStats then
+    env.displayStats
+
+  if hasErrors then
+    return none
+
+  if let some oleanFileName := oleanFileName? then
+    profileitIO ".olean serialization" finalOpts do
+      writeModule env oleanFileName
 
   if let some ileanFileName := ileanFileName? then
-    let trees := snaps.getAll.concatMap (match ·.infoTree? with | some t => #[t] | _ => #[])
+    let trees := snaps.getAll.flatMap (match ·.infoTree? with | some t => #[t] | _ => #[])
     let references := Lean.Server.findModuleRefs inputCtx.fileMap trees (localVars := false)
-    let ilean := { module := mainModuleName, references := ← references.toLspModuleRefs : Lean.Server.Ilean }
+    let (moduleRefs, decls) ← references.toLspModuleRefs
+    let ilean := {
+      module        := mainModuleName
+      directImports := Server.collectImports ⟨snap.stx⟩
+      references    := moduleRefs
+      decls
+      : Lean.Server.Ilean
+    }
     IO.FS.writeFile ileanFileName $ Json.compress $ toJson ilean
 
-  -- TODO: remove default when reworking cmdline interface in Lean; currently the only case
-  -- where we use the environment despite errors in the file is `--stats`
-  let some cmdState := Language.Lean.waitForFinalCmdState? snap
-    | return (← mkEmptyEnvironment, false)
-
   if let some out := trace.profiler.output.get? opts then
-    let traceState := cmdState.traceState
-    let profile ← Firefox.Profile.export mainModuleName.toString startTime traceState opts
+    let traceStates := snaps.getAll.map (·.traces)
+    let profile ← Firefox.Profile.export mainModuleName.toString startTime traceStates opts
     IO.FS.writeFile ⟨out⟩ <| Json.compress <| toJson profile
 
-  let hasErrors := snaps.getAll.any (·.diagnostics.msgLog.hasErrors)
-  pure (cmdState.env, !hasErrors)
-
+  -- no point in freeing the snapshot graph and all referenced data this close to process exit
+  Runtime.forget snaps
+  return some env
 
 end Lean.Elab

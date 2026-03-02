@@ -1,4 +1,0 @@
-mvarAtDefaultValue.lean:5:2-5:3: error: invalid default value for field, it contains metavariables
-  ?m
-mvarAtDefaultValue.lean:8:2-8:3: error: invalid default value for field, it contains metavariables
-  ?m + 1

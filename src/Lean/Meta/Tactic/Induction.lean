@@ -3,15 +3,16 @@ Copyright (c) 2020 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura
 -/
+module
 prelude
-import Lean.Meta.RecursorInfo
-import Lean.Meta.SynthInstance
-import Lean.Meta.Tactic.Util
-import Lean.Meta.Tactic.Revert
-import Lean.Meta.Tactic.Intro
-import Lean.Meta.Tactic.Clear
-import Lean.Meta.Tactic.FVarSubst
-
+public import Lean.Meta.RecursorInfo
+public import Lean.Meta.SynthInstance
+public import Lean.Meta.Tactic.Revert
+public import Lean.Meta.Tactic.Intro
+public import Lean.Meta.Tactic.FVarSubst
+import Lean.Meta.WHNF
+import Init.Omega
+public section
 namespace Lean.Meta
 
 private partial def getTargetArity : Expr → Nat
@@ -23,7 +24,7 @@ private def addRecParams (mvarId : MVarId) (majorTypeArgs : Array Expr) : List (
   | [], recursor => pure recursor
   | some pos :: rest, recursor =>
     if h : pos < majorTypeArgs.size then
-      addRecParams mvarId majorTypeArgs rest (mkApp recursor (majorTypeArgs.get ⟨pos, h⟩))
+      addRecParams mvarId majorTypeArgs rest (mkApp recursor (majorTypeArgs[pos]))
     else
       throwTacticEx `induction mvarId "ill-formed recursor"
   | none :: rest, recursor => do
@@ -71,7 +72,8 @@ private partial def finalize
           pure (recursor, recursorType)
         let recursor := mkApp recursor major
         let recursorType ← getTypeBody mvarId recursorType major
-        loop (pos+1+indices.size) minorIdx recursor recursorType true subgoals
+        let consumedMajor := true
+        loop (pos+1+indices.size) minorIdx recursor recursorType consumedMajor subgoals
       else
         -- consume motive
         let tag ← mvarId.getTag
@@ -79,6 +81,7 @@ private partial def finalize
         match recursorType with
         | Expr.forallE n d _ c =>
           let d := d.headBeta
+          let tag' := if numMinors == 1 then tag else tag ++ n.eraseMacroScopes
           -- Remark is givenNames is not empty, then user provided explicit alternatives for each minor premise
           if c.isInstImplicit && givenNames.isEmpty then
             match (← synthInstance? d) with
@@ -88,7 +91,7 @@ private partial def finalize
               loop (pos+1) (minorIdx+1) recursor recursorType consumedMajor subgoals
             | none => do
               -- Add newSubgoal if type class resolution failed
-              let mvar ← mkFreshExprSyntheticOpaqueMVar d (tag ++ n)
+              let mvar ← mkFreshExprSyntheticOpaqueMVar d tag'
               let recursor := mkApp recursor mvar
               let recursorType ← getTypeBody mvarId recursorType mvar
               loop (pos+1) (minorIdx+1) recursor recursorType consumedMajor (subgoals.push { mvarId := mvar.mvarId! })
@@ -97,26 +100,28 @@ private partial def finalize
             if arity < initialArity then throwTacticEx `induction mvarId "ill-formed recursor"
             let nparams := arity - initialArity -- number of fields due to minor premise
             let nextra  := reverted.size - indices.size - 1 -- extra dependencies that have been reverted
-            let minorGivenNames := if h : minorIdx < givenNames.size then givenNames.get ⟨minorIdx, h⟩ else {}
-            let mvar ← mkFreshExprSyntheticOpaqueMVar d (tag ++ n)
+            let minorGivenNames := if h : minorIdx < givenNames.size then givenNames[minorIdx] else {}
+            let mvar ← mkFreshExprSyntheticOpaqueMVar d tag'
             let recursor := mkApp recursor mvar
             let recursorType ← getTypeBody mvarId recursorType mvar
             -- Try to clear major premise from new goal
+            trace[Meta.Tactic.induction] "name of major premise: {major.fvarId!.name}"
             let mvarId' ← mvar.mvarId!.tryClear major.fvarId!
             let (fields, mvarId') ←  mvarId'.introN nparams minorGivenNames.varNames (useNamesForExplicitOnly := !minorGivenNames.explicit)
             let (extra,  mvarId') ← mvarId'.introNP nextra
-            let subst := reverted.size.fold (init := baseSubst) fun i (subst : FVarSubst) =>
+            let subst := reverted.size.fold (init := baseSubst) fun i _ (subst : FVarSubst) =>
               if i < indices.size + 1 then subst
               else
-                let revertedFVarId := reverted[i]!
+                let revertedFVarId := reverted[i]
                 let newFVarId      := extra[i - indices.size - 1]!
                 subst.insert revertedFVarId (mkFVar newFVarId)
             let fields := fields.map mkFVar
-            loop (pos+1) (minorIdx+1) recursor recursorType consumedMajor (subgoals.push { mvarId := mvarId', fields := fields, subst := subst })
+            loop (pos+1) (minorIdx+1) recursor recursorType consumedMajor (subgoals.push { mvarId := mvarId', fields, subst})
         | _ => unreachable!
     else
       unless consumedMajor do throwTacticEx `induction mvarId "ill-formed recursor"
       mvarId.assign recursor
+      trace[Meta.Tactic.induction] "finalize loop is done, {subgoals.size} subgoals"
       pure subgoals
   loop (recursorInfo.paramsPos.length + 1) 0 recursor recursorType false #[]
 
@@ -131,23 +136,25 @@ Remark: `mvarId` and `tacticName` are used to generate error messages.
 def getMajorTypeIndices (mvarId : MVarId) (tacticName : Name) (recursorInfo : RecursorInfo) (majorType : Expr) : MetaM (Array Expr) := do
   let majorTypeArgs := majorType.getAppArgs
   recursorInfo.indicesPos.toArray.mapM fun idxPos => do
-    if idxPos ≥ majorTypeArgs.size then throwTacticEx tacticName mvarId m!"major premise type is ill-formed{indentExpr majorType}"
-    let idx := majorTypeArgs.get! idxPos
-    unless idx.isFVar do throwTacticEx tacticName mvarId m!"major premise type index {idx} is not a variable{indentExpr majorType}"
-    majorTypeArgs.size.forM fun i => do
-      let arg := majorTypeArgs[i]!
-      if i != idxPos && arg == idx then
-        throwTacticEx tacticName mvarId m!"'{idx}' is an index in major premise, but it occurs more than once{indentExpr majorType}"
-      if i < idxPos then
-        if (← exprDependsOn arg idx.fvarId!) then
-          throwTacticEx tacticName mvarId m!"'{idx}' is an index in major premise, but it occurs in previous arguments{indentExpr majorType}"
-      -- If arg is also and index and a variable occurring after `idx`, we need to make sure it doesn't depend on `idx`.
-      -- Note that if `arg` is not a variable, we will fail anyway when we visit it.
-      if i > idxPos && recursorInfo.indicesPos.contains i && arg.isFVar then
-        let idxDecl ← idx.fvarId!.getDecl
-        if (← localDeclDependsOn idxDecl arg.fvarId!) then
-          throwTacticEx tacticName mvarId m!"'{idx}' is an index in major premise, but it depends on index occurring at position #{i+1}"
-    return idx
+    if h : idxPos ≥ majorTypeArgs.size then
+      throwTacticEx tacticName mvarId m!"major premise type is ill-formed{indentExpr majorType}"
+    else
+      let idx := majorTypeArgs[idxPos]
+      unless idx.isFVar do throwTacticEx tacticName mvarId m!"major premise type index {idx} is not a variable{indentExpr majorType}"
+      majorTypeArgs.size.forM fun i _ => do
+        let arg := majorTypeArgs[i]
+        if i != idxPos && arg == idx then
+          throwTacticEx tacticName mvarId m!"'{idx}' is an index in major premise, but it occurs more than once{indentExpr majorType}"
+        if i < idxPos then
+          if (← exprDependsOn arg idx.fvarId!) then
+            throwTacticEx tacticName mvarId m!"'{idx}' is an index in major premise, but it occurs in previous arguments{indentExpr majorType}"
+        -- If arg is also and index and a variable occurring after `idx`, we need to make sure it doesn't depend on `idx`.
+        -- Note that if `arg` is not a variable, we will fail anyway when we visit it.
+        if i > idxPos && recursorInfo.indicesPos.contains i && arg.isFVar then
+          let idxDecl ← idx.fvarId!.getDecl
+          if (← localDeclDependsOn idxDecl arg.fvarId!) then
+            throwTacticEx tacticName mvarId m!"'{idx}' is an index in major premise, but it depends on index occurring at position #{i+1}"
+      return idx
 
 /--
 Auxiliary method for implementing `induction`-like tactics.
@@ -173,10 +180,13 @@ def mkRecursorAppPrefix (mvarId : MVarId) (tacticName : Name) (majorFVarId : FVa
             match univPos with
             | RecursorUnivLevelPos.motive => pure (recursorLevels.push targetLevel, true)
             | RecursorUnivLevelPos.majorType idx =>
-              if idx ≥ majorTypeFnLevels.size then throwTacticEx tacticName mvarId "ill-formed recursor"
-              pure (recursorLevels.push (majorTypeFnLevels.get! idx), foundTargetLevel)
+              if h : idx ≥ majorTypeFnLevels.size then
+                throwTacticEx tacticName mvarId "ill-formed recursor"
+              else
+                pure (recursorLevels.push majorTypeFnLevels[idx], foundTargetLevel)
       if !foundTargetLevel && !targetLevel.isZero then
-        throwTacticEx tacticName mvarId m!"recursor '{recursorInfo.recursorName}' can only eliminate into Prop"
+        throwNamedError lean.propRecLargeElim
+          (mkTacticExMsg tacticName mvarId m!"recursor `{recursorInfo.recursorName}` can only eliminate into `Prop`")
       let recursor := mkConst recursorInfo.recursorName recursorLevels.toList
       let recursor ← addRecParams mvarId majorTypeArgs recursorInfo.paramsPos recursor
       -- Compute motive
@@ -212,9 +222,10 @@ def _root_.Lean.MVarId.induction (mvarId : MVarId) (majorFVarId : FVarId) (recur
       -- Re-introduce indices and major
       let (indices', mvarId) ← mvarId.introNP indices.size
       let (majorFVarId', mvarId) ← mvarId.intro1P
-      -- Create FVarSubst with indices
+      -- Create FVarSubst with indices and major
       let baseSubst := Id.run do
         let mut subst : FVarSubst := {}
+        subst := subst.insert majorFVarId (mkFVar majorFVarId')
         let mut i := 0
         for index in indices do
           subst := subst.insert index.fvarId! (mkFVar indices'[i]!)
@@ -223,10 +234,9 @@ def _root_.Lean.MVarId.induction (mvarId : MVarId) (majorFVarId : FVarId) (recur
       trace[Meta.Tactic.induction] "after revert&intro\n{MessageData.ofGoal mvarId}"
       -- Update indices and major
       let indices := indices'.map mkFVar
-      let majorFVarId := majorFVarId'
-      let major := mkFVar majorFVarId
+      let major := mkFVar majorFVarId'
       mvarId.withContext do
-        let recursor ← mkRecursorAppPrefix mvarId `induction majorFVarId recursorInfo indices
+        let recursor ← mkRecursorAppPrefix mvarId `induction majorFVarId' recursorInfo indices
         finalize mvarId givenNames recursorInfo reverted major indices baseSubst recursor
 
 builtin_initialize registerTraceClass `Meta.Tactic.induction

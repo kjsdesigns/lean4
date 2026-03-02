@@ -1,13 +1,21 @@
 /-
 Copyright (c) 2023 Lean FRO, LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
-Authors: Scott Morrison
+Authors: Kim Morrison
 -/
+module
+
 prelude
-import Lean.Elab.Tactic.Omega.Core
-import Lean.Elab.Tactic.FalseOrByContra
-import Lean.Meta.Tactic.Cases
-import Lean.Elab.Tactic.Config
+public import Lean.Elab.Tactic.Omega.Core
+public import Lean.Elab.Tactic.FalseOrByContra
+public import Lean.Elab.Tactic.Config
+public import Lean.Meta.Tactic.Simp.Attr
+import Lean.Elab.Tactic.BuiltinTactic
+import Init.Data.Int.Pow
+import Init.Data.List.MapIdx
+import Init.Data.Nat.Dvd
+
+public section
 
 /-!
 # Frontend to the `omega` tactic.
@@ -69,9 +77,9 @@ def mkEvalRflProof (e : Expr) (lc : LinearCombo) : OmegaM Expr := do
 def mkCoordinateEvalAtomsEq (e : Expr) (n : Nat) : OmegaM Expr := do
   if n < 10 then
     let atoms ← atoms
-    let tail ← mkListLit (.const ``Int []) atoms[n+1:].toArray.toList
+    let tail ← mkListLit (.const ``Int []) atoms[n<...*].toArray.toList
     let lem := .str ``LinearCombo s!"coordinate_eval_{n}"
-    mkEqSymm (mkAppN (.const lem []) (atoms[:n+1].toArray.push tail))
+    mkEqSymm (mkAppN (.const lem []) (atoms[*...=n].toArray.push tail))
   else
     let atoms ← atomsCoeffs
     let n := toExpr n
@@ -80,7 +88,7 @@ def mkCoordinateEvalAtomsEq (e : Expr) (n : Nat) : OmegaM Expr := do
     mkEqTrans eq (← mkEqSymm (mkApp2 (.const ``LinearCombo.coordinate_eval []) n atoms))
 
 /-- Construct the linear combination (and its associated proof and new facts) for an atom. -/
-def mkAtomLinearCombo (e : Expr) : OmegaM (LinearCombo × OmegaM Expr × Std.HashSet Expr) := do
+def mkAtomLinearCombo (e : Expr) : OmegaM (LinearCombo × OmegaM Expr × List Expr) := do
   let (n, facts) ← lookup e
   return ⟨LinearCombo.coordinate n, mkCoordinateEvalAtomsEq e n, facts.getD ∅⟩
 
@@ -94,16 +102,16 @@ Gives a small (10%) speedup in testing.
 I tried using a pointer based cache,
 but there was never enough subexpression sharing to make it effective.
 -/
-partial def asLinearCombo (e : Expr) : OmegaM (LinearCombo × OmegaM Expr × Std.HashSet Expr) := do
+partial def asLinearCombo (e : Expr) : OmegaM (LinearCombo × OmegaM Expr × List Expr) := do
   let cache ← get
   match cache.get? e with
   | some (lc, prf) =>
     trace[omega] "Found in cache: {e}"
     return (lc, prf, ∅)
   | none =>
-    let r ← asLinearComboImpl e
-    modifyThe Cache fun cache => (cache.insert e (r.1, r.2.1.run' cache))
-    pure r
+    let (lc, proof, r) ← asLinearComboImpl e
+    modifyThe Cache fun cache => (cache.insert e (lc, proof.run' cache))
+    pure (lc, proof, r)
 
 /--
 Translates an expression into a `LinearCombo`.
@@ -120,7 +128,7 @@ We also transform the expression as we descend into it:
 * pushing coercions: `↑(x + y)`, `↑(x * y)`, `↑(x / k)`, `↑(x % k)`, `↑k`
 * unfolding `emod`: `x % k` → `x - x / k`
 -/
-partial def asLinearComboImpl (e : Expr) : OmegaM (LinearCombo × OmegaM Expr × Std.HashSet Expr) := do
+partial def asLinearComboImpl (e : Expr) : OmegaM (LinearCombo × OmegaM Expr × List Expr) := do
   trace[omega] "processing {e}"
   match groundInt? e with
   | some i =>
@@ -142,7 +150,7 @@ partial def asLinearComboImpl (e : Expr) : OmegaM (LinearCombo × OmegaM Expr ×
       mkEqTrans
         (← mkAppM ``Int.add_congr #[← prf₁, ← prf₂])
         (← mkEqSymm add_eval)
-    pure (l₁ + l₂, prf, facts₁.union facts₂)
+    pure (l₁ + l₂, prf, facts₁ ++ facts₂)
   | (``HSub.hSub, #[_, _, _, _, e₁, e₂]) => do
     let (l₁, prf₁, facts₁) ← asLinearCombo e₁
     let (l₂, prf₂, facts₂) ← asLinearCombo e₂
@@ -152,7 +160,7 @@ partial def asLinearComboImpl (e : Expr) : OmegaM (LinearCombo × OmegaM Expr ×
       mkEqTrans
         (← mkAppM ``Int.sub_congr #[← prf₁, ← prf₂])
         (← mkEqSymm sub_eval)
-    pure (l₁ - l₂, prf, facts₁.union facts₂)
+    pure (l₁ - l₂, prf, facts₁ ++ facts₂)
   | (``Neg.neg, #[_, _, e']) => do
     let (l, prf, facts) ← asLinearCombo e'
     let prf' : OmegaM Expr := do
@@ -178,7 +186,7 @@ partial def asLinearComboImpl (e : Expr) : OmegaM (LinearCombo × OmegaM Expr ×
           mkEqTrans
             (← mkAppM ``Int.mul_congr #[← xprf, ← yprf])
             (← mkEqSymm mul_eval)
-        pure (some (LinearCombo.mul xl yl, prf, xfacts.union yfacts), true)
+        pure (some (LinearCombo.mul xl yl, prf, xfacts ++ yfacts), true)
       else
         pure (none, false)
     match r? with
@@ -229,13 +237,14 @@ partial def asLinearComboImpl (e : Expr) : OmegaM (LinearCombo × OmegaM Expr ×
     | .app (.app (.app (.app (.const ``Prod.mk [u, v]) _) _) x) y =>
       rewrite e (mkApp4 (.const ``Prod.snd_mk [u, v]) α x β y)
     | _ => mkAtomLinearCombo e
+  | (``Int.negSucc, #[n]) => rewrite e (mkApp (.const ``Int.negSucc_eq []) n)
   | _ => mkAtomLinearCombo e
 where
   /--
   Apply a rewrite rule to an expression, and interpret the result as a `LinearCombo`.
   (We're not rewriting any subexpressions here, just the top level, for efficiency.)
   -/
-  rewrite (lhs rw : Expr) : OmegaM (LinearCombo × OmegaM Expr × Std.HashSet Expr) := do
+  rewrite (lhs rw : Expr) : OmegaM (LinearCombo × OmegaM Expr × List Expr) := do
     trace[omega] "rewriting {lhs} via {rw} : {← inferType rw}"
     match (← inferType rw).eq? with
     | some (_, _lhs', rhs) =>
@@ -243,7 +252,7 @@ where
       let prf' : OmegaM Expr := do mkEqTrans rw (← prf)
       pure (lc, prf', facts)
     | none => panic! "Invalid rewrite rule in 'asLinearCombo'"
-  handleNatCast (e i n : Expr) : OmegaM (LinearCombo × OmegaM Expr × Std.HashSet Expr) := do
+  handleNatCast (e i n : Expr) : OmegaM (LinearCombo × OmegaM Expr × List Expr) := do
     match n with
     | .fvar h =>
       if let some v ← h.getValue? then
@@ -252,22 +261,15 @@ where
       else
         mkAtomLinearCombo e
     | _ => match n.getAppFnArgs with
-    | (``Nat.succ, #[n]) => rewrite e (.app (.const ``Int.ofNat_succ []) n)
-    | (``HAdd.hAdd, #[_, _, _, _, a, b]) => rewrite e (mkApp2 (.const ``Int.ofNat_add []) a b)
+    | (``Nat.succ, #[n]) => rewrite e (.app (.const ``Int.natCast_succ []) n)
+    | (``HAdd.hAdd, #[_, _, _, _, a, b]) => rewrite e (mkApp2 (.const ``Int.natCast_add []) a b)
     | (``HMul.hMul, #[_, _, _, _, a, b]) =>
-      -- Don't push the cast into a multiplication unless it produces a non-trivial linear combination.
-      let r? ← commitWhen do
-        let (lc, prf, r) ← rewrite e (mkApp2 (.const ``Int.ofNat_mul []) a b)
-        if lc.isAtom then
-          pure (none, false)
-        else
-          pure (some (lc, prf, r), true)
-      match r? with
-      | some r => pure r
-      | none => mkAtomLinearCombo e
-    | (``HDiv.hDiv, #[_, _, _, _, a, b]) => rewrite e (mkApp2 (.const ``Int.ofNat_ediv []) a b)
+      let (lc, prf, r) ← rewrite e (mkApp2 (.const ``Int.natCast_mul []) a b)
+      -- Add the fact that the multiplication is non-negative.
+      pure (lc, prf, r.insert (mkApp2 (.const ``Int.ofNat_mul_nonneg []) a b))
+    | (``HDiv.hDiv, #[_, _, _, _, a, b]) => rewrite e (mkApp2 (.const ``Int.natCast_ediv []) a b)
     | (``OfNat.ofNat, #[_, n, _]) => rewrite e (.app (.const ``Int.natCast_ofNat []) n)
-    | (``HMod.hMod, #[_, _, _, _, a, b]) => rewrite e (mkApp2 (.const ``Int.ofNat_emod []) a b)
+    | (``HMod.hMod, #[_, _, _, _, a, b]) => rewrite e (mkApp2 (.const ``Int.natCast_emod []) a b)
     | (``HSub.hSub, #[_, _, _, _, mkApp6 (.const ``HSub.hSub _) _ _ _ _ a b, c]) =>
       rewrite e (mkApp3 (.const ``Int.ofNat_sub_sub []) a b c)
     | (``HPow.hPow, #[_, _, _, _, a, b]) =>
@@ -284,6 +286,7 @@ where
       | _ => mkAtomLinearCombo e
     | (``Min.min, #[_, _, a, b]) => rewrite e (mkApp2 (.const ``Int.ofNat_min []) a b)
     | (``Max.max, #[_, _, a, b]) => rewrite e (mkApp2 (.const ``Int.ofNat_max []) a b)
+    | (``Int.toNat, #[n]) => rewrite e (mkApp (.const ``Int.toNat_eq_max []) n)
     | (``HShiftLeft.hShiftLeft, #[_, _, _, _, a, b]) =>
       rewrite e (mkApp2 (.const ``Int.ofNat_shiftLeft_eq []) a b)
     | (``HShiftRight.hShiftRight, #[_, _, _, _, a, b]) =>
@@ -296,7 +299,7 @@ where
     | (``Fin.val, #[n, x]) =>
       handleFinVal e i n x
     | _ => mkAtomLinearCombo e
-  handleFinVal (e i n x : Expr) : OmegaM (LinearCombo × OmegaM Expr × Std.HashSet Expr) := do
+  handleFinVal (e i n x : Expr) : OmegaM (LinearCombo × OmegaM Expr × List Expr) := do
     match x with
     | .fvar h =>
       if let some v ← h.getValue? then
@@ -329,7 +332,7 @@ where
 end
 namespace MetaProblem
 
-/-- The trivial `MetaProblem`, with no facts to processs and a trivial `Problem`. -/
+/-- The trivial `MetaProblem`, with no facts to process and a trivial `Problem`. -/
 def trivial : MetaProblem where
   problem := {}
 
@@ -342,12 +345,11 @@ We solve equalities as they are discovered, as this often results in an earlier 
 -/
 def addIntEquality (p : MetaProblem) (h x : Expr) : OmegaM MetaProblem := do
   let (lc, prf, facts) ← asLinearCombo x
-  let newFacts : Std.HashSet Expr := facts.fold (init := ∅) fun s e =>
-    if p.processedFacts.contains e then s else s.insert e
+  let newFacts : List Expr := facts.filter (p.processedFacts.contains · = false)
   trace[omega] "Adding proof of {lc} = 0"
   pure <|
   { p with
-    facts := newFacts.toList ++ p.facts
+    facts := newFacts ++ p.facts
     problem := ← (p.problem.addEquality lc.const lc.coeffs
       (some do mkEqTrans (← mkEqSymm (← prf)) h)) |>.solveEqualities }
 
@@ -358,12 +360,11 @@ We solve equalities as they are discovered, as this often results in an earlier 
 -/
 def addIntInequality (p : MetaProblem) (h y : Expr) : OmegaM MetaProblem := do
   let (lc, prf, facts) ← asLinearCombo y
-  let newFacts : Std.HashSet Expr := facts.fold (init := ∅) fun s e =>
-    if p.processedFacts.contains e then s else s.insert e
+  let newFacts : List Expr := facts.filter (p.processedFacts.contains · = false)
   trace[omega] "Adding proof of {lc} ≥ 0"
   pure <|
   { p with
-    facts := newFacts.toList ++ p.facts
+    facts := newFacts ++ p.facts
     problem := ← (p.problem.addInequality lc.const lc.coeffs
       (some do mkAppM ``le_of_le_of_eq #[h, (← prf)])) |>.solveEqualities }
 
@@ -429,10 +430,11 @@ partial def addFact (p : MetaProblem) (h : Expr) : OmegaM (MetaProblem × Nat) :
     trace[omega] "adding fact: {t}"
     match t with
     | .forallE _ x y _ =>
-      if (← isProp x) && (← isProp y) then
+      if ← pure t.isArrow <&&> isProp x <&&> isProp y then
         p.addFact (mkApp4 (.const ``Decidable.not_or_of_imp []) x y
           (.app (.const ``Classical.propDecidable []) x) h)
       else
+        trace[omega] "rejecting forall: it's not an arrow, or not propositional"
         return (p, 0)
     | .app _ _ =>
       match_expr t with
@@ -526,23 +528,6 @@ partial def processFacts (p : MetaProblem) : OmegaM (MetaProblem × Nat) := do
 end MetaProblem
 
 /--
-Given `p : P ∨ Q` (or any inductive type with two one-argument constructors),
-split the goal into two subgoals:
-one containing the hypothesis `h : P` and another containing `h : Q`.
--/
-def cases₂ (mvarId : MVarId) (p : Expr) (hName : Name := `h) :
-    MetaM ((MVarId × FVarId) × (MVarId × FVarId)) := do
-  let mvarId ← mvarId.assert `hByCases (← inferType p) p
-  let (fvarId, mvarId) ← mvarId.intro1
-  let #[s₁, s₂] ← mvarId.cases fvarId #[{ varNames := [hName] }, { varNames := [hName] }] |
-    throwError "'cases' tactic failed, unexpected number of subgoals"
-  let #[Expr.fvar f₁ ..] ← pure s₁.fields
-    | throwError "'cases' tactic failed, unexpected new hypothesis"
-  let #[Expr.fvar f₂ ..] ← pure s₂.fields
-    | throwError "'cases' tactic failed, unexpected new hypothesis"
-  return ((s₁.mvarId, f₁), (s₂.mvarId, f₂))
-
-/--
 Helpful error message when omega cannot find a solution
 -/
 def formatErrorMessage (p : Problem) : OmegaM MessageData := do
@@ -579,7 +564,7 @@ where
   varNames (mask : Array Bool) : MetaM (Array String) := do
     let mut names := #[]
     let mut next := 0
-    for h : i in [:mask.size] do
+    for h : i in *...mask.size do
       if mask[i] then
         while ← inScope (varNameOf next) do next := next + 1
         names := names.push (varNameOf next)
@@ -607,24 +592,23 @@ where
       s!"{x} ≤ {e} ≤ {y}"
 
   prettyCoeffs (names : Array String) (coeffs : Coeffs) : String :=
-    coeffs.toList.enum
-      |>.filter (fun (_,c) => c ≠ 0)
-      |>.enum
-      |>.map (fun (j, (i,c)) =>
+    coeffs.toList.zipIdx
+      |>.filter (fun (c,_) => c ≠ 0)
+      |>.mapIdx (fun j (c,i) =>
         (if j > 0 then if c > 0 then " + " else " - " else if c > 0 then "" else "- ") ++
         (if Int.natAbs c = 1 then names[i]! else s!"{c.natAbs}*{names[i]!}"))
       |> String.join
 
   mentioned (atoms : Array Expr) (constraints : Std.HashMap Coeffs Fact) : MetaM (Array Bool) := do
-    let initMask := Array.mkArray atoms.size false
+    let initMask := .replicate atoms.size false
     return constraints.fold (init := initMask) fun mask coeffs _ =>
-      coeffs.enum.foldl (init := mask) fun mask (i, c) =>
+      coeffs.zipIdx.foldl (init := mask) fun mask (c, i) =>
         if c = 0 then mask else mask.set! i true
 
   prettyAtoms (names : Array String) (atoms : Array Expr) (mask : Array Bool) : MessageData :=
-    (Array.zip names atoms).toList.enum
-      |>.filter (fun (i, _) => mask.getD i false)
-      |>.map (fun (_, (n, a)) => m!" {n} := {a}")
+    (Array.zip names atoms).toList.zipIdx
+      |>.filter (fun (_, i) => mask.getD i false)
+      |>.map (fun ((n, a),_) => m!" {n} := {a}")
       |> m!"\n".joinSep
 
 mutual
@@ -633,33 +617,36 @@ mutual
 Split a disjunction in a `MetaProblem`, and if we find a new usable fact
 call `omegaImpl` in both branches.
 -/
-partial def splitDisjunction (m : MetaProblem) (g : MVarId) : OmegaM Unit := g.withContext do
+partial def splitDisjunction (m : MetaProblem) : OmegaM Expr := do
   match m.disjunctions with
     | [] => throwError "omega could not prove the goal:\n{← formatErrorMessage m.problem}"
-    | h :: t =>
-      trace[omega] "Case splitting on {← inferType h}"
-      let ctx ← getMCtx
-      let (⟨g₁, h₁⟩, ⟨g₂, h₂⟩) ← cases₂ g h
-      trace[omega] "Adding facts:\n{← g₁.withContext <| inferType (.fvar h₁)}"
-      let m₁ := { m with facts := [.fvar h₁], disjunctions := t }
-      let r ← withoutModifyingState do
-        let (m₁, n) ← g₁.withContext m₁.processFacts
+    | h :: t => do
+      let hType ← whnfD (← inferType h)
+      trace[omega] "Case splitting on {hType}"
+      let_expr Or hType₁ hType₂ := hType | throwError "Unexpected disjunction {hType}"
+      let p?₁ ← withoutModifyingState do withLocalDeclD `h₁ hType₁ fun h₁ => do
+        withTraceNode `omega (msg := fun _ => do pure m!"Assuming fact:{indentExpr hType₁}") do
+        let m₁ := { m with facts := [h₁], disjunctions := t }
+        let (m₁, n) ← m₁.processFacts
         if 0 < n then
-          omegaImpl m₁ g₁
-          pure true
+          let p₁ ← omegaImpl m₁
+          let p₁ ← mkLambdaFVars #[h₁] p₁
+          return some p₁
         else
-          pure false
-      if r then
-        trace[omega] "Adding facts:\n{← g₂.withContext <| inferType (.fvar h₂)}"
-        let m₂ := { m with facts := [.fvar h₂], disjunctions := t }
-        omegaImpl m₂ g₂
+          return none
+      if let some p₁ := p?₁ then
+         withLocalDeclD `h₂ hType₂ fun h₂ => do
+          withTraceNode `omega (msg := fun _ => do pure m!"Assuming fact:{indentExpr hType₂}") do
+          let m₂ := { m with facts := [h₂], disjunctions := t }
+          let p₂ ← omegaImpl m₂
+          let p₂ ← mkLambdaFVars #[h₂] p₂
+          return mkApp6 (mkConst ``Or.elim) hType₁ hType₂ (mkConst ``False) h p₁ p₂
       else
         trace[omega] "No new facts found."
-        setMCtx ctx
-        splitDisjunction { m with disjunctions := t } g
+        splitDisjunction { m with disjunctions := t }
 
 /-- Implementation of the `omega` algorithm, and handling disjunctions. -/
-partial def omegaImpl (m : MetaProblem) (g : MVarId) : OmegaM Unit := g.withContext do
+partial def omegaImpl (m : MetaProblem) : OmegaM Expr := do
   let (m, _) ← m.processFacts
   guard m.facts.isEmpty
   let p := m.problem
@@ -668,12 +655,12 @@ partial def omegaImpl (m : MetaProblem) (g : MVarId) : OmegaM Unit := g.withCont
   trace[omega] "After elimination:\nAtoms: {← atomsList}\n{p'}"
   match p'.possible, p'.proveFalse?, p'.proveFalse?_spec with
   | true, _, _ =>
-    splitDisjunction m g
+    splitDisjunction m
   | false, .some prf, _ =>
     trace[omega] "Justification:\n{p'.explanation?.get}"
     let prf ← instantiateMVars (← prf)
     trace[omega] "omega found a contradiction, proving {← inferType prf}"
-    g.assign prf
+    return prf
 
 end
 
@@ -682,31 +669,45 @@ Given a collection of facts, try prove `False` using the omega algorithm,
 and close the goal using that.
 -/
 def omega (facts : List Expr) (g : MVarId) (cfg : OmegaConfig := {}) : MetaM Unit :=
-  OmegaM.run (omegaImpl { facts } g) cfg
+  g.withContext do
+    let prf ← OmegaM.run (omegaImpl { facts }) cfg
+    g.assign prf
 
 open Lean Elab Tactic Parser.Tactic
 
 /-- The `omega` tactic, for resolving integer and natural linear arithmetic problems. -/
 def omegaTactic (cfg : OmegaConfig) : TacticM Unit := do
+  -- Conservatively expect all of `Init.Omega` to be imported.
+  recordExtraModUse (isMeta := false) `Init.Omega
   liftMetaFinishingTactic fun g => do
-    let g ← g.falseOrByContra
-    g.withContext do
-      let hyps := (← getLocalHyps).toList
-      trace[omega] "analyzing {hyps.length} hypotheses:\n{← hyps.mapM inferType}"
-      omega hyps g cfg
+    if debug.terminalTacticsAsSorry.get (← getOptions) then
+      g.admit
+    else
+      let some g ← g.falseOrByContra | return ()
+      g.withContext do
+        let type ← g.getType
+        let g' ← mkFreshExprSyntheticOpaqueMVar type
+        let hyps := (← getLocalHyps).toList
+        trace[omega] "analyzing {hyps.length} hypotheses:\n{← hyps.mapM inferType}"
+        omega hyps g'.mvarId! cfg
+        -- Omega proofs are typically rather large, so hide them in a separate definition
+        let e ← mkAuxTheorem type (← instantiateMVarsProfiling g') (zetaDelta := true)
+        g.assign e
 
 /-- The `omega` tactic, for resolving integer and natural linear arithmetic problems. This
 `TacticM Unit` frontend with default configuration can be used as an Aesop rule, for example via
-the tactic call `aesop (add 50% tactic Lean.Omega.omegaDefault)`. -/
+the tactic call `aesop (add 50% tactic Lean.Elab.Tactic.Omega.omegaDefault)`. -/
 def omegaDefault : TacticM Unit := omegaTactic {}
 
 @[builtin_tactic Lean.Parser.Tactic.omega]
-def evalOmega : Tactic := fun
-  | `(tactic| omega $[$cfg]?) => do
-    let cfg ← elabOmegaConfig (mkOptionalNode cfg)
+def evalOmega : Tactic
+  | `(tactic| omega%$tk $cfg:optConfig) => do
+    -- Call `assumption` first, to avoid constructing unnecessary proofs.
+    Meta.withReducibleAndInstances (evalAssumption tk) <|> do
+    let cfg ← elabOmegaConfig cfg
     omegaTactic cfg
   | _ => throwUnsupportedSyntax
 
-builtin_initialize bvOmegaSimpExtension : SimpExtension ←
-  registerSimpAttr `bv_toNat
-    "simp lemmas converting `BitVec` goals to `Nat` goals, for the `bv_omega` preprocessor"
+builtin_initialize bitvec_to_nat : SimpExtension ←
+  registerSimpAttr `bitvec_to_nat
+    "simp lemmas converting `BitVec` goals to `Nat` goals"

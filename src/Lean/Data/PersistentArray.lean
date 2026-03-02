@@ -3,10 +3,16 @@ Copyright (c) 2019 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura
 -/
+module
+
 prelude
-import Init.Data.Array.Basic
-import Init.NotationExtra
+public import Init.Data.Nat.Fold
+public import Init.Data.UInt.Basic
+import Init.Data.String.Defs
 import Init.Data.ToString.Macro
+import Init.Omega
+
+public section
 
 universe u v w
 
@@ -64,7 +70,7 @@ partial def getAux [Inhabited α] : PersistentArrayNode α → USize → USize �
 
 def get! [Inhabited α] (t : PersistentArray α) (i : Nat) : α :=
   if i >= t.tailOff then
-    t.tail.get! (i - t.tailOff)
+    t.tail[i - t.tailOff]!
   else
     getAux t.root (USize.ofNat i) t.shift
 
@@ -148,8 +154,8 @@ private def emptyArray {α : Type u} : Array (PersistentArrayNode α) :=
 partial def popLeaf : PersistentArrayNode α → Option (Array α) × Array (PersistentArrayNode α)
   | node cs =>
     if h : cs.size ≠ 0 then
-      let idx : Fin cs.size := ⟨cs.size - 1, by exact Nat.pred_lt h⟩
-      let last := cs.get idx
+      let idx := cs.size - 1
+      let last := cs[idx]
       let cs'  := cs.set idx default
       match popLeaf last with
       | (none,   _)       => (none, emptyArray)
@@ -158,7 +164,7 @@ partial def popLeaf : PersistentArrayNode α → Option (Array α) × Array (Per
           let cs' := cs'.pop
           if cs'.isEmpty then (some l, emptyArray) else (some l, cs')
         else
-          (some l, cs'.set (Array.size_set cs idx _ ▸ idx) (node newLast))
+          (some l, cs'.set idx (node newLast) (by simp only [cs', Array.size_set]; omega))
     else
       (none, emptyArray)
   | leaf vs   => (some vs, emptyArray)
@@ -173,8 +179,8 @@ def pop (t : PersistentArray α) : PersistentArray α :=
       let last       := last.pop
       let newSize    := t.size - 1
       let newTailOff := newSize - last.size
-      if newRoots.size == 1 && (newRoots.get! 0).isNode then
-        { root    := newRoots.get! 0,
+      if h : ∃ _ : newRoots.size = 1, newRoots[0].isNode then
+        { root    := newRoots[0]'(have := h.1; by omega),
           shift   := t.shift - initShift,
           size    := newSize,
           tail    := last,
@@ -197,7 +203,7 @@ variable {β : Type v}
 @[specialize] private partial def foldlFromMAux (f : β → α → m β) : PersistentArrayNode α → USize → USize → β → m β
   | node cs, i, shift, b => do
     let j    := (div2Shift i shift).toNat
-    let b ← foldlFromMAux f (cs.get! j) (mod2Shift i shift) (shift - initShift) b
+    let b ← foldlFromMAux f cs[j]! (mod2Shift i shift) (shift - initShift) b
     cs.foldlM (init := b) (start := j+1) fun b c => foldlMAux f c b
   | leaf vs, i, _, b => vs.foldlM (init := b) (start := i.toNat) f
 
@@ -248,7 +254,7 @@ partial def forInAux {α : Type u} {β : Type v} {m : Type v → Type w} [Monad 
       | ForInStep.yield bNew => b := bNew
     return b
 
-instance : ForIn m (PersistentArray α) α where
+instance [Monad m] : ForIn m (PersistentArray α) α where
   forIn := PersistentArray.forIn
 
 @[specialize] partial def findSomeMAux (f : α → m (Option β)) : PersistentArrayNode α → m (Option β)
@@ -273,16 +279,32 @@ instance : ForIn m (PersistentArray α) α where
   | node cs => cs.forM (fun c => forMAux f c)
   | leaf vs => vs.forM f
 
-@[specialize] def forM (t : PersistentArray α) (f : α → m PUnit) : m PUnit :=
+@[specialize] def forMFrom0 (t : PersistentArray α) (f : α → m PUnit) : m PUnit :=
   forMAux f t.root *> t.tail.forM f
+
+@[specialize] private partial def forFromMAux (f : α → m PUnit) : PersistentArrayNode α → USize → USize → m PUnit
+  | node cs, i, shift => do
+    let j    := (div2Shift i shift).toNat
+    forFromMAux f cs[j]! (mod2Shift i shift) (shift - initShift)
+    cs.forM (start := j+1) (forMAux f)
+  | leaf vs, i, _ => vs.forM (start := i.toNat) f
+
+@[specialize] def forM (t : PersistentArray α) (f : α → m PUnit) (start : Nat := 0) : m PUnit := do
+  if start == 0 then
+    forMFrom0 t f
+  else if start >= t.tailOff then
+    t.tail.forM (start := start - t.tailOff) f
+  else do
+    forFromMAux f t.root (USize.ofNat start) t.shift
+    t.tail.forM f
 
 end
 
 @[inline] def foldl (t : PersistentArray α) (f : β → α → β) (init : β) (start : Nat := 0) : β :=
-  Id.run <| t.foldlM f init start
+  Id.run <| t.foldlM (pure <| f · ·) init start
 
 @[inline] def foldr (t : PersistentArray α) (f : α → β → β) (init : β) : β :=
-  Id.run <| t.foldrM f init
+  Id.run <| t.foldrM (pure <| f · ·) init
 
 @[inline] def filter (as : PersistentArray α) (p : α → Bool) : PersistentArray α :=
   as.foldl (init := {}) fun asNew a => if p a then asNew.push a else asNew
@@ -299,10 +321,10 @@ def append (t₁ t₂ : PersistentArray α) : PersistentArray α :=
 instance : Append (PersistentArray α) := ⟨append⟩
 
 @[inline] def findSome? {β} (t : PersistentArray α) (f : α → (Option β)) : Option β :=
-  Id.run $ t.findSomeM? f
+  Id.run $ t.findSomeM? (pure <| f ·)
 
 @[inline] def findSomeRev? {β} (t : PersistentArray α) (f : α → (Option β)) : Option β :=
-  Id.run $ t.findSomeRevM? f
+  Id.run $ t.findSomeRevM? (pure <| f ·)
 
 def toList (t : PersistentArray α) : List α :=
   (t.foldl (init := []) fun xs x => x :: xs).reverse
@@ -317,13 +339,13 @@ variable {m : Type → Type w} [Monad m]
   anyMAux p t.root <||> t.tail.anyM p
 
 @[inline] def allM (a : PersistentArray α) (p : α → m Bool) : m Bool := do
-  let b ← anyM a (fun v => do let b ← p v; pure (not b))
-  pure (not b)
+  let b ← anyM a (fun v => do let b ← p v; pure (!b))
+  pure (!b)
 
 end
 
 @[inline] def any (a : PersistentArray α) (p : α → Bool) : Bool :=
-  Id.run $ anyM a p
+  Id.run $ anyM a (pure <| p ·)
 
 @[inline] def all (a : PersistentArray α) (p : α → Bool) : Bool :=
   !any a fun v => !p v
@@ -344,7 +366,7 @@ variable {β : Type u}
 end
 
 @[inline] def map {β} (f : α → β) (t : PersistentArray α) : PersistentArray β :=
-  Id.run $ t.mapM f
+  Id.run $ t.mapM (pure <| f ·)
 
 structure Stats where
   numNodes : Nat
@@ -370,7 +392,7 @@ instance : ToString Stats := ⟨Stats.toString⟩
 end PersistentArray
 
 def mkPersistentArray {α : Type u} (n : Nat) (v : α) : PArray α :=
-  n.fold (init := PersistentArray.empty) fun _ p => p.push v
+  n.fold (init := PersistentArray.empty) fun _ _ p => p.push v
 
 @[inline] def mkPArray {α : Type u} (n : Nat) (v : α) : PArray α :=
   mkPersistentArray n v
@@ -379,6 +401,9 @@ end Lean
 
 open Lean (PersistentArray)
 
+/--
+Converts a list to a persistent array.
+-/
 def List.toPArray' {α : Type u} (xs : List α) : PersistentArray α :=
   let rec loop : List α → PersistentArray α → PersistentArray α
   | [],    t => t

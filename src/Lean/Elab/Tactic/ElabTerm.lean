@@ -3,13 +3,16 @@ Copyright (c) 2020 Microsoft Corporation. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Leonardo de Moura
 -/
+module
+
 prelude
-import Lean.Meta.Tactic.Constructor
-import Lean.Meta.Tactic.Assert
-import Lean.Meta.Tactic.Clear
-import Lean.Meta.Tactic.Rename
-import Lean.Elab.Tactic.Basic
-import Lean.Elab.SyntheticMVars
+public import Lean.Meta.Tactic.Constructor
+public import Lean.Meta.Tactic.Assert
+public import Lean.Meta.Tactic.Cleanup
+public import Lean.Meta.Tactic.Rename
+public import Lean.Elab.Tactic.Config
+
+public section
 
 namespace Lean.Elab.Tactic
 open Meta
@@ -17,7 +20,8 @@ open Meta
 /-! # `elabTerm` for Tactics and basic tactics that use it. -/
 
 /--
-Runs a term elaborator inside a tactic.
+Runs a term elaborator inside a tactic, finalizing elaboration with `Term.synthesizeSyntheticMVars`.
+- `mayPostpone` controls the postponement behavior of `Term.synthesizeSyntheticMVars`.
 
 This function ensures that term elaboration fails when backtracking,
 i.e., in `first| tac term | other`.
@@ -55,11 +59,6 @@ def elabTermEnsuringType (stx : Syntax) (expectedType? : Option Expr) (mayPostpo
       Term.throwTypeMismatchError none expectedType eType e
     return e
 
-/-- Try to close main goal using `x target`, where `target` is the type of the main goal.  -/
-def closeMainGoalUsing (tacName : Name) (x : Expr → TacticM Expr) (checkUnassigned := true) : TacticM Unit :=
-  withMainContext do
-    closeMainGoal (tacName := tacName) (checkUnassigned := checkUnassigned) (← x (← getMainTarget))
-
 def logUnassignedAndAbort (mvarIds : Array MVarId) : TacticM Unit := do
    if (← Term.logUnassignedUsingErrorInfos mvarIds) then
      throwAbortTactic
@@ -68,14 +67,37 @@ def filterOldMVars (mvarIds : Array MVarId) (mvarCounterSaved : Nat) : MetaM (Ar
   let mctx ← getMCtx
   return mvarIds.filter fun mvarId => (mctx.getDecl mvarId |>.index) >= mvarCounterSaved
 
+/--
+Try to close main goal using `x target tag`, where `target` is the type of the main goal and `tag` is its user name.
+
+If `checkNewUnassigned` is true, then throws an error if the resulting value has metavariables that were created during the execution of `x`.
+If it is false, then it is the responsibility of `x` to add such metavariables to the goal list.
+
+During the execution of `x`:
+* The local context is that of the main goal.
+* The goal list has the main goal removed.
+* It is allowable to modify the goal list, for example with `Lean.Elab.Tactic.pushGoals`.
+
+On failure, the main goal remains at the front of the goal list.
+-/
+def closeMainGoalUsing (tacName : Name) (x : Expr → Name → TacticM Expr) (checkNewUnassigned := true) : TacticM Unit := do
+  let mvarCounterSaved := (← getMCtx).mvarCounter
+  let mvarId ← popMainGoal
+  Tactic.tryCatch
+    (mvarId.withContext do
+      let val ← x (← mvarId.getType) (← mvarId.getTag)
+      if checkNewUnassigned then
+        let mvars ← filterOldMVars (← getMVars val) mvarCounterSaved
+        logUnassignedAndAbort mvars
+      unless (← mvarId.checkedAssign val) do
+        throwTacticEx tacName mvarId m!"attempting to close the goal using{indentExpr val}\nthis is often due occurs-check failure")
+    (fun ex => do
+      pushGoal mvarId
+      throw ex)
+
 @[builtin_tactic «exact»] def evalExact : Tactic := fun stx => do
   match stx with
-  | `(tactic| exact $e) =>
-    closeMainGoalUsing `exact (checkUnassigned := false) fun type => do
-      let mvarCounterSaved := (← getMCtx).mvarCounter
-      let r ← elabTermEnsuringType e type
-      logUnassignedAndAbort (← filterOldMVars (← getMVars r) mvarCounterSaved)
-      return r
+  | `(tactic| exact $e) => closeMainGoalUsing `exact fun type _ => elabTermEnsuringType e type
   | _ => throwUnsupportedSyntax
 
 def sortMVarIdArrayByIndex [MonadMCtx m] [Monad m] (mvarIds : Array MVarId) : m (Array MVarId) := do
@@ -88,13 +110,34 @@ def sortMVarIdArrayByIndex [MonadMCtx m] [Monad m] (mvarIds : Array MVarId) : m 
     else
       Name.quickLt mvarId₁.name mvarId₂.name
 
-def sortMVarIdsByIndex [MonadMCtx m] [Monad m] (mvarIds : List MVarId) : m (List MVarId) :=
-  return (← sortMVarIdArrayByIndex mvarIds.toArray).toList
+def sortMVarIdsByIndex [MonadMCtx m] [Monad m] (mvarIds : Array MVarId) : m (Array MVarId) :=
+  return (← sortMVarIdArrayByIndex mvarIds)
 
 /--
-  Execute `k`, and collect new "holes" in the resulting expression.
+Execute `k`, and collect any fresh metavariables created during the execution of `k`.
 -/
-def withCollectingNewGoalsFrom (k : TacticM Expr) (tagSuffix : Name) (allowNaturalHoles := false) : TacticM (Expr × List MVarId) :=
+def collectFreshMVars [Monad m] [MonadLiftT MetaM m] (k : m Expr) : m (Expr × Array MVarId) := do
+  let mvarCounterSaved := (← liftMetaM getMCtx).mvarCounter
+  let val ← k
+  let newMVarIds ← getMVarsNoDelayed val
+  /- Filter out all mvars that were created prior to `k`. -/
+  let newMVarIds ← filterOldMVars newMVarIds mvarCounterSaved
+  /-
+  We sort the new metavariable ids by index to ensure the new goals are ordered using the order the metavariables have been created.
+  See issue #1682.
+  Potential problem: if elaboration of subterms is delayed the order the new metavariables are created may not match the order they
+  appear in the `.lean` file. We should tell users to prefer tagged goals.
+  -/
+  let newMVarIds ← liftMetaM <| sortMVarIdsByIndex newMVarIds
+  return (val, newMVarIds)
+
+/--
+Execute `k`, and collect new "holes" in the resulting expression.
+
+* `parentTag` and `tagSuffix` are used to tag untagged goals with `Lean.Elab.Tactic.tagUntaggedGoals`.
+* If `allowNaturalHoles` is true, then `_`'s are allowed and create new goals.
+-/
+def withCollectingNewGoalsFrom (k : TacticM Expr) (parentTag : Name) (tagSuffix : Name) (allowNaturalHoles := false) : TacticM (Expr × List MVarId) :=
   /-
   When `allowNaturalHoles = true`, unassigned holes should become new metavariables, including `_`s.
   Thus, we set `holesAsSyntheticOpaque` to true if it is not already set to `true`.
@@ -124,26 +167,16 @@ def withCollectingNewGoalsFrom (k : TacticM Expr) (tagSuffix : Name) (allowNatur
     go
 where
   go := do
-    let mvarCounterSaved := (← getMCtx).mvarCounter
-    let val ← k
-    let newMVarIds ← getMVarsNoDelayed val
+    let (val, newMVarIds) ← collectFreshMVars k
     /- ignore let-rec auxiliary variables, they are synthesized automatically later -/
     let newMVarIds ← newMVarIds.filterM fun mvarId => return !(← Term.isLetRecAuxMVar mvarId)
-    /- Filter out all mvars that were created prior to `k`. -/
-    let newMVarIds ← filterOldMVars newMVarIds mvarCounterSaved
     /- If `allowNaturalHoles := false`, all natural mvarIds must be assigned.
     Passing this guard ensures that `newMVarIds` does not contain unassigned natural mvars. -/
     unless allowNaturalHoles do
       let naturalMVarIds ← newMVarIds.filterM fun mvarId => return (← mvarId.getKind).isNatural
       logUnassignedAndAbort naturalMVarIds
-    /-
-    We sort the new metavariable ids by index to ensure the new goals are ordered using the order the metavariables have been created.
-    See issue #1682.
-    Potential problem: if elaboration of subterms is delayed the order the new metavariables are created may not match the order they
-    appear in the `.lean` file. We should tell users to prefer tagged goals.
-    -/
-    let newMVarIds ← sortMVarIdsByIndex newMVarIds.toList
-    tagUntaggedGoals (← getMainTag) tagSuffix newMVarIds
+    let newMVarIds := newMVarIds.toList
+    tagUntaggedGoals parentTag tagSuffix newMVarIds
     return (val, newMVarIds)
 
 /-- Elaborates `stx` and collects the `MVarId`s of any holes that were created during elaboration.
@@ -152,8 +185,8 @@ With `allowNaturalHoles := false` (the default), any new natural holes (`_`) whi
 be synthesized during elaboration cause `elabTermWithHoles` to fail. (Natural goals appearing in
 `stx` which were created prior to elaboration are permitted.)
 
-Unnamed `MVarId`s are renamed to share the main goal's tag. If multiple unnamed goals are
-encountered, `tagSuffix` is appended to the main goal's tag along with a numerical index.
+Unnamed `MVarId`s are renamed to share the tag `parentTag?` (or the main goal's tag if `parentTag?` is `none`).
+If multiple unnamed goals are encountered, `tagSuffix` is appended to this tag along with a numerical index.
 
 Note:
 * Previously-created `MVarId`s which appear in `stx` are not returned.
@@ -162,11 +195,11 @@ metavariables.
 * When `allowNaturalHoles := true`, `stx` is elaborated under `withAssignableSyntheticOpaque`,
 meaning that `.syntheticOpaque` metavariables might be assigned during elaboration. This is a
 consequence of the implementation. -/
-def elabTermWithHoles (stx : Syntax) (expectedType? : Option Expr) (tagSuffix : Name) (allowNaturalHoles := false) : TacticM (Expr × List MVarId) := do
-  withCollectingNewGoalsFrom (elabTermEnsuringType stx expectedType?) tagSuffix allowNaturalHoles
+def elabTermWithHoles (stx : Syntax) (expectedType? : Option Expr) (tagSuffix : Name) (allowNaturalHoles := false) (parentTag? : Option Name := none) : TacticM (Expr × List MVarId) := do
+  withCollectingNewGoalsFrom (elabTermEnsuringType stx expectedType?) (← parentTag?.getDM getMainTag) tagSuffix allowNaturalHoles
 
 /-- If `allowNaturalHoles == true`, then we allow the resultant expression to contain unassigned "natural" metavariables.
-   Recall that "natutal" metavariables are created for explicit holes `_` and implicit arguments. They are meant to be
+   Recall that "natural" metavariables are created for explicit holes `_` and implicit arguments. They are meant to be
    filled by typing constraints.
    "Synthetic" metavariables are meant to be filled by tactics and are usually created using the synthetic hole notation `?<hole-name>`. -/
 def refineCore (stx : Syntax) (tagSuffix : Name) (allowNaturalHoles : Bool) : TacticM Unit := do
@@ -183,7 +216,7 @@ def refineCore (stx : Syntax) (tagSuffix : Name) (allowNaturalHoles : Bool) : Ta
     else
       /- Ensure that the main goal does not occur in `val`. -/
       if val.findMVar? (· == mvarId) matches some _ then
-        throwError "'refine' tactic failed, value{indentExpr val}\ndepends on the main goal metavariable '{mkMVar mvarId}'"
+        throwError "`refine` tactic failed, value{indentExpr val}\ndepends on the main goal metavariable `{mkMVar mvarId}`"
       mvarId.assign val
       replaceMainGoal mvarIds'
 
@@ -235,48 +268,14 @@ def elabTermForApply (stx : Syntax) (mayPostpone := true) : TacticM Expr := do
     match (← Term.resolveId? stx (withInfo := true)) with
     | some e => return e
     | _      => pure ()
-  /-
-    By disabling the "error recovery" (and consequently "error to sorry") feature,
-    we make sure an `apply e` fails without logging an error message.
-    The motivation is that `apply` is frequently used when writing tactic such as
-    ```
-    cases h <;> intro h' <;> first | apply t[h'] | ....
-    ```
-    Here the type of `h'` may be different in each case, and the term `t[h']` containing `h'` may even fail to
-    be elaborated in some cases. When this happens we want the tactic to fail without reporting any error to the user,
-    and the next tactic is tried.
+  elabTerm stx none mayPostpone
 
-    A drawback of disabling "error to sorry" is that there is no error recovery after the error is thrown, and features such
-    as auto-completion are affected.
-
-    By disabling "error to sorry", we also limit ourselves to at most one error at `t[h']`.
-
-    By disabling "error to sorry", we also miss the opportunity to catch mistakes in tactic code such as
-      `first | apply nonsensical-term | assumption`
-
-    This should not be a big problem for the `apply` tactic since we usually provide small terms there.
-
-    Note that we do not disable "error to sorry" at `exact` and `refine` since they are often used to elaborate big terms,
-    and we do want error recovery there, and we want to see the error messages.
-
-    We should probably provide options for allowing users to control this behavior.
-
-    see issue #1037
-
-    More complex solution:
-      - We do not disable "error to sorry"
-      - We elaborate term and check whether errors were produced
-      - If there are other tactic branches and there are errors, we remove the errors from the log, and throw a new error to force the tactic to backtrack.
-  -/
-  withoutRecover <| elabTerm stx none mayPostpone
-
-def getFVarId (id : Syntax) : TacticM FVarId := withRef id do
+def getFVarId (id : Syntax) : TacticM FVarId := withRef id <| withMainContext do
   -- use apply-like elaboration to suppress insertion of implicit arguments
-  let e ← withMainContext do
-    elabTermForApply id (mayPostpone := false)
+  let e ← withoutRecover <| elabTermForApply id (mayPostpone := false)
   match e with
   | Expr.fvar fvarId => return fvarId
-  | _                => throwError "unexpected term '{e}'; expected single reference to variable"
+  | _                => throwError "Unexpected term `{e}`; expected single reference to variable"
 
 def getFVarIds (ids : Array Syntax) : TacticM (Array FVarId) := do
   withMainContext do ids.mapM getFVarId
@@ -303,7 +302,7 @@ def evalApplyLikeTactic (tac : MVarId → Expr → MetaM (List MVarId)) (e : Syn
 
 @[builtin_tactic Lean.Parser.Tactic.apply] def evalApply : Tactic := fun stx =>
   match stx with
-  | `(tactic| apply $e) => evalApplyLikeTactic (·.apply) e
+  | `(tactic| apply $t) => evalApplyLikeTactic (fun g e => g.apply e (term? := some m!"`{e}`")) t
   | _ => throwUnsupportedSyntax
 
 @[builtin_tactic Lean.Parser.Tactic.constructor] def evalConstructor : Tactic := fun _ =>
@@ -320,6 +319,9 @@ def evalApplyLikeTactic (tac : MVarId → Expr → MetaM (List MVarId)) (e : Syn
 
 @[builtin_tactic Lean.Parser.Tactic.withUnfoldingAll] def evalWithUnfoldingAll : Tactic := fun stx =>
   withTransparency TransparencyMode.all <| evalTactic stx[1]
+
+@[builtin_tactic Lean.Parser.Tactic.withUnfoldingNone] def evalWithUnfoldingNone : Tactic := fun stx =>
+  withTransparency TransparencyMode.none <| evalTactic stx[1]
 
 /--
   Elaborate `stx`. If it is a free variable, return it. Otherwise, assert it, and return the free variable.
@@ -352,133 +354,11 @@ def elabAsFVar (stx : Syntax) (userName? : Option Name := none) : TacticM FVarId
       let fvarId ← withoutModifyingState <| withNewMCtxDepth <| withoutRecover do
         let type ← elabTerm typeStx none (mayPostpone := true)
         let fvarId? ← (← getLCtx).findDeclRevM? fun localDecl => do
-          if (← isDefEq type localDecl.type) then return localDecl.fvarId else return none
+          if !localDecl.isImplementationDetail && (← isDefEq type localDecl.type) then return localDecl.fvarId else return none
         match fvarId? with
-        | none => throwError "failed to find a hypothesis with type{indentExpr type}"
+        | none => throwError "Failed to find a hypothesis with type{indentExpr type}"
         | some fvarId => return fvarId
       replaceMainGoal [← (← getMainGoal).rename fvarId h.getId]
   | _ => throwUnsupportedSyntax
-
-/--
-Make sure `expectedType` does not contain free and metavariables.
-It applies zeta and zetaDelta-reduction to eliminate let-free-vars.
--/
-private def preprocessPropToDecide (expectedType : Expr) : TermElabM Expr := do
-  let mut expectedType ← instantiateMVars expectedType
-  if expectedType.hasFVar then
-    expectedType ← zetaReduce expectedType
-  if expectedType.hasFVar || expectedType.hasMVar then
-    throwError "expected type must not contain free or meta variables{indentExpr expectedType}"
-  return expectedType
-
-/--
-Given the decidable instance `inst`, reduces it and returns a decidable instance expression
-in whnf that can be regarded as the reason for the failure of `inst` to fully reduce.
--/
-private partial def blameDecideReductionFailure (inst : Expr) : MetaM Expr := do
-  let inst ← whnf inst
-  -- If it's the Decidable recursor, then blame the major premise.
-  if inst.isAppOfArity ``Decidable.rec 5 then
-    return ← blameDecideReductionFailure inst.appArg!
-  -- If it is a matcher, look for a discriminant that's a Decidable instance to blame.
-  if let .const c _ := inst.getAppFn then
-    if let some info ← getMatcherInfo? c then
-      if inst.getAppNumArgs == info.arity then
-        let args := inst.getAppArgs
-        for i in [0:info.numDiscrs] do
-          let inst' := args[info.numParams + 1 + i]!
-          if (← Meta.isClass? (← inferType inst')) == ``Decidable then
-            let inst'' ← whnf inst'
-            if !(inst''.isAppOf ``isTrue || inst''.isAppOf ``isFalse) then
-              return ← blameDecideReductionFailure inst''
-  return inst
-
-@[builtin_tactic Lean.Parser.Tactic.decide] def evalDecide : Tactic := fun _ =>
-  closeMainGoalUsing `decide fun expectedType => do
-    let expectedType ← preprocessPropToDecide expectedType
-    let d ← mkDecide expectedType
-    let d ← instantiateMVars d
-    -- Get instance from `d`
-    let s := d.appArg!
-    -- Reduce the instance rather than `d` itself for diagnostics purposes.
-    let r ← withAtLeastTransparency .default <| whnf s
-    if r.isAppOf ``isTrue then
-      -- Success!
-      -- While we have a proof from reduction, we do not embed it in the proof term,
-      -- and instead we let the kernel recompute it during type checking from the following more efficient term.
-      let rflPrf ← mkEqRefl (toExpr true)
-      return mkApp3 (Lean.mkConst ``of_decide_eq_true) expectedType s rflPrf
-    else
-      -- Diagnose the failure, lazily so that there is no performance impact if `decide` isn't being used interactively.
-      throwError MessageData.ofLazyM (es := #[expectedType]) do
-        if r.isAppOf ``isFalse then
-          return m!"\
-          tactic 'decide' proved that the proposition\
-          {indentExpr expectedType}\n\
-          is false"
-        -- Re-reduce the instance and collect diagnostics, to get all unfolded Decidable instances
-        let (reason, unfoldedInsts) ← withoutModifyingState <| withOptions (fun opt => diagnostics.set opt true) do
-          modifyDiag (fun _ => {})
-          let reason ← withAtLeastTransparency .default <| blameDecideReductionFailure s
-          let unfolded := (← get).diag.unfoldCounter.foldl (init := #[]) fun cs n _ => cs.push n
-          let unfoldedInsts ← unfolded |>.qsort Name.lt |>.filterMapM fun n => do
-            let e ← mkConstWithLevelParams n
-            if (← Meta.isClass? (← inferType e)) == ``Decidable then
-              return m!"'{MessageData.ofConst e}'"
-            else
-              return none
-          return (reason, unfoldedInsts)
-        let stuckMsg :=
-          if unfoldedInsts.isEmpty then
-            m!"Reduction got stuck at the '{MessageData.ofConstName ``Decidable}' instance{indentExpr reason}"
-          else
-            let instances := if unfoldedInsts.size == 1 then "instance" else "instances"
-            m!"After unfolding the {instances} {MessageData.andList unfoldedInsts.toList}, \
-            reduction got stuck at the '{MessageData.ofConstName ``Decidable}' instance{indentExpr reason}"
-        let hint :=
-          if reason.isAppOf ``Eq.rec then
-            m!"\n\n\
-            Hint: Reduction got stuck on '▸' ({MessageData.ofConstName ``Eq.rec}), \
-            which suggests that one of the '{MessageData.ofConstName ``Decidable}' instances is defined using tactics such as 'rw' or 'simp'. \
-            To avoid tactics, make use of functions such as \
-            '{MessageData.ofConstName ``inferInstanceAs}' or '{MessageData.ofConstName ``decidable_of_decidable_of_iff}' \
-            to alter a proposition."
-          else if reason.isAppOf ``Classical.choice then
-            m!"\n\n\
-            Hint: Reduction got stuck on '{MessageData.ofConstName ``Classical.choice}', \
-            which indicates that a '{MessageData.ofConstName ``Decidable}' instance \
-            is defined using classical reasoning, proving an instance exists rather than giving a concrete construction. \
-            The 'decide' tactic works by evaluating a decision procedure via reduction, and it cannot make progress with such instances. \
-            This can occur due to the 'opened scoped Classical' command, which enables the instance \
-            '{MessageData.ofConstName ``Classical.propDecidable}'."
-          else
-            MessageData.nil
-        return m!"\
-          tactic 'decide' failed for proposition\
-          {indentExpr expectedType}\n\
-          since its '{MessageData.ofConstName ``Decidable}' instance\
-          {indentExpr s}\n\
-          did not reduce to '{MessageData.ofConstName ``isTrue}' or '{MessageData.ofConstName ``isFalse}'.\n\n\
-          {stuckMsg}{hint}"
-
-private def mkNativeAuxDecl (baseName : Name) (type value : Expr) : TermElabM Name := do
-  let auxName ← Term.mkAuxName baseName
-  let decl := Declaration.defnDecl {
-    name := auxName, levelParams := [], type, value
-    hints := .abbrev
-    safety := .safe
-  }
-  addDecl decl
-  compileDecl decl
-  pure auxName
-
-@[builtin_tactic Lean.Parser.Tactic.nativeDecide] def evalNativeDecide : Tactic := fun _ =>
-  closeMainGoalUsing `nativeDecide fun expectedType => do
-    let expectedType ← preprocessPropToDecide expectedType
-    let d ← mkDecide expectedType
-    let auxDeclName ← mkNativeAuxDecl `_nativeDecide (Lean.mkConst `Bool) d
-    let rflPrf ← mkEqRefl (toExpr true)
-    let s := d.appArg! -- get instance from `d`
-    return mkApp3 (Lean.mkConst ``of_decide_eq_true) expectedType s <| mkApp3 (Lean.mkConst ``Lean.ofReduceBool) (Lean.mkConst auxDeclName) (toExpr true) rflPrf
 
 end Lean.Elab.Tactic

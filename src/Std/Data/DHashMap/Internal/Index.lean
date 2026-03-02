@@ -3,9 +3,14 @@ Copyright (c) 2024 Lean FRO, LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Markus Himmel
 -/
+module
+
 prelude
+public import Init.Data.UInt.Bitwise
+import Init.ByCases
 import Init.Data.UInt.Lemmas
-import Init.Data.UInt.Bitwise
+
+public section
 
 /-!
 This is an internal implementation file of the hash map. Users of the hash map should not rely on
@@ -43,22 +48,14 @@ def scrambleHash (hash : UInt64) : UInt64 :=
 `sz` is an explicit parameter because having it inferred from `h` can lead to suboptimal IR,
 cf. https://github.com/leanprover/lean4/issues/4157
 -/
-@[irreducible, inline] def mkIdx (sz : Nat) (h : 0 < sz) (hash : UInt64) :
+@[irreducible, inline, expose] def mkIdx (sz : Nat) (h : 0 < sz) (hash : UInt64) :
     { u : USize // u.toNat < sz } :=
-  ⟨(scrambleHash hash).toUSize &&& (sz.toUSize - 1), by
-    -- Making this proof significantly less painful will be a good test for our USize API
+  ⟨(scrambleHash hash).toUSize &&& (USize.ofNat sz - 1), by
+    -- This proof is a good test for our USize API
     by_cases h' : sz < USize.size
-    · rw [USize.and_toNat, ← USize.ofNat_one, USize.sub_toNat_of_le, USize.toNat_ofNat_of_lt]
-      · refine Nat.lt_of_le_of_lt Nat.and_le_right (Nat.sub_lt h ?_)
-        rw [USize.toNat_ofNat_of_lt]
-        · exact Nat.one_pos
-        · exact Nat.lt_of_le_of_lt h h'
-      · exact h'
-      · rw [USize.le_def, Fin.le_def]
-        change _ ≤ (_ % _)
-        rw [Nat.mod_eq_of_lt h', USize.ofNat, Fin.val_ofNat', Nat.mod_eq_of_lt]
-        · exact h
-        · exact Nat.lt_of_le_of_lt h h'
+    · rw [USize.toNat_and, USize.toNat_sub_of_le, USize.toNat_ofNat_of_lt' h']
+      · exact Nat.lt_of_le_of_lt Nat.and_le_right (Nat.sub_lt h (by simp))
+      · simp [USize.le_iff_toNat_le, Nat.mod_eq_of_lt h', Nat.succ_le_of_lt h]
     · exact Nat.lt_of_lt_of_le (USize.toNat_lt_size _) (Nat.le_of_not_lt h')⟩
 
 end Std.DHashMap.Internal
