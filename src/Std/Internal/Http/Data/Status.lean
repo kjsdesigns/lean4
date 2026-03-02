@@ -36,8 +36,23 @@ abbrev IsValidReasonPhrase (s : String) : Prop :=
   s.toList.all Char.reasonPhraseChar
 
 /--
+Returns `true` for every status code that has a dedicated named constructor in `Status`.
+Used to ensure `Status.other` is never constructed with a code that already has a name.
+-/
+def isKnownStatusCode : UInt16 → Bool
+  | 100 | 101 | 102 | 103
+  | 200 | 201 | 202 | 203 | 204 | 205 | 206 | 207 | 208 | 226
+  | 300 | 301 | 302 | 303 | 304 | 305 | 306 | 307 | 308
+  | 400 | 401 | 402 | 403 | 404 | 405 | 406 | 407 | 408 | 409 | 410
+  | 411 | 412 | 413 | 414 | 415 | 416 | 417 | 418 | 421 | 422 | 423
+  | 424 | 425 | 426 | 428 | 429 | 431 | 451
+  | 500 | 501 | 502 | 503 | 504 | 505 | 506 | 507 | 508 | 510 | 511 => true
+  | _ => false
+
+/--
 A custom HTTP status with a numeric code and a reason phrase. Used to represent status codes
-not enumerated as dedicated constructors in `Status`.
+not enumerated as dedicated constructors in `Status`. The code must be in the range 100–999
+(a three-digit integer per RFC 9112 §4) and must not correspond to any named constructor.
 
 Reference: https://httpwg.org/specs/rfc9110.html#status.codes
 -/
@@ -57,10 +72,21 @@ structure CustomStatus where
   Proof that the reason phrase contains only valid characters.
   -/
   validReasonPhrase : IsValidReasonPhrase phrase := by decide
+
+  /--
+  Proof that the code is a valid HTTP status code (100–999), i.e. a three-digit integer
+  as required by RFC 9112 §4.
+  -/
+  validCode : 100 ≤ code ∧ code ≤ 999 := by decide
+
+  /--
+  Proof that the code does not clash with any named `Status` constructor.
+  -/
+  validUnknown : ¬isKnownStatusCode code := by decide
 deriving Repr, BEq
 
 instance : Inhabited CustomStatus where
-  default := ⟨0, "Unknown", by decide⟩
+  default := ⟨209, "Unknown", by decide, by decide, by decide⟩
 
 instance : ToString CustomStatus where
   toString s := s.phrase
@@ -72,8 +98,8 @@ Attempts to create a `CustomStatus` from a numeric code and a reason phrase stri
 `none` if the phrase contains invalid characters.
 -/
 def ofCodeAndPhrase? (code : UInt16) (phrase : String) : Option CustomStatus :=
-  if h : IsValidReasonPhrase phrase then
-    some ⟨code, phrase, h⟩
+  if h : IsValidReasonPhrase phrase ∧ (100 ≤ code ∧ code ≤ 999) ∧ ¬isKnownStatusCode code then
+    some ⟨code, phrase, h.left, h.right.left, h.right.right⟩
   else
     none
 
@@ -482,73 +508,78 @@ def toCode : Status → UInt16
 /--
 Converts a `UInt16` to `Status`.
 -/
-def ofCode (reasonPhrase : Option { x : String // IsValidReasonPhrase x }) : UInt16 → Status
-  | 100 => .«continue»
-  | 101 => .switchingProtocols
-  | 102 => .processing
-  | 103 => .earlyHints
-  | 200 => .ok
-  | 201 => .created
-  | 202 => .accepted
-  | 203 => .nonAuthoritativeInformation
-  | 204 => .noContent
-  | 205 => .resetContent
-  | 206 => .partialContent
-  | 207 => .multiStatus
-  | 208 => .alreadyReported
-  | 226 => .imUsed
-  | 300 => .multipleChoices
-  | 301 => .movedPermanently
-  | 302 => .found
-  | 303 => .seeOther
-  | 304 => .notModified
-  | 305 => .useProxy
-  | 306 => .unused
-  | 307 => .temporaryRedirect
-  | 308 => .permanentRedirect
-  | 400 => .badRequest
-  | 401 => .unauthorized
-  | 402 => .paymentRequired
-  | 403 => .forbidden
-  | 404 => .notFound
-  | 405 => .methodNotAllowed
-  | 406 => .notAcceptable
-  | 407 => .proxyAuthenticationRequired
-  | 408 => .requestTimeout
-  | 409 => .conflict
-  | 410 => .gone
-  | 411 => .lengthRequired
-  | 412 => .preconditionFailed
-  | 413 => .payloadTooLarge
-  | 414 => .uriTooLong
-  | 415 => .unsupportedMediaType
-  | 416 => .rangeNotSatisfiable
-  | 417 => .expectationFailed
-  | 418 => .imATeapot
-  | 421 => .misdirectedRequest
-  | 422 => .unprocessableEntity
-  | 423 => .locked
-  | 424 => .failedDependency
-  | 425 => .tooEarly
-  | 426 => .upgradeRequired
-  | 428 => .preconditionRequired
-  | 429 => .tooManyRequests
-  | 431 => .requestHeaderFieldsTooLarge
-  | 451 => .unavailableForLegalReasons
-  | 500 => .internalServerError
-  | 501 => .notImplemented
-  | 502 => .badGateway
-  | 503 => .serviceUnavailable
-  | 504 => .gatewayTimeout
-  | 505 => .httpVersionNotSupported
-  | 506 => .variantAlsoNegotiates
-  | 507 => .insufficientStorage
-  | 508 => .loopDetected
-  | 510 => .notExtended
-  | 511 => .networkAuthenticationRequired
+def ofCode (reasonPhrase : Option { x : String // IsValidReasonPhrase x }) (code: UInt16) : Option Status :=
+  match h : code with
+  | 100 => some .«continue»
+  | 101 => some .switchingProtocols
+  | 102 => some .processing
+  | 103 => some .earlyHints
+  | 200 => some .ok
+  | 201 => some .created
+  | 202 => some .accepted
+  | 203 => some .nonAuthoritativeInformation
+  | 204 => some .noContent
+  | 205 => some .resetContent
+  | 206 => some .partialContent
+  | 207 => some .multiStatus
+  | 208 => some .alreadyReported
+  | 226 => some .imUsed
+  | 300 => some .multipleChoices
+  | 301 => some .movedPermanently
+  | 302 => some .found
+  | 303 => some .seeOther
+  | 304 => some .notModified
+  | 305 => some .useProxy
+  | 306 => some .unused
+  | 307 => some .temporaryRedirect
+  | 308 => some .permanentRedirect
+  | 400 => some .badRequest
+  | 401 => some .unauthorized
+  | 402 => some .paymentRequired
+  | 403 => some .forbidden
+  | 404 => some .notFound
+  | 405 => some .methodNotAllowed
+  | 406 => some .notAcceptable
+  | 407 => some .proxyAuthenticationRequired
+  | 408 => some .requestTimeout
+  | 409 => some .conflict
+  | 410 => some .gone
+  | 411 => some .lengthRequired
+  | 412 => some .preconditionFailed
+  | 413 => some .payloadTooLarge
+  | 414 => some .uriTooLong
+  | 415 => some .unsupportedMediaType
+  | 416 => some .rangeNotSatisfiable
+  | 417 => some .expectationFailed
+  | 418 => some .imATeapot
+  | 421 => some .misdirectedRequest
+  | 422 => some .unprocessableEntity
+  | 423 => some .locked
+  | 424 => some .failedDependency
+  | 425 => some .tooEarly
+  | 426 => some .upgradeRequired
+  | 428 => some .preconditionRequired
+  | 429 => some .tooManyRequests
+  | 431 => some .requestHeaderFieldsTooLarge
+  | 451 => some .unavailableForLegalReasons
+  | 500 => some .internalServerError
+  | 501 => some .notImplemented
+  | 502 => some .badGateway
+  | 503 => some .serviceUnavailable
+  | 504 => some .gatewayTimeout
+  | 505 => some .httpVersionNotSupported
+  | 506 => some .variantAlsoNegotiates
+  | 507 => some .insufficientStorage
+  | 508 => some .loopDetected
+  | 510 => some .notExtended
+  | 511 => some .networkAuthenticationRequired
   | n =>
     let ph := reasonPhrase.getD ⟨"Unknown", by decide⟩
-    .other ⟨n, ph.val, ph.property⟩
+
+    if h : (100 ≤ n ∧ n ≤ 999) ∧ ¬isKnownStatusCode n then
+      some <| .other ⟨n, ph.val, ph.property, h.left, h.right⟩
+    else
+      none
 
 /--
 Checks if the type of the status code is informational, meaning that the request was received

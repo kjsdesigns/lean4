@@ -34,7 +34,7 @@ HTTP token character and `s` is non-empty.
 Reference: https://httpwg.org/specs/rfc9112.html#chunked.extension
 -/
 abbrev IsValidExtensionName (s : String) : Prop :=
-  s.toList.all Char.token ∧ ¬s.toList.isEmpty
+  isToken s
 
 /--
 A validated chunk extension name that ensures all characters conform to HTTP standards

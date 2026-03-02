@@ -14,10 +14,10 @@ public section
 
 
 /-!
-# Internal Quoting Helpers
+# Internal String Helpers
 
-Shared string-quoting utilities for HTTP encoding paths such as header parameter values and chunk
-extensions.
+Shared string utilities for HTTP: token validation and quoted-string encoding/decoding for header
+parameter values and chunk extensions.
 -/
 
 namespace Std.Http.Internal
@@ -111,6 +111,7 @@ Checks whether a string is a valid non-empty HTTP token.
 -/
 @[expose]
 def isToken (s : String) : Bool :=
-  ¬s.isEmpty ∧ s.toList.all Char.token
+  let s := s.toList
+  ¬s.isEmpty ∧ s.all Char.token
 
 end Std.Http.Internal
