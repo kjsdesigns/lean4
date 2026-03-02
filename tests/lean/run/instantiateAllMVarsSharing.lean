@@ -60,11 +60,7 @@ private def mkTestRoot : MetaM Expr := do
       root.mvarId!.assign (Lean.mkLambda `s .default nat (mkApp rootAux (.bvar 0)))
       return root
 
--- instantiateAllMVars (non-sharing) loses some sharing compared to instantiateAllMVarsSharing
-/--
-error: sharing regression: instantiateAllMVarsSharing 29 objs, instantiateAllMVars 34 objs
--/
-#guard_msgs (error) in
+-- Both variants now produce the same result with the same sharing
 run_meta do
   let root ← mkTestRoot
 
@@ -79,9 +75,7 @@ run_meta do
   saved.restore
 
   guard (eSharing == eAll)
-
-  if nAll > nSharing then
-    throwError "sharing regression: instantiateAllMVarsSharing {nSharing} objs, instantiateAllMVars {nAll} objs"
+  guard (nAll == nSharing)
 
 -- instantiateAllMVarsSharing produces the same result as instantiateMVars
 run_meta do

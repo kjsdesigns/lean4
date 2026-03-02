@@ -33,21 +33,15 @@ public def instantiateMVarsOriginal (e : Expr) : MetaM Expr := do
 /-- Like `instantiateMVars` but uses a fused two-pass approach.
     Pass 1 resolves direct mvar assignments with write-back.
     Pass 2 resolves delayed assignments with a fused fvar substitution,
-    avoiding separate `replace_fvars` calls.
-
-    This variant may lose sharing across delayed-mvar boundaries. -/
+    avoiding separate `replace_fvars` calls. Preserves sharing using
+    a flat cache with generation-based staleness detection. -/
 public def instantiateAllMVars (e : Expr) : MetaM Expr := do
   if !e.hasMVar then return e
   let (mctx, eNew) := instantiateAllMVarsImp (← getMCtx) e
   modifyMCtx fun _ => mctx; return eNew
 
-/-- Like `instantiateAllMVars` but preserves sharing across delayed-mvar boundaries
-    using a scope-tracked cache stack. Results that only depend on outer-scope fvar
-    substitutions are cached at the outermost valid scope, so they are reused when
-    the same subexpression appears in sibling delayed-mvar resolutions.
-
-    This produces nearly optimal output sharing (matching `instantiateMVars`) at the
-    cost of O(scope_depth) cache lookups instead of O(1). -/
+/-- Alias for `instantiateAllMVars`. Both variants now use the same
+    sharing-preserving implementation with O(1) cache lookups. -/
 public def instantiateAllMVarsSharing (e : Expr) : MetaM Expr := do
   if !e.hasMVar then return e
   let (mctx, eNew) := instantiateAllMVarsSharingImp (← getMCtx) e

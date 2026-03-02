@@ -346,11 +346,10 @@ public:
    Pass 2: Resolve delayed assignments with fused fvar substitution.
    Direct mvar chains have been pre-resolved by pass 1.
 
-   Two modes controlled by `m_preserve_sharing`:
-   - false: simple cache swap on visit_delayed boundaries (fast, may lose sharing)
-   - true:  stack of (ptr, depth) caches with scope tracking; results are cached
-            at the outermost valid scope so they persist across visit_delayed
-            boundaries, preserving sharing at near-zero extra cost.
+   Uses a flat (ptr, depth)-keyed cache with generation-based staleness.
+   Each visit_delayed scope gets a unique generation number; cache entries
+   record the scope level and generation at insertion. Validity is O(1):
+   entry valid iff level <= m_scope && m_scope_gens[level] == entry.scope_gen.
    ============================================================================ */
 
 struct fvar_subst_entry {
@@ -366,21 +365,22 @@ class instantiate_delayed_fn {
         }
     };
 
-    typedef lean::unordered_map<std::pair<lean_object *, unsigned>, expr, key_hasher> depth_cache;
+    struct cache_entry { expr result; unsigned scope_level; unsigned scope_gen; };
+
+    typedef lean::unordered_map<std::pair<lean_object *, unsigned>, cache_entry, key_hasher> flat_cache;
 
     metavar_ctx & m_mctx;
     name_set const & m_resolvable_delayed;
     name_hash_map<fvar_subst_entry> m_fvar_subst;
     unsigned m_depth;
-    bool m_preserve_sharing;
 
-    /* Stack of (ptr, depth)-keyed caches, one per visit_delayed scope.
-       Level 0 is the outermost scope (before any visit_delayed).
-       In non-sharing mode, only level m_scope is used (others are empty). */
-    std::vector<depth_cache> m_cache_stack;
+    /* Single flat cache with generation-based staleness detection. */
+    flat_cache m_cache;
+    std::vector<unsigned> m_scope_gens;  /* m_scope_gens[level] = generation */
+    unsigned m_gen_counter;
     unsigned m_scope;
 
-    /* [sharing mode] After visit() returns, this holds the maximum fvar-substitution
+    /* After visit() returns, this holds the maximum fvar-substitution
        scope that contributed to the result — i.e., the outermost scope at which the
        result is valid and can be cached. Updated monotonically (via max) through
        the save/reset/restore pattern in visit(). */
@@ -404,47 +404,30 @@ class instantiate_delayed_fn {
         auto it = m_fvar_subst.find(fid);
         if (it == m_fvar_subst.end())
             return optional<expr>();
-        if (m_preserve_sharing) {
-            m_result_scope = std::max(m_result_scope, it->second.scope);
-        }
+        m_result_scope = std::max(m_result_scope, it->second.scope);
         unsigned d = m_depth - it->second.depth;
         if (d == 0)
             return optional<expr>(it->second.value);
         return optional<expr>(lift_loose_bvars(it->second.value, d));
     }
 
-    /* Cache lookup.
-       Non-sharing mode: check only the current (innermost) scope level.
-       Sharing mode: scan from outermost to innermost; first hit wins.
-       (Under the assumption that fvar names are unique across scopes,
-       each (ptr, depth) appears in at most one level, so direction
-       doesn't matter — but outermost-first is efficient since most
-       entries live at low scope levels.) */
+    /* Cache lookup — O(1) with generation-based staleness check. */
     optional<expr> cache_lookup(lean_object * ptr) {
         auto key = mk_pair(ptr, m_depth);
-        if (m_preserve_sharing) {
-            for (unsigned s = 0; s <= m_scope; s++) {
-                auto it = m_cache_stack[s].find(key);
-                if (it != m_cache_stack[s].end()) {
-                    m_result_scope = std::max(m_result_scope, s);
-                    return optional<expr>(it->second);
-                }
-            }
-        } else {
-            auto it = m_cache_stack[m_scope].find(key);
-            if (it != m_cache_stack[m_scope].end())
-                return optional<expr>(it->second);
+        auto it = m_cache.find(key);
+        if (it == m_cache.end()) return {};
+        auto & entry = it->second;
+        if (entry.scope_level <= m_scope &&
+            m_scope_gens[entry.scope_level] == entry.scope_gen) {
+            m_result_scope = std::max(m_result_scope, entry.scope_level);
+            return optional<expr>(entry.result);
         }
-        return optional<expr>();
+        return {};
     }
 
     void cache_insert(lean_object * ptr, expr const & result) {
         auto key = mk_pair(ptr, m_depth);
-        if (m_preserve_sharing) {
-            m_cache_stack[m_result_scope].insert(mk_pair(key, result));
-        } else {
-            m_cache_stack[m_scope].insert(mk_pair(key, result));
-        }
+        m_cache[key] = { result, m_result_scope, m_scope_gens[m_result_scope] };
     }
 
     /* Get a direct mvar assignment. Visit it to resolve delayed mvars
@@ -540,20 +523,16 @@ class instantiate_delayed_fn {
             m_fvar_subst[fid] = {m_depth, m_scope, args[args.size() - 1 - i]};
         }
 
-        /* Push a new cache scope for the extended substitution. */
-        if (m_scope >= m_cache_stack.size()) {
-            m_cache_stack.emplace_back();
-        } else {
-            m_cache_stack[m_scope].clear();
-        }
+        /* Push: bump generation so stale entries at this scope level are detected. */
+        m_gen_counter++;
+        if (m_scope >= m_scope_gens.size())
+            m_scope_gens.push_back(m_gen_counter);
+        else
+            m_scope_gens[m_scope] = m_gen_counter;
 
         expr val_new = visit(mk_mvar(mid_pending));
 
-        /* Pop the cache scope. In sharing mode, entries that belong to outer
-           scopes were already inserted there by cache_insert. Only scope-specific
-           entries (those using fvars from this scope) live at m_scope and are
-           discarded. In non-sharing mode, all entries at m_scope are discarded. */
-        m_cache_stack[m_scope].clear();
+        /* Pop: just decrement scope — stale entries are detected by generation mismatch. */
         m_scope--;
 
         /* Restore the fvar substitution. */
@@ -630,11 +609,10 @@ class instantiate_delayed_fn {
     }
 
 public:
-    instantiate_delayed_fn(metavar_ctx & mctx, name_set const & resolvable_delayed, bool preserve_sharing)
+    instantiate_delayed_fn(metavar_ctx & mctx, name_set const & resolvable_delayed)
         : m_mctx(mctx), m_resolvable_delayed(resolvable_delayed),
-          m_depth(0), m_preserve_sharing(preserve_sharing),
-          m_scope(0), m_result_scope(0) {
-        m_cache_stack.emplace_back(); /* scope 0 */
+          m_depth(0), m_gen_counter(0), m_scope(0), m_result_scope(0) {
+        m_scope_gens.push_back(0); /* scope 0 has generation 0 */
     }
 
     expr visit(expr const & e) {
@@ -660,15 +638,12 @@ public:
             shared = true;
         }
 
-        /* In sharing mode, save and reset the result scope for this subtree.
+        /* Save and reset the result scope for this subtree.
            After computing, cache_insert uses m_result_scope to place the entry
            at the outermost valid scope level. Then we restore the parent's
            watermark, taking the max with our contribution. */
-        unsigned saved_result_scope = 0;
-        if (m_preserve_sharing) {
-            saved_result_scope = m_result_scope;
-            m_result_scope = 0;
-        }
+        unsigned saved_result_scope = m_result_scope;
+        m_result_scope = 0;
 
         expr r;
         switch (e.kind()) {
@@ -722,9 +697,7 @@ public:
         }
 
     done:
-        if (m_preserve_sharing) {
-            m_result_scope = std::max(saved_result_scope, m_result_scope);
-        }
+        m_result_scope = std::max(saved_result_scope, m_result_scope);
         return r;
     }
 
@@ -746,7 +719,7 @@ public:
    Entry points: run pass 1 then pass 2.
    ============================================================================ */
 
-static object * run_instantiate_all(object * m, object * e, bool preserve_sharing) {
+static object * run_instantiate_all(object * m, object * e) {
     metavar_ctx mctx(m);
 
     /* Pass 1: resolve direct mvar assignments, pre-normalize pending values. */
@@ -754,7 +727,7 @@ static object * run_instantiate_all(object * m, object * e, bool preserve_sharin
     expr e1 = pass1(expr(e));
 
     /* Pass 2: resolve delayed assignments with fused fvar substitution. */
-    instantiate_delayed_fn pass2(mctx, pass1.resolvable_delayed(), preserve_sharing);
+    instantiate_delayed_fn pass2(mctx, pass1.resolvable_delayed());
     expr e2 = pass2(e1);
 
     /* (mctx, expr) */
@@ -764,15 +737,11 @@ static object * run_instantiate_all(object * m, object * e, bool preserve_sharin
     return r;
 }
 
-/* Fast variant: may lose sharing across delayed-mvar boundaries. */
 extern "C" LEAN_EXPORT object * lean_instantiate_expr_mvars_all(object * m, object * e) {
-    return run_instantiate_all(m, e, false);
+    return run_instantiate_all(m, e);
 }
 
-/* Sharing-preserving variant: uses scope-tracked cache stack to preserve
-   cross-scope sharing. Nearly optimal output size at the cost of
-   O(scope_depth) cache lookups instead of O(1). */
 extern "C" LEAN_EXPORT object * lean_instantiate_expr_mvars_all_sharing(object * m, object * e) {
-    return run_instantiate_all(m, e, true);
+    return run_instantiate_all(m, e);
 }
 }
