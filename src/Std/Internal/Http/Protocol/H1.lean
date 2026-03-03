@@ -295,8 +295,9 @@ private def authorityHostHeaderValue (authority : URI.Authority) : Header.Value 
   let host := toString authority.host
 
   let value := match authority.port with
-    | some port => s!"{host}:{port}"
-    | none => host
+    | .value port => s!"{host}:{port}"
+    | .empty => s!"{host}:"
+    | .omitted => s!"{host}"
 
   Header.Value.ofString! value
 

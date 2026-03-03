@@ -89,7 +89,7 @@ Fails if the input starts with a non-token character or is empty.
 -/
 @[inline]
 def parseToken (limit : Nat) : Parser ByteSlice :=
-  takeWhileUpTo1 (fun c => token (Char.ofUInt8 c)) limit
+  takeWhileUpTo1 (fun c => tchar (Char.ofUInt8 c)) limit
 
 /--
 Parses a line terminator.
