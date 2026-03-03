@@ -9,10 +9,9 @@ prelude
 public import Lean.PrettyPrinter.Delaborator.Basic
 public import Lean.Meta.CoeAttr
 public import Lean.Meta.Structure
-import Lean.Parser.Command
 public import Lean.PrettyPrinter.Formatter
 public import Lean.PrettyPrinter.Parenthesizer
-meta import Lean.Parser.Do
+meta import Lean.Parser.Command
 
 public section
 
@@ -47,8 +46,12 @@ def delabFVar : Delab := do
     let l ← fvarId.getDecl
     maybeAddBlockImplicit (mkIdent l.userName)
   catch _ =>
-    -- loose free variable, use internal name
-    maybeAddBlockImplicit <| mkIdent (fvarId.name.replacePrefix `_uniq `_fvar)
+    -- loose free variable
+    if ← getPPOption getPPFVarsAnonymous then
+      -- use internal name like `_fvar.22`
+      maybeAddBlockImplicit <| mkIdent (fvarId.name.replacePrefix `_uniq `_fvar)
+    else
+      maybeAddBlockImplicit <| mkIdent `_fvar._
 
 -- loose bound variable, use pseudo syntax
 @[builtin_delab bvar]
@@ -1547,7 +1550,7 @@ def delabSorry : Delab := whenPPOption getPPNotation <| whenNotPPOption getPPExp
 open Parser Command Term in
 @[run_builtin_parser_attribute_hooks]
 -- use `termParser` instead of `declId` so we can reuse `delabConst`
-def declSigWithId := leading_parser termParser maxPrec >> declSig
+private meta def declSigWithId := leading_parser termParser maxPrec >> declSig
 
 private unsafe def evalSyntaxConstantUnsafe (env : Environment) (opts : Options) (constName : Name) : ExceptT String Id Syntax :=
   env.evalConstCheck Syntax opts ``Syntax constName
