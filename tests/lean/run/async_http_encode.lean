@@ -350,17 +350,17 @@ info: "HTTP/1.1 418 I'm a teapot\x0d\n\x0d\n"
 
 -- Status.other 104: minimum valid non-known code (100–103 are all named)
 /--
-info: "104 Unknown"
+info: "999 Unknown"
 -/
 #guard_msgs in
-#eval encodeStr (Status.other ⟨104, "Unknown", by decide, by decide, by decide⟩)
+#eval encodeStr (Status.other ⟨999, "Unknown", by decide, by decide, by decide⟩)
 
 -- Status.other 209: non-named code between two known blocks
 /--
-info: "209 Unknown"
+info: "888 Unknown"
 -/
 #guard_msgs in
-#eval encodeStr (Status.other ⟨209, "Unknown", by decide, by decide, by decide⟩)
+#eval encodeStr (Status.other ⟨888, "Unknown", by decide, by decide, by decide⟩)
 
 -- Status.other 999: maximum valid code
 /--
