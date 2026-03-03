@@ -123,13 +123,13 @@ def status (builder : Builder) (status : Status) : Builder :=
 Sets the headers for the response being built.
 -/
 def headers (builder : Builder) (headers : Headers) : Builder :=
-  { builder with head := { builder.head with headers } }
+  { builder with line := { builder.line with headers } }
 
 /--
 Adds a single header to the response being built.
 -/
 def header (builder : Builder) (key : Header.Name) (value : Header.Value) : Builder :=
-  { builder with head := { builder.head with headers := builder.head.headers.insert key value } }
+  { builder with line := { builder.line with headers := builder.line.headers.insert key value } }
 
 /--
 Adds a single header to the response being built, panics if the header is invalid.
@@ -137,7 +137,7 @@ Adds a single header to the response being built, panics if the header is invali
 def header! (builder : Builder) (key : String) (value : String) : Builder :=
   let key := Header.Name.ofString! key
   let value := Header.Value.ofString! value
-  { builder with head := { builder.head with headers := builder.head.headers.insert key value } }
+  { builder with line := { builder.line with headers := builder.line.headers.insert key value } }
 
 /--
 Adds a single header to the response being built.
@@ -146,7 +146,7 @@ Returns `none` if the header name or value is invalid.
 def header? (builder : Builder) (key : String) (value : String) : Option Builder := do
   let key ← Header.Name.ofString? key
   let value ← Header.Value.ofString? value
-  pure <| { builder with head := { builder.head with headers := builder.head.headers.insert key value } }
+  pure <| { builder with line := { builder.line with headers := builder.line.headers.insert key value } }
 
 /--
 Inserts a typed extension value into the response being built.
