@@ -278,6 +278,8 @@ public def parseRequestLine (limits : H1.Config) : Parser Request.Head := do
   let (uri, (major, minor)) ← parseRequestLineBody limits
   if major == 1 ∧ minor == 1 then
     return ⟨method, .v11, uri, .empty⟩
+  else if major == 1 ∧ minor == 0 then
+    return ⟨method, .v10, uri, .empty⟩
   else
     fail "unsupported HTTP version"
 
@@ -308,9 +310,12 @@ def parseFieldLine (limits : H1.Config) : Parser (String × String) := do
   return (name, value)
 
 /--
-Parses a single header.
+Parses a single header field line, or returns `none` when it sees the blank line that
+terminates the header section.
 
-field-line CRLF
+```
+field-line = field-name ":" OWS field-value OWS CRLF
+```
 -/
 public def parseSingleHeader (limits : H1.Config) : Parser (Option (String × String)) := do
   let next ← peek?
@@ -516,11 +521,9 @@ public def parseStatusLine (limits : H1.Config) : Parser Response.Head := do
   let (major, minor) ← parseHttpVersionNumber <* sp
   let status ← parseStatusCode limits
   if major == 1 ∧ minor == 1 then
-    return {
-      status
-      version := .v11
-      headers := .empty
-    }
+    return { status, version := .v11, headers := .empty }
+  else if major == 1 ∧ minor == 0 then
+    return { status, version := .v10, headers := .empty }
   else
     fail "unsupported HTTP version"
 

@@ -1324,13 +1324,13 @@ private partial def processReceivingStartLine (machine : Machine .receiving) : M
 
   match result with
   | some (method, uri, version) =>
-      if version == some .v11 then
+      match version with
+      |  some (v@Version.v11) | some (v@Version.v10) =>
         machine
-        |>.modifyReader (.setMessageHead ({ method, version := .v11, uri, headers := .empty }))
+        |>.modifyReader (.setMessageHead { method, version := v, uri, headers := .empty })
         |>.setReaderState (.needHeader 0)
         |> processRead
-      else
-        machine.setFailure .unsupportedVersion
+      | _ => machine.setFailure .unsupportedVersion
   | none =>
       machine
 
@@ -1348,7 +1348,14 @@ private partial def processSendingStartLine (machine : Machine .sending) : Machi
   | some (status, version) =>
       if version == some .v11 then
         machine
-        |>.modifyReader (.setMessageHead ({ status, version := .v11, headers := .empty }))
+        |>.modifyReader (.setMessageHead { status, version := .v11, headers := .empty })
+        |>.setReaderState (.needHeader 0)
+        |> processRead
+      else if version == some .v10 then
+        -- HTTP/1.0 response: accept and disable keep-alive (shouldKeepAlive returns false
+        -- for version ≠ .v11).
+        machine
+        |>.modifyReader (.setMessageHead { status, version := .v10, headers := .empty })
         |>.setReaderState (.needHeader 0)
         |> processRead
       else
