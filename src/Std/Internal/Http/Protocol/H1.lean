@@ -893,7 +893,9 @@ def canContinue (machine : Machine dir) (status : Status) : Machine dir :=
         |>.setReaderState .closed
   | .receiving, _ => machine
 
-/-- Enqueues body chunks into the writer buffer for encoding and sending. -/
+/--
+Enqueues body chunks into the writer buffer for encoding and sending.
+-/
 @[inline]
 def sendData (machine : Machine dir) (data : Array Chunk) : Machine dir :=
   if data.isEmpty then
@@ -901,12 +903,16 @@ def sendData (machine : Machine dir) (data : Array Chunk) : Machine dir :=
   else
     machine.modifyWriter (fun writer => { writer with userData := writer.userData ++ data })
 
-/-- Takes and clears all accumulated events, returning the drained array. -/
+/--
+Takes and clears all accumulated events, returning the drained array.
+-/
 @[inline]
 def takeEvents (machine : Machine dir) : Machine dir × Array (Event dir) :=
   ({ machine with events := #[] }, machine.events)
 
-/-- Takes all accumulated output to send to the socket. -/
+/--
+Takes and clears accumulated output bytes, returning them as a buffer.
+-/
 @[inline]
 def takeOutput (machine : Machine dir) : Machine dir × ChunkedBuffer :=
   let output := machine.writer.outputData

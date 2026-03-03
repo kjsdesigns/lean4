@@ -71,7 +71,7 @@ inductive Writer.State
   | complete
 
   /--
-  State that it has completed and cannot process more data.
+  Closed; no further data can be written.
   -/
   | closed
 deriving Inhabited, Repr, BEq
