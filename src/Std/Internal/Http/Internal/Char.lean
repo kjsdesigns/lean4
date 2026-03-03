@@ -278,8 +278,7 @@ theorem reasonPhraseChar_eq_reasonPhraseCharSpec : EqOnAscii reasonPhraseChar re
   decide
 
 /--
-Checks if a byte is a hexadecimal digit (0-9, a-f, or A-F). Note: This accepts both lowercase and
-uppercase hex digits.
+Checks if a byte is a hexadecimal digit (0-9, a-f, or A-F) using a precomputed bitmask.
 -/
 def isHexDigitSpec (c : Char) : Bool :=
   (c ≥ '0' && c ≤ '9') ||
