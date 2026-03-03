@@ -162,7 +162,7 @@ instance : Writer Full where
 instance : Writer Empty where
   send _ _ _ := throw <| .userError "cannot send"
   close _ := pure ()
-  isClosed _ := pure false
+  isClosed _ := pure true
   hasInterest _ := pure false
   getKnownSize _ := pure (some (.fixed 0))
   setKnownSize _ _ := pure ()
