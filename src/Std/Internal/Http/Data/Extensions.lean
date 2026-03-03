@@ -30,17 +30,6 @@ set_option linter.all true
 `quickCmp` is unavailable here, so this is a simpler implementation of the same comparison.
 -/
 
-private def compareString (s₁ s₂ : String) : Ordering :=
-  let rec go : List Char → List Char → Ordering
-    | [], [] => .eq
-    | [], _ => .lt
-    | _, [] => .gt
-    | c₁ :: cs₁, c₂ :: cs₂ =>
-        match compare c₁.toNat c₂.toNat with
-        | .eq => go cs₁ cs₂
-        | ord => ord
-  go s₁.toList s₂.toList
-
 /--
 An ordering for `Name` keys used by `Extensions`.
 -/
@@ -50,7 +39,7 @@ protected def Extensions.compareName : Name → Name → Ordering
   | _, .anonymous => .gt
   | .str p₁ s₁, .str p₂ s₂ =>
       match Extensions.compareName p₁ p₂ with
-      | .eq => compareString s₁ s₂
+      | .eq => compareOfLessAndEq s₁ s₂
       | ord => ord
   | .str _ _, .num _ _ => .lt
   | .num _ _, .str _ _ => .gt
