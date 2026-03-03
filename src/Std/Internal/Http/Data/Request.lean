@@ -77,7 +77,7 @@ Builds an HTTP Request.
 -/
 structure Request.Builder where
   /--
-  The head of the request.
+  The request-line of an HTTP request.
   -/
   line : Head := { method := .get, version := .v11, uri := "*" }
 
