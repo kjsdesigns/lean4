@@ -55,7 +55,7 @@ structure Config where
   `User-Agent` header value injected into outgoing requests (sending mode).
   `none` suppresses the header entirely.
   -/
-  serverName : Option Header.Value := none
+  agentName : Option Header.Value := none
 
   /--
   Maximum length of request URI (default: 8192 bytes).

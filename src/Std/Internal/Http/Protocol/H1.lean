@@ -748,7 +748,7 @@ private def writeHead (messageHead : Message.Head dir.swap) (machine : Machine d
 
   -- Add identity header based on direction
   let headers :=
-    let identityOpt := machine.config.serverName
+    let identityOpt := machine.config.agentName
     match dir, identityOpt with
     | .receiving, some server => headers.insert Header.Name.server server
     | .sending, some userAgent => headers.insert Header.Name.userAgent userAgent
