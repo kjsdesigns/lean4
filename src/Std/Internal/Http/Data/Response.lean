@@ -65,7 +65,7 @@ structure Response.Builder where
   /--
   The response status-line information.
   -/
-  head : Head := {}
+  line : Head := {}
 
   /--
   Optional dynamic metadata attached to the response.
@@ -106,7 +106,7 @@ def empty : Builder := { }
 Sets the HTTP status code for the response being built.
 -/
 def status (builder : Builder) (status : Status) : Builder :=
-  { builder with head := { builder.head with status := status } }
+  { builder with line := { builder.line with status := status } }
 
 /--
 Inserts a typed extension value into the response being built.
@@ -118,14 +118,14 @@ def extension (builder : Builder) [TypeName α] (data : α) : Builder :=
 Builds and returns the final HTTP Response with the specified body.
 -/
 def body (builder : Builder) (body : t) : Response t :=
-  { line := builder.head, body := body, extensions := builder.extensions }
+  { line := builder.line, body := body, extensions := builder.extensions }
 
 /--
 Builds and returns the final HTTP Response with an empty body (`{}`).
 Requires an `EmptyCollection` instance for the response body type.
 -/
 def build [EmptyCollection t] (builder : Builder) : Response t :=
-  { line := builder.head, body := {}, extensions := builder.extensions }
+  { line := builder.line, body := {}, extensions := builder.extensions }
 
 end Builder
 
