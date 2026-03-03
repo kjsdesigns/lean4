@@ -177,7 +177,7 @@ def toH1Config (config : Config) : Protocol.H1.Config where
   maxHeaders := config.maxHeaders
   maxHeaderBytes := config.maxHeaderBytes
   enableKeepAlive := config.enableKeepAlive
-  serverName := config.serverName
+  agentName := config.serverName
   maxUriLength := config.maxUriLength
   maxStartLineLength := config.maxStartLineLength
   maxHeaderNameLength := config.maxHeaderNameLength
