@@ -309,9 +309,13 @@ private def checkReceivingMessageHead (message : Message.Head .receiving) : Exce
   if !isValidRequestTargetForMethod message then
     throw .badMessage
 
-  -- Host validation
-  if !hasSingleAcceptedHostHeader message then
-    throw .badMessage
+  -- Host validation:
+  -- • HTTP/1.1: a Host header is REQUIRED (RFC 9112 §3.2).
+  -- • HTTP/1.0: Host is optional (RFC 2616 §14.23), but if present it must
+  --   be a single, well-formed value (no duplicates, correct authority form).
+  if message.version == .v11 || message.headers.contains .host then
+    if !hasSingleAcceptedHostHeader message then
+      throw .badMessage
 
   -- Gets the size of the message.
   match message.getSize (allowEOFBody := true) with
