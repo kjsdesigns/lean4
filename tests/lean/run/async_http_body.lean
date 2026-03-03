@@ -287,16 +287,18 @@ def fullInterest : Async Unit := do
 def emptyWriterBasics : Async Unit := do
   let body : Body.Empty := {}
   assert! (← Writer.getKnownSize body) == some (.fixed 0)
-  assert! !(← Writer.isClosed body)
+  assert! (← Writer.isClosed body)
   assert! !(← Writer.hasInterest body)
 
   Writer.setKnownSize body (some (.fixed 99))
   assert! (← Writer.getKnownSize body) == some (.fixed 0)
 
   Writer.close body
+
   let interested ← Selectable.one #[
     .case (Writer.interestSelector body) pure
   ]
+
   assert! interested == false
 
 #eval emptyWriterBasics.block
