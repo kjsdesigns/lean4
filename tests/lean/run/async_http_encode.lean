@@ -40,7 +40,7 @@ info: "GET"
 info: "HEAD"
 -/
 #guard_msgs in
-#eval encodeStr Method.line
+#eval encodeStr Method.head
 
 /--
 info: "POST"
