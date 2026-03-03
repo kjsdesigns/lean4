@@ -52,7 +52,7 @@ structure Response (t : Type) where
   /--
   The response status-line information.
   -/
-  head : Response.Head := {}
+  line : Response.Head := {}
 
   /--
   The content of the response.
@@ -158,14 +158,14 @@ def extension (builder : Builder) [TypeName α] (data : α) : Builder :=
 Builds and returns the final HTTP Response with the specified body.
 -/
 def body (builder : Builder) (body : t) : Response t :=
-  { head := builder.head, body := body, extensions := builder.extensions }
+  { line := builder.head, body := body, extensions := builder.extensions }
 
 /--
 Builds and returns the final HTTP Response with an empty body (`{}`).
 Requires an `EmptyCollection` instance for the response body type.
 -/
 def build [EmptyCollection t] (builder : Builder) : Response t :=
-  { head := builder.head, body := {}, extensions := builder.extensions }
+  { line := builder.head, body := {}, extensions := builder.extensions }
 
 end Builder
 
