@@ -253,6 +253,40 @@ private def isValidRequestTargetForMethod (message : Message.Head .receiving) : 
 
   | _, _ => true
 
+/- Internal host/authority matching helpers. -/
+@[inline]
+private def defaultPortForScheme? (scheme : URI.Scheme) : Option UInt16 :=
+  let scheme : String := scheme
+  if scheme == "http" then
+    some 80
+  else if scheme == "https" then
+    some 443
+  else
+    none
+
+@[inline]
+private def normalizeHostPortForAuthorityMatch
+    (scheme? : Option URI.Scheme)
+    (port : URI.Port) : URI.Port :=
+  match port with
+  | .omitted =>
+    match scheme? with
+    | some scheme =>
+      match defaultPortForScheme? scheme with
+      | some p => .value p
+      | none => .omitted
+    | none => .omitted
+  | p => p
+
+@[inline]
+private def hostAuthorityMatches
+    (scheme? : Option URI.Scheme)
+    (authority : URI.Authority)
+    (hostHeader : Header.Host) : Bool :=
+  let authorityPort := normalizeHostPortForAuthorityMatch scheme? authority.port
+  let hostPort := normalizeHostPortForAuthorityMatch scheme? hostHeader.port
+  authority.host == hostHeader.host && authorityPort == hostPort
+
 /--
 Validates the required `Host` header for HTTP/1.1 requests:
 exactly one value, with absolute-form authority taking precedence over Host.
@@ -275,9 +309,13 @@ private def hasSingleAcceptedHostHeader (message : Message.Head .receiving) : Bo
       match message.uri with
       | .asteriskForm =>
         hostValue.value.isEmpty ∨ parsed.isSome
-      | .absoluteForm { authority := some authority, .. } _ | .authorityForm authority =>
+      | .absoluteForm { scheme, authority := some authority, .. } _ =>
         match parsed with
-        | some ⟨host, _⟩ => authority.host == host -- && authority.port == port (Not so strict!)
+        | some hostHeader => hostAuthorityMatches (some scheme) authority hostHeader
+        | none => false
+      | .authorityForm authority =>
+        match parsed with
+        | some hostHeader => hostAuthorityMatches none authority hostHeader
         | none => false
       | _ =>
         -- RFC 9110 §7.2: when the target URI has no authority (origin-form, asterisk-form),
@@ -1096,7 +1134,9 @@ partial def processWrite (machine : Machine dir) : Machine dir :=
   | .pending =>
       if machine.reader.isClosed then machine.closeWriter else machine
   | .waitingHeaders =>
-      machine.addEvent .needAnswer
+      match dir with
+      | .receiving => machine
+      | .sending => machine.addEvent .needAnswer
   | .waitingForFlush =>
       if machine.shouldFlush then
         machine.writeHead machine.writer.messageHead
@@ -1156,7 +1196,6 @@ private def handleReaderFailed (machine : Machine dir) (error : H1.Error) : Mach
 
   machine
   |>.setReaderState .closed
-  |>.addEvent (.failed error)
   |>.setError error
 
 /--
