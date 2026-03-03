@@ -489,7 +489,8 @@ def parseReasonPhrase (limits : H1.Config) : Parser String := do
   liftOption <| String.fromUTF8? bytes.toByteArray
 
 /--
-Parses HTTP status code (3 digits)
+Parses a status-code (3 decimal digits), the following reason phrase, and the
+terminating CRLF; returns a typed `Status`.
 -/
 def parseStatusCode (limits : H1.Config) : Parser Status := do
   let d1 ← digit
