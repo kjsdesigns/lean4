@@ -228,7 +228,7 @@ structure Host where
   /--
   Optional port.
   -/
-  port : Option URI.Port
+  port : URI.Port
 deriving Repr, BEq
 
 namespace Host
@@ -247,8 +247,9 @@ Serializes a `Host` header back to a name and a value.
 -/
 def serialize (host : Host) : Header.Name × Header.Value :=
   let value := match host.port with
-    | some port => Header.Value.ofString! s!"{host.host}:{port}"
-    | none => Header.Value.ofString! <| toString host.host
+    | .value port => Header.Value.ofString! s!"{host.host}:{port}"
+    | .empty => Header.Value.ofString! s!"{host.host}:"
+    | .omitted => Header.Value.ofString! <| toString host.host
 
   (.mk "host", value)
 

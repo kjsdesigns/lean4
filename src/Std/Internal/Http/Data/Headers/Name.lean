@@ -49,14 +49,14 @@ structure Name where
   value : String
 
   /--
-  The proof that it's a valid header name
+  The proof that it's a valid header name.
   -/
-  validHeaderName : IsValidHeaderName value := by decide
+  isValidHeaderValue : IsValidHeaderName value := by decide
 
   /--
-  The proof that we stored the header name in normal form
+  The proof that we stored the header name in stored as a lower case string.
   -/
-  normalForm : IsLowerCase value := by decide
+  isLowerCase : IsLowerCase value := by decide
 deriving Repr, DecidableEq
 
 namespace Name

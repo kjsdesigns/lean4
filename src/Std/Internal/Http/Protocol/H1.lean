@@ -253,6 +253,40 @@ private def isValidRequestTargetForMethod (message : Message.Head .receiving) : 
 
   | _, _ => true
 
+/- Internal host/authority matching helpers. -/
+@[inline]
+private def defaultPortForScheme? (scheme : URI.Scheme) : Option UInt16 :=
+  let scheme : String := scheme
+  if scheme == "http" then
+    some 80
+  else if scheme == "https" then
+    some 443
+  else
+    none
+
+@[inline]
+private def normalizeHostPortForAuthorityMatch
+    (scheme? : Option URI.Scheme)
+    (port : URI.Port) : URI.Port :=
+  match port with
+  | .omitted =>
+    match scheme? with
+    | some scheme =>
+      match defaultPortForScheme? scheme with
+      | some p => .value p
+      | none => .omitted
+    | none => .omitted
+  | p => p
+
+@[inline]
+private def hostAuthorityMatches
+    (scheme? : Option URI.Scheme)
+    (authority : URI.Authority)
+    (hostHeader : Header.Host) : Bool :=
+  let authorityPort := normalizeHostPortForAuthorityMatch scheme? authority.port
+  let hostPort := normalizeHostPortForAuthorityMatch scheme? hostHeader.port
+  authority.host == hostHeader.host && authorityPort == hostPort
+
 /--
 Validates the required `Host` header for HTTP/1.1 requests:
 exactly one value, with absolute-form authority taking precedence over Host.
@@ -275,9 +309,13 @@ private def hasSingleAcceptedHostHeader (message : Message.Head .receiving) : Bo
       match message.uri with
       | .asteriskForm =>
         hostValue.value.isEmpty ∨ parsed.isSome
-      | .absoluteForm { authority := some authority, .. } _ | .authorityForm authority =>
+      | .absoluteForm { scheme, authority := some authority, .. } _ =>
         match parsed with
-        | some ⟨host, _⟩ => authority.host == host -- && authority.port == port (Not so strict!)
+        | some hostHeader => hostAuthorityMatches (some scheme) authority hostHeader
+        | none => false
+      | .authorityForm authority =>
+        match parsed with
+        | some hostHeader => hostAuthorityMatches none authority hostHeader
         | none => false
       | _ =>
         -- RFC 9110 §7.2: when the target URI has no authority (origin-form, asterisk-form),
@@ -295,8 +333,9 @@ private def authorityHostHeaderValue (authority : URI.Authority) : Header.Value 
   let host := toString authority.host
 
   let value := match authority.port with
-    | some port => s!"{host}:{port}"
-    | none => host
+    | .value port => s!"{host}:{port}"
+    | .empty => s!"{host}:"
+    | .omitted => s!"{host}"
 
   Header.Value.ofString! value
 
@@ -308,9 +347,13 @@ private def checkReceivingMessageHead (message : Message.Head .receiving) : Exce
   if !isValidRequestTargetForMethod message then
     throw .badMessage
 
-  -- Host validation
-  if !hasSingleAcceptedHostHeader message then
-    throw .badMessage
+  -- Host validation:
+  -- • HTTP/1.1: a Host header is REQUIRED (RFC 9112 §3.2).
+  -- • HTTP/1.0: Host is optional (RFC 2616 §14.23), but if present it must
+  --   be a single, well-formed value (no duplicates, correct authority form).
+  if message.version == .v11 || message.headers.contains .host then
+    if !hasSingleAcceptedHostHeader message then
+      throw .badMessage
 
   -- Gets the size of the message.
   match message.getSize (allowEOFBody := true) with
@@ -1091,7 +1134,9 @@ partial def processWrite (machine : Machine dir) : Machine dir :=
   | .pending =>
       if machine.reader.isClosed then machine.closeWriter else machine
   | .waitingHeaders =>
-      machine.addEvent .needAnswer
+      match dir with
+      | .receiving => machine
+      | .sending => machine.addEvent .needAnswer
   | .waitingForFlush =>
       if machine.shouldFlush then
         machine.writeHead machine.writer.messageHead
@@ -1151,7 +1196,6 @@ private def handleReaderFailed (machine : Machine dir) (error : H1.Error) : Mach
 
   machine
   |>.setReaderState .closed
-  |>.addEvent (.failed error)
   |>.setError error
 
 /--
@@ -1324,13 +1368,13 @@ private partial def processReceivingStartLine (machine : Machine .receiving) : M
 
   match result with
   | some (method, uri, version) =>
-      if version == some .v11 then
+      match version with
+      |  some (v@Version.v11) | some (v@Version.v10) =>
         machine
-        |>.modifyReader (.setMessageHead ({ method, version := .v11, uri, headers := .empty }))
+        |>.modifyReader (.setMessageHead { method, version := v, uri, headers := .empty })
         |>.setReaderState (.needHeader 0)
         |> processRead
-      else
-        machine.setFailure .unsupportedVersion
+      | _ => machine.setFailure .unsupportedVersion
   | none =>
       machine
 
@@ -1348,7 +1392,14 @@ private partial def processSendingStartLine (machine : Machine .sending) : Machi
   | some (status, version) =>
       if version == some .v11 then
         machine
-        |>.modifyReader (.setMessageHead ({ status, version := .v11, headers := .empty }))
+        |>.modifyReader (.setMessageHead { status, version := .v11, headers := .empty })
+        |>.setReaderState (.needHeader 0)
+        |> processRead
+      else if version == some .v10 then
+        -- HTTP/1.0 response: accept and disable keep-alive (shouldKeepAlive returns false
+        -- for version ≠ .v11).
+        machine
+        |>.modifyReader (.setMessageHead { status, version := .v10, headers := .empty })
         |>.setReaderState (.needHeader 0)
         |> processRead
       else
