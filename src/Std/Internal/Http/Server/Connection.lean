@@ -263,9 +263,9 @@ private def handle
       | .close =>
         pure ()
 
-    if let some head := pendingHead then
+    if let some line := pendingHead then
       waitingResponse := true
-      let newResponse := Handler.onRequest handler { head, body := requestIncoming, extensions := connection.extensions } connectionContext
+      let newResponse := Handler.onRequest handler { line, body := requestIncoming, extensions := connection.extensions } connectionContext
       let task ← newResponse.asTask
       BaseIO.chainTask task fun x => discard <| response.send x
       pendingHead := none
@@ -376,11 +376,11 @@ private def handle
             machine := machine.setKnownSize knownSize
 
           let head ← do
-            if config.generateDate ∧ ¬res.head.headers.contains Header.Name.date then
+            if config.generateDate ∧ ¬res.line.headers.contains Header.Name.date then
               let now ← Std.Time.DateTime.now (tz := .UTC)
-              pure { res.head with headers := res.head.headers.insert Header.Name.date (Header.Value.ofString! now.toRFC822String) }
+              pure { res.line with headers := res.line.headers.insert Header.Name.date (Header.Value.ofString! now.toRFC822String) }
             else
-              pure res.head
+              pure res.line
           machine := machine.send head
           waitingResponse := false
           if machine.writer.omitBody then

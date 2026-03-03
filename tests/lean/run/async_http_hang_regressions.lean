@@ -104,7 +104,7 @@ def onesChunked (n : Nat) : String := Id.run do
 
 def ignoreHandler : TestHandler := fun _ => Response.ok |>.text "ok"
 
-def uriHandler : TestHandler := fun req => Response.ok |>.text (toString req.head.uri)
+def uriHandler : TestHandler := fun req => Response.ok |>.text (toString req.line.uri)
 
 def echoBodyHandler : TestHandler := fun req => do
   let mut body := ByteArray.empty

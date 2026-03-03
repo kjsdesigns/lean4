@@ -35,7 +35,7 @@ structure TestCase where
   deriving Inhabited
 
 def toByteArray (req : Request (Array Chunk)) (chunked := false) : IO ByteArray := Async.block do
-  let mut data := Internal.Encode.encode (v := .v11) .empty req.head
+  let mut data := Internal.Encode.encode (v := .v11) .empty req.line
   let toByteArray (chunkData : Internal.ChunkedBuffer) (part : Chunk) := Internal.Encode.encode .v11 chunkData part
 
   for part in req.body do data := toByteArray data part
@@ -79,18 +79,18 @@ def runTestCase (tc : TestCase) : IO Unit := do
 
 /-- Check if request is a basic GET requests to the specified URI and host. -/
 def isBasicGetRequest (req : Request Body.Incoming) (uri : String) (host : String) : Bool :=
-  req.head.method == .get ∧
-  req.head.version == .v11 ∧
-  toString req.head.uri = uri ∧
-  req.head.headers.hasEntry (.mk "host") (.ofString! host)
+  req.line.method == .get ∧
+  req.line.version == .v11 ∧
+  toString req.line.uri = uri ∧
+  req.line.headers.hasEntry (.mk "host") (.ofString! host)
 
 /-- Check if request has a specific Content-Length header. -/
 def hasContentLength (req : Request Body.Incoming) (length : String) : Bool :=
-  req.head.headers.hasEntry (.mk "content-length")  (.ofString! length)
+  req.line.headers.hasEntry (.mk "content-length")  (.ofString! length)
 
 /-- Check if request uses chunked transfer encoding. -/
 def isChunkedRequest (req : Request Body.Incoming) : Bool :=
-  if let some te := req.head.headers.get? (.mk "transfer-encoding") then
+  if let some te := req.line.headers.get? (.mk "transfer-encoding") then
     match Header.TransferEncoding.parse te with
     | some te => te.isChunked
     | none => false
@@ -100,17 +100,17 @@ def isChunkedRequest (req : Request Body.Incoming) : Bool :=
 /-- Check if request has a specific header with a specific value. -/
 def hasHeader (req : Request Body.Incoming) (name : String) (value : String) : Bool :=
   if let some name := Header.Name.ofString? name then
-    req.head.headers.hasEntry name (.ofString! value)
+    req.line.headers.hasEntry name (.ofString! value)
   else
     false
 
 /-- Check if request method matches the expected method. -/
 def hasMethod (req : Request Body.Incoming) (method : Method) : Bool :=
-  req.head.method == method
+  req.line.method == method
 
 /-- Check if request URI matches the expected URI string. -/
 def hasUri (req : Request Body.Incoming) (uri : String) : Bool :=
-  toString req.head.uri = uri
+  toString req.line.uri = uri
 
 -- Tests
 
@@ -412,7 +412,7 @@ def hasUri (req : Request Body.Incoming) (uri : String) : Bool :=
     |>.body #[]
 
   handler := fun req => do
-    Response.ok |>.text (toString (toString req.head.uri).length)
+    Response.ok |>.text (toString (toString req.line.uri).length)
 
   expected := "HTTP/1.1 400 Bad Request\x0d\nServer: LeanHTTP/1.1\x0d\nConnection: close\x0d\nContent-Length: 0\x0d\n\x0d\n"
 }
@@ -429,7 +429,7 @@ def hasUri (req : Request Body.Incoming) (uri : String) : Bool :=
     |>.body #[]
 
   handler := fun req => do
-    Response.ok |>.text (toString (toString req.head.uri).length)
+    Response.ok |>.text (toString (toString req.line.uri).length)
 
   expected := "HTTP/1.1 400 Bad Request\x0d\nServer: LeanHTTP/1.1\x0d\nConnection: close\x0d\nContent-Length: 0\x0d\n\x0d\n"
 }

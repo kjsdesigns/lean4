@@ -41,7 +41,7 @@ def runPipelined
   let seenRef ← IO.mkRef (#[] : Array String)
 
   let handler : TestHandler := fun req => do
-    let uri := toString req.head.uri
+    let uri := toString req.line.uri
     seenRef.modify (·.push uri)
 
     let body ←
@@ -100,7 +100,7 @@ def assertSeenCount (name : String) (seen : Array String) (expected : Nat) : IO 
   let req1 := "GET /first HTTP/1.1\x0d\nHost: example.com\x0d\n\x0d\n"
   let req2 := "GET /second HTTP/1.1\x0d\nHost: example.com\x0d\nConnection: close\x0d\n\x0d\n"
   let response ← sendRaw client server (req1 ++ req2).toUTF8 (fun req =>
-    Response.ok |>.text (toString req.head.uri))
+    Response.ok |>.text (toString req.line.uri))
 
   assertStatusCount "Two keep-alive responses" response 2
   assertContains "Two keep-alive first" response "/first"
@@ -112,7 +112,7 @@ def assertSeenCount (name : String) (seen : Array String) (expected : Nat) : IO 
   let req1 := "GET /first HTTP/1.1\x0d\nHost: example.com\x0d\nConnection: close\x0d\n\x0d\n"
   let req2 := "GET /second HTTP/1.1\x0d\nHost: example.com\x0d\nConnection: close\x0d\n\x0d\n"
   let response ← sendRaw client server (req1 ++ req2).toUTF8 (fun req =>
-    Response.ok |>.text (toString req.head.uri))
+    Response.ok |>.text (toString req.line.uri))
 
   assertStatusCount "Connection close response count" response 1
   assertContains "Connection close first served" response "/first"
@@ -124,7 +124,7 @@ def assertSeenCount (name : String) (seen : Array String) (expected : Nat) : IO 
   let req1 := "GET /1 HTTP/1.1\x0d\nHost: example.com\x0d\n\x0d\n"
   let req2 := "GET /2 HTTP/1.1\x0d\nHost: example.com\x0d\nConnection: close\x0d\n\x0d\n"
   let response ← sendRaw client server (req1 ++ req2).toUTF8
-    (fun req => Response.ok |>.text (toString req.head.uri))
+    (fun req => Response.ok |>.text (toString req.line.uri))
     (config := { lingeringTimeout := 3000, enableKeepAlive := false, generateDate := false })
 
   assertStatusCount "Keep-alive disabled response count" response 1
@@ -138,7 +138,7 @@ def assertSeenCount (name : String) (seen : Array String) (expected : Nat) : IO 
   let req1 := "GET /1 HTTP/1.1\x0d\nHost: example.com\x0d\n\x0d\n"
   let req2 := "GET /2 HTTP/1.1\x0d\nHost: example.com\x0d\nConnection: close\x0d\n\x0d\n"
   let response ← sendRaw client server (req0 ++ req1 ++ req2).toUTF8
-    (fun req => Response.ok |>.text (toString req.head.uri))
+    (fun req => Response.ok |>.text (toString req.line.uri))
     (config := { lingeringTimeout := 3000, maxRequests := 2, generateDate := false })
 
   assertStatusCount "maxRequests response count" response 2
@@ -152,7 +152,7 @@ def assertSeenCount (name : String) (seen : Array String) (expected : Nat) : IO 
   let req1 := "POST /ignore HTTP/1.1\x0d\nHost: example.com\x0d\nContent-Length: 5\x0d\n\x0d\nhello"
   let req2 := "GET /after HTTP/1.1\x0d\nHost: example.com\x0d\nConnection: close\x0d\n\x0d\n"
   let response ← sendRaw client server (req1 ++ req2).toUTF8 (fun req =>
-    Response.ok |>.text (toString req.head.uri))
+    Response.ok |>.text (toString req.line.uri))
 
   assertStatusCount "Unread CL body keep-alive responses" response 2
   assertContains "Unread CL body first" response "/ignore"
@@ -164,7 +164,7 @@ def assertSeenCount (name : String) (seen : Array String) (expected : Nat) : IO 
   let req1 := "POST /chunked HTTP/1.1\x0d\nHost: example.com\x0d\nTransfer-Encoding: chunked\x0d\n\x0d\n5\x0d\nhello\x0d\n0\x0d\n\x0d\n"
   let req2 := "GET /next HTTP/1.1\x0d\nHost: example.com\x0d\nConnection: close\x0d\n\x0d\n"
   let response ← sendRaw client server (req1 ++ req2).toUTF8 (fun req =>
-    Response.ok |>.text (toString req.head.uri))
+    Response.ok |>.text (toString req.line.uri))
 
   assertStatusCount "Unread chunked body keep-alive responses" response 2
   assertContains "Unread chunked first" response "/chunked"

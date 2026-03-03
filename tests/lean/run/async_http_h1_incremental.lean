@@ -27,6 +27,23 @@ private def hasCloseBodyEvent (events : Array (Event .receiving)) : Bool :=
     | .closeBody => true
     | _ => false
 
+private def hasContinueEvent (events : Array (Event .receiving)) : Bool :=
+  events.any fun
+    | .«continue» => true
+    | _ => false
+
+private def countNeedAnswerEvents (events : Array (Event .receiving)) : Nat :=
+  events.foldl (init := 0) fun n e =>
+    match e with
+    | .needAnswer => n + 1
+    | _ => n
+
+private def countFailedEvents (events : Array (Event .receiving)) : Nat :=
+  events.foldl (init := 0) fun n e =>
+    match e with
+    | .failed _ => n + 1
+    | _ => n
+
 private def pulledBodyBytes (chunks : Array PulledChunk) : ByteArray :=
   chunks.foldl (fun acc c => acc ++ c.chunk.data) .empty
 
@@ -185,6 +202,23 @@ private def assertIncrementalSuccess
   else
     pure ()
 
+private def runOneStepReceiving
+    (payload : ByteArray)
+    (config : Protocol.H1.Config := {}) :
+    Machine .receiving × StepResult .receiving :=
+  let machine0 : Machine .receiving := { config := config }
+  (machine0.feed payload).step
+
+private def assertFailedWith
+    (name : String)
+    (payload : ByteArray)
+    (expected : Error)
+    (config : Protocol.H1.Config := {}) : IO Unit := do
+  let (machine, step) := runOneStepReceiving payload config
+  ensure name (hasFailedEvent step.events) s!"expected failure event, events:\n{repr step.events}"
+  ensure name (machine.error == some expected)
+    s!"expected error {repr expected}, got {repr machine.error}"
+
 -- Deterministic: one-byte incremental content-length request.
 #eval show IO Unit from do
   let body := "hello".toUTF8
@@ -276,3 +310,110 @@ private def assertIncrementalSuccess
 
     let trace := runIncrementalReceiving parts
     assertIncrementalSuccess s!"Property chunked #{i}" trace body (expectNeedMoreData := parts.size > 1)
+
+-- Edge case: unsupported HTTP version in request-line.
+#eval show IO Unit from do
+  assertFailedWith
+    "Unsupported HTTP version"
+    "GET / HTTP/2.0\r\nHost: example.com\r\n\r\n".toUTF8
+    .unsupportedVersion
+
+-- Edge case: URI length limit must map to uriTooLong.
+#eval show IO Unit from do
+  let cfg : Protocol.H1.Config := { maxUriLength := 8, maxStartLineLength := 256 }
+  assertFailedWith
+    "URI too long"
+    "GET /this/path/is/way/too/long HTTP/1.1\r\nHost: example.com\r\n\r\n".toUTF8
+    .uriTooLong
+    cfg
+
+-- Edge case: header count limit exceeded.
+#eval show IO Unit from do
+  let cfg : Protocol.H1.Config := { maxHeaders := 1 }
+  assertFailedWith
+    "Too many headers"
+    "GET / HTTP/1.1\r\nHost: example.com\r\nX-Test: 1\r\n\r\n".toUTF8
+    .tooManyHeaders
+    cfg
+
+-- Edge case: aggregate header bytes limit exceeded.
+#eval show IO Unit from do
+  let cfg : Protocol.H1.Config := { maxHeaderBytes := 8 }
+  assertFailedWith
+    "Headers too large"
+    "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n".toUTF8
+    .headersTooLarge
+    cfg
+
+-- Edge case: duplicate Host headers rejected.
+#eval show IO Unit from do
+  assertFailedWith
+    "Duplicate Host rejected"
+    "GET / HTTP/1.1\r\nHost: a.example\r\nHost: b.example\r\n\r\n".toUTF8
+    .badMessage
+
+-- Edge case: mixed Content-Length and Transfer-Encoding rejected.
+#eval show IO Unit from do
+  assertFailedWith
+    "TE and CL mixed"
+    "POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 4\r\nTransfer-Encoding: chunked\r\n\r\n4\r\nWiki\r\n0\r\n\r\n".toUTF8
+    .badMessage
+
+-- Edge case: CONNECT must use authority-form target.
+#eval show IO Unit from do
+  assertFailedWith
+    "CONNECT non-authority target rejected"
+    "CONNECT / HTTP/1.1\r\nHost: example.com\r\n\r\n".toUTF8
+    .badMessage
+
+-- Edge case: asterisk-form reserved for OPTIONS.
+#eval show IO Unit from do
+  assertFailedWith
+    "GET * rejected"
+    "GET * HTTP/1.1\r\nHost: example.com\r\n\r\n".toUTF8
+    .badMessage
+
+-- Edge case: Expect: 100-continue pauses reader and can be accepted/rejected.
+#eval show IO Unit from do
+  let request :=
+    "POST /expect HTTP/1.1\r\nHost: example.com\r\nExpect: 100-continue\r\nContent-Length: 4\r\n\r\n".toUTF8
+
+  let machine0 : Machine .receiving := { config := {} }
+  let (machine1, step1) := (machine0.feed request).step
+
+  ensure "Expect setup not failed" (!machine1.failed) s!"unexpected failure:\n{repr step1.events}"
+  ensure "Expect emitted continue event" (hasContinueEvent step1.events) s!"missing continue event:\n{repr step1.events}"
+  ensure "Expect reader paused"
+    (match machine1.reader.state with
+      | .«continue» _ => true
+      | _ => false)
+    s!"expected continue state, got {repr machine1.reader.state}"
+
+  let machine2 := machine1.canContinue .«continue»
+  ensure "Expect accepted"
+    (match machine2.reader.state with
+      | .readBody (.fixed 4) => true
+      | _ => false)
+    s!"expected fixed(4) body state, got {repr machine2.reader.state}"
+
+  let machine3 := machine1.canContinue .ok
+  ensure "Expect rejected closes reader"
+    (match machine3.reader.state with
+      | .closed => true
+      | _ => false)
+    s!"expected closed reader, got {repr machine3.reader.state}"
+  ensure "Expect rejected disables keep-alive" (!machine3.keepAlive) "keepAlive should be disabled after reject"
+
+-- Regression: receiving path should emit needAnswer only once per message.
+#eval show IO Unit from do
+  let payload := "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n".toUTF8
+  let (_machine, step) := runOneStepReceiving payload
+  ensure "Single needAnswer event" (countNeedAnswerEvents step.events == 1)
+    s!"expected exactly one needAnswer event, got events:\n{repr step.events}"
+
+-- Regression: malformed request should emit failed only once.
+#eval show IO Unit from do
+  let payload := "GET / HTTP/2.0\r\nHost: example.com\r\n\r\n".toUTF8
+  let (_machine, step) := runOneStepReceiving payload
+  ensure "Single failed event" (countFailedEvents step.events == 1)
+    s!"expected exactly one failed event, got events:\n{repr step.events}"

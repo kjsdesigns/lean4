@@ -327,7 +327,7 @@ def echoBodyHandler : TestHandler := fun req => do
     let mut body := ByteArray.empty
     for chunk in req.body do
       body := body ++ chunk.data
-    Response.ok |>.text s!"{toString req.head.uri}:{String.fromUTF8! body}")
+    Response.ok |>.text s!"{toString req.line.uri}:{String.fromUTF8! body}")
 
   assertStatusCount "Pipelined parse after exact CL" response 2
   assertContains "Pipelined first response" response "/:hello"

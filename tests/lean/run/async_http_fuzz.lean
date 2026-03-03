@@ -301,7 +301,7 @@ def runPipelinedReadAll
   let seenRef ← IO.mkRef (#[] : Array String)
 
   let handler : TestHandler := fun req => do
-    let uri := toString req.head.uri
+    let uri := toString req.line.uri
     seenRef.modify (·.push uri)
     let _body : String ← req.body.readAll
     Response.ok |>.text uri

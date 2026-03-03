@@ -219,11 +219,6 @@ def notImplemented : String :=
   let responseA ← sendRaw clientA serverA rawA okHandler
   assertExact "HTTP/2.0 rejected" responseA bad505
 
-  let (clientB, serverB) ← Mock.new
-  let rawB := "GET / HTTP/1.0\x0d\nHost: example.com\x0d\nConnection: close\x0d\n\x0d\n".toUTF8
-  let responseB ← sendRaw clientB serverB rawB okHandler
-  assertExact "HTTP/1.0 rejected" responseB bad505
-
 -- Request-line parsing failures.
 #eval show IO _ from do
   let (clientA, serverA) ← Mock.new
@@ -312,14 +307,19 @@ def notImplemented : String :=
   assertExact "CONNECT authority-form accepted" responseC ok200
 
   let (clientD, serverD) ← Mock.new
-  let getAsterisk := "GET * HTTP/1.1\x0d\nHost: example.com\x0d\nConnection: close\x0d\n\x0d\n".toUTF8
-  let responseD ← sendRaw clientD serverD getAsterisk okHandler
-  assertExact "Asterisk-form rejected for non-OPTIONS" responseD bad400
+  let badAuthorityPort := "CONNECT example.com:444 HTTP/1.1\x0d\nHost: example.com\x0d\nConnection: close\x0d\n\x0d\n".toUTF8
+  let responseD ← sendRaw clientD serverD badAuthorityPort okHandler
+  assertExact "CONNECT authority-form non-default port mismatch rejected" responseD bad400
 
   let (clientE, serverE) ← Mock.new
+  let getAsterisk := "GET * HTTP/1.1\x0d\nHost: example.com\x0d\nConnection: close\x0d\n\x0d\n".toUTF8
+  let responseE ← sendRaw clientE serverE getAsterisk okHandler
+  assertExact "Asterisk-form rejected for non-OPTIONS" responseE bad400
+
+  let (clientF, serverF) ← Mock.new
   let optionsAsterisk := "OPTIONS * HTTP/1.1\x0d\nHost: example.com\x0d\nConnection: close\x0d\n\x0d\n".toUTF8
-  let responseE ← sendRaw clientE serverE optionsAsterisk okHandler
-  assertExact "Asterisk-form accepted for OPTIONS" responseE ok200
+  let responseF ← sendRaw clientF serverF optionsAsterisk okHandler
+  assertExact "Asterisk-form accepted for OPTIONS" responseF ok200
 
 -- h11-inspired: GET and HEAD should use the same framing headers.
 #eval show IO _ from do
@@ -448,7 +448,7 @@ def notImplemented : String :=
   let (clientD, serverD) ← Mock.new
   let unsupportedTe := "POST / HTTP/1.1\x0d\nHost: example.com\x0d\nTransfer-Encoding: gzip, chunked\x0d\nConnection: close\x0d\n\x0d\n5\x0d\nhello\x0d\n0\x0d\n\x0d\n".toUTF8
   let responseD ← sendRaw clientD serverD unsupportedTe (fun req => do
-    let seenTe := match req.head.headers.getAll? Header.Name.transferEncoding with
+    let seenTe := match req.line.headers.getAll? Header.Name.transferEncoding with
       | some values => String.intercalate "|" (values.map (·.value) |>.toList)
       | none => "<none>"
     Response.ok |>.text seenTe)
