@@ -287,6 +287,20 @@ private def hostAuthorityMatches
   let hostPort := normalizeHostPortForAuthorityMatch scheme? hostHeader.port
   authority.host == hostHeader.host && authorityPort == hostPort
 
+@[inline]
+private def isDefaultTunnelPort (port : UInt16) : Bool :=
+  port == 80 || port == 443
+
+@[inline]
+private def hostAuthorityMatchesConnectAuthority
+    (authority : URI.Authority)
+    (hostHeader : Header.Host) : Bool :=
+  authority.host == hostHeader.host &&
+    (authority.port == hostHeader.port ||
+      match authority.port, hostHeader.port with
+      | .value port, .omitted => isDefaultTunnelPort port
+      | _, _ => false)
+
 /--
 Validates the required `Host` header for HTTP/1.1 requests:
 exactly one value, with absolute-form authority taking precedence over Host.
@@ -315,7 +329,9 @@ private def hasSingleAcceptedHostHeader (message : Message.Head .receiving) : Bo
         | none => false
       | .authorityForm authority =>
         match parsed with
-        | some hostHeader => hostAuthorityMatches none authority hostHeader
+        -- RFC 9110 CONNECT examples allow `Host` to omit the default port
+        -- while authority-form keeps the explicit tunnel port in request-target.
+        | some hostHeader => hostAuthorityMatchesConnectAuthority authority hostHeader
         | none => false
       | _ =>
         -- RFC 9110 §7.2: when the target URI has no authority (origin-form, asterisk-form),
