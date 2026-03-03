@@ -426,7 +426,6 @@ class instantiate_delayed_fn {
         if (it == m_cache.end()) return {};
         auto & entry = it->second;
         if ((entry.scope_level == 0 || entry.scope_level == m_scope) &&
-            entry.scope_level <= m_scope &&
             m_scope_gens[entry.scope_level] == entry.scope_gen) {
             m_result_scope = std::max(m_result_scope, entry.scope_level);
             return optional<expr>(entry.result);
