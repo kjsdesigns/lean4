@@ -6,7 +6,6 @@ Authors: Sofia Rodrigues
 module
 
 prelude
-import Std.Tactic.BVDecide
 public import Init.Data.String
 
 @[expose]
