@@ -31,7 +31,7 @@ Specific HTTP processing errors with detailed information.
 -/
 inductive Error
   /--
-  Malformed request line or status line.
+  Malformed start line (request-line or status-line).
   -/
   | invalidStatusLine
 
@@ -54,16 +54,6 @@ inductive Error
   Request URI is too long.
   -/
   | uriTooLong
-
-  /--
-  Unsupported HTTP method.
-  -/
-  | unsupportedMethod
-
-  /--
-  Unsupported transfer coding in `Transfer-Encoding`.
-  -/
-  | unsupportedTransferEncoding
 
   /--
   Unsupported HTTP version.
@@ -110,8 +100,6 @@ instance : ToString Error where
   | .timeout => "Timeout"
   | .entityTooLarge => "Entity too large"
   | .uriTooLong => "URI too long"
-  | .unsupportedMethod => "Unsupported method"
-  | .unsupportedTransferEncoding => "Unsupported transfer encoding"
   | .unsupportedVersion => "Unsupported version"
   | .invalidChunk => "Invalid chunk"
   | .connectionClosed => "Connection closed"

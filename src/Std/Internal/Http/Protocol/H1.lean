@@ -754,7 +754,7 @@ def closeReader (machine : Machine dir) : Machine dir :=
   machine.modifyReader ({ · with noMoreInput := true })
 
 /--
-Signals that the writer cannot send more messages because the socket closed.
+Closes the writer side, preventing any further message output.
 -/
 @[inline]
 def closeWriter (machine : Machine dir) : Machine dir :=
@@ -867,7 +867,11 @@ def send (machine : Machine dir) (message : Message.Head dir.swap) : Machine dir
     machine
 
 /--
-Allows body processing to continue after receiving `Expect: 100-continue`.
+Resolves an `Expect: 100-continue` decision.
+
+When `status` is `100 Continue`, sends the interim response and advances to body
+reading. For any other status, sends the rejection response (typically 417), disables
+keep-alive, and closes the reader — the body will not be received.
 -/
 def canContinue (machine : Machine dir) (status : Status) : Machine dir :=
   match dir, machine.reader.state with
@@ -1019,7 +1023,8 @@ private partial def processFixedBufferedBody (machine : Machine dir) (n : Nat) :
 /--
 Handles fixed-length writer state when no user bytes are currently buffered.
 
-If producer closed early, the message is invalid and the connection closes.
+If the producer closed without providing all declared bytes, keep-alive is
+disabled and the connection is closed.
 -/
 @[inline]
 private partial def processFixedIdleBody (machine : Machine dir) : Machine dir :=
@@ -1111,8 +1116,6 @@ private def errorResponseStatus (error : H1.Error) : Status :=
   | .unsupportedVersion => .httpVersionNotSupported
   | .entityTooLarge => .payloadTooLarge
   | .uriTooLong => .uriTooLong
-  | .unsupportedMethod => .notImplemented
-  | .unsupportedTransferEncoding => .notImplemented
   | .tooManyHeaders => .requestHeaderFieldsTooLarge
   | .headersTooLarge => .requestHeaderFieldsTooLarge
   | _ => .badRequest
