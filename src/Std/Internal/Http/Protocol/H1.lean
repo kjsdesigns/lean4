@@ -280,9 +280,9 @@ private def hasSingleAcceptedHostHeader (message : Message.Head .receiving) : Bo
         | some ⟨host, _⟩ => authority.host == host -- && authority.port == port (Not so strict!)
         | none => false
       | _ =>
-        match parsed with
-        | some _ => true
-        | none => false
+        -- RFC 9110 §7.2: when the target URI has no authority (origin-form, asterisk-form),
+        -- a client MUST send Host with an empty field value, so an empty value is valid here.
+        hostValue.value.isEmpty ∨ parsed.isSome
   | _ => false
 
 /--
@@ -1214,6 +1214,7 @@ private def parseChunkSizeBody (machine : Machine dir) :
   let (machine, result) := parseWith machine
     (parseChunkSize machine.config)
     (limit := some machine.config.maxChunkLineLength)
+
   match result with
   | some (size, ext) =>
       if size > machine.config.maxChunkSize then
@@ -1233,10 +1234,8 @@ private def parseLastChunkBodyState (machine : Machine dir)
     Machine dir × Option PulledChunk × Bool :=
   let (machine, result) := parseWith machine (parseLastChunkBody machine.config) (limit := none)
   match result with
-  | some _ =>
-      emitBodyChunk machine .complete true false ext .empty (closeBody := true)
-  | none =>
-      bodyNoProgress machine
+  | some _ => emitBodyChunk machine .complete true false ext .empty (closeBody := true)
+  | none => bodyNoProgress machine
 
 /--
 Consumes chunk-data bytes for the current chunk, handling complete and partial
@@ -1305,8 +1304,6 @@ mutual
 /--
 Parses one request start-line in server mode and initializes `reader.messageHead`
 for header parsing.
-
-Unsupported methods or versions are converted into protocol failures.
 -/
 private partial def processReceivingStartLine (machine : Machine .receiving) : Machine .receiving :=
   let (machine, result) := parseWith machine
