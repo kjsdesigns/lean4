@@ -331,8 +331,8 @@ def requestBuilderText : Async Unit := do
   let req ← Request.post (.originForm! "/api")
     |>.text "Hello, World!"
 
-  assert! req.head.headers.get? Header.Name.contentType == some (Header.Value.ofString! "text/plain; charset=utf-8")
-  assert! req.head.headers.get? Header.Name.contentLength == none
+  assert! req.line.headers.get? Header.Name.contentType == some (Header.Value.ofString! "text/plain; charset=utf-8")
+  assert! req.line.headers.get? Header.Name.contentLength == none
 
   let body ← recvBuiltBody req.body
   assert! body.isSome
@@ -346,8 +346,8 @@ def requestBuilderJson : Async Unit := do
   let req ← Request.post (.originForm! "/api")
     |>.json "{\"key\": \"value\"}"
 
-  assert! req.head.headers.get? Header.Name.contentType == some (Header.Value.ofString! "application/json")
-  assert! req.head.headers.get? Header.Name.contentLength == none
+  assert! req.line.headers.get? Header.Name.contentType == some (Header.Value.ofString! "application/json")
+  assert! req.line.headers.get? Header.Name.contentLength == none
   let body ← recvBuiltBody req.body
   assert! body.isSome
   assert! body.get!.data == "{\"key\": \"value\"}".toUTF8
@@ -361,7 +361,7 @@ def requestBuilderFromBytes : Async Unit := do
   let req ← Request.post (.originForm! "/api")
     |>.fromBytes data
 
-  assert! req.head.headers.get? Header.Name.contentLength == none
+  assert! req.line.headers.get? Header.Name.contentLength == none
   let body ← recvBuiltBody req.body
   assert! body.isSome
   assert! body.get!.data == data
@@ -386,8 +386,8 @@ def responseBuilderText : Async Unit := do
   let res ← Response.ok
     |>.text "Hello, World!"
 
-  assert! res.head.headers.get? Header.Name.contentType == some (Header.Value.ofString! "text/plain; charset=utf-8")
-  assert! res.head.headers.get? Header.Name.contentLength == none
+  assert! res.line.headers.get? Header.Name.contentType == some (Header.Value.ofString! "text/plain; charset=utf-8")
+  assert! res.line.headers.get? Header.Name.contentLength == none
 
   let body ← recvBuiltBody res.body
   assert! body.isSome
@@ -401,8 +401,8 @@ def responseBuilderJson : Async Unit := do
   let res ← Response.ok
     |>.json "{\"status\": \"ok\"}"
 
-  assert! res.head.headers.get? Header.Name.contentType == some (Header.Value.ofString! "application/json")
-  assert! res.head.headers.get? Header.Name.contentLength == none
+  assert! res.line.headers.get? Header.Name.contentType == some (Header.Value.ofString! "application/json")
+  assert! res.line.headers.get? Header.Name.contentLength == none
   let body ← recvBuiltBody res.body
   assert! body.isSome
   assert! body.get!.data == "{\"status\": \"ok\"}".toUTF8
@@ -416,7 +416,7 @@ def responseBuilderFromBytes : Async Unit := do
   let res ← Response.ok
     |>.fromBytes data
 
-  assert! res.head.headers.get? Header.Name.contentLength == none
+  assert! res.line.headers.get? Header.Name.contentLength == none
   let body ← recvBuiltBody res.body
   assert! body.isSome
   assert! body.get!.data == data
