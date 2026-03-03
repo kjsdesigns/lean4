@@ -212,6 +212,40 @@ info: some " "
 #eval parseCheck "https://user:pass@secure.example.com/private"
 #eval parseCheck "/double//slash//path"
 #eval parseCheck "http://user%40example:pass%3Aword@host.com"
+#eval parseCheck "http://example.com:/"
+#eval parseCheck "http://example.com:/?q=1"
+
+-- `&` in a key must be percent-encoded so toRawString round-trips correctly.
+#guard
+  let query := URI.Query.empty.insert "a&b" "1"
+  query.toRawString == "a%26b=1"
+
+-- `=` in a key must be percent-encoded so re-parsing preserves the key.
+#guard
+  let query := URI.Query.empty.insert "a=b" "1"
+  query.toRawString == "a%3Db=1"
+
+-- `&` in a value must be percent-encoded.
+#guard
+  let query := URI.Query.empty.insert "key" "a&b"
+  query.toRawString == "key=a%26b"
+
+-- `=` in a value is technically safe (parser uses first `=`), but encoding it
+-- is still correct and keeps representation unambiguous.
+#guard
+  let query := URI.Query.empty.insert "key" "a=b"
+  query.toRawString == "key=a%3Db"
+
+-- Round-trip: insert → toRawString → re-parse should preserve the parameter.
+#guard
+  let original := URI.Query.empty.insert "a&b" "c=d"
+  let raw := original.toRawString
+  -- Parse via a synthetic origin-form request target
+  match (URI.Parser.parseRequestTarget <* Std.Internal.Parsec.eof).run
+      s!"/path?{raw}".toUTF8 with
+  | .ok result =>
+      (result.query.get "a&b" == some "c=d")
+  | .error _ => false
 
 #guard
   match (parseRequestTarget <* Std.Internal.Parsec.eof).run "http:80".toUTF8 with
@@ -291,7 +325,7 @@ info: Std.Http.RequestTarget.originForm { segments := #[], absolute := true } no
 
 /--
 info: Std.Http.RequestTarget.authorityForm
-  { userInfo := none, host := Std.Http.URI.Host.name "example.com", port := some 8080 }
+  { userInfo := none, host := Std.Http.URI.Host.name "example.com", port := Std.Http.URI.Port.value 8080 }
 -/
 #guard_msgs in
 #eval show IO _ from do
@@ -299,7 +333,8 @@ info: Std.Http.RequestTarget.authorityForm
   IO.println (repr result)
 
 /--
-info: Std.Http.RequestTarget.authorityForm { userInfo := none, host := Std.Http.URI.Host.ipv4 192.168.1.1, port := some 3000 }
+info: Std.Http.RequestTarget.authorityForm
+  { userInfo := none, host := Std.Http.URI.Host.ipv4 192.168.1.1, port := Std.Http.URI.Port.value 3000 }
 -/
 #guard_msgs in
 #eval show IO _ from do
@@ -307,7 +342,8 @@ info: Std.Http.RequestTarget.authorityForm { userInfo := none, host := Std.Http.
   IO.println (repr result)
 
 /--
-info: Std.Http.RequestTarget.authorityForm { userInfo := none, host := Std.Http.URI.Host.ipv6 ::1, port := some 8080 }
+info: Std.Http.RequestTarget.authorityForm
+  { userInfo := none, host := Std.Http.URI.Host.ipv6 ::1, port := Std.Http.URI.Port.value 8080 }
 -/
 #guard_msgs in
 #eval show IO _ from do
@@ -317,7 +353,9 @@ info: Std.Http.RequestTarget.authorityForm { userInfo := none, host := Std.Http.
 /--
 info: Std.Http.RequestTarget.absoluteForm
   { scheme := "https",
-    authority := some { userInfo := none, host := Std.Http.URI.Host.name "example.com", port := some 8080 },
+    authority := some { userInfo := none,
+                   host := Std.Http.URI.Host.name "example.com",
+                   port := Std.Http.URI.Port.value 8080 },
     path := { segments := #["ata"], absolute := true },
     query := #[],
     fragment := none }
@@ -331,7 +369,9 @@ info: Std.Http.RequestTarget.absoluteForm
 /--
 info: Std.Http.RequestTarget.absoluteForm
   { scheme := "http",
-    authority := some { userInfo := none, host := Std.Http.URI.Host.ipv6 2001:db8::1, port := some 8080 },
+    authority := some { userInfo := none,
+                   host := Std.Http.URI.Host.ipv6 2001:db8::1,
+                   port := Std.Http.URI.Port.value 8080 },
     path := { segments := #["path"], absolute := true },
     query := #[],
     fragment := none }
@@ -347,7 +387,7 @@ info: Std.Http.RequestTarget.absoluteForm
   { scheme := "https",
     authority := some { userInfo := some { username := "user%20b", password := some "pass" },
                    host := Std.Http.URI.Host.name "secure.example.com",
-                   port := none },
+                   port := Std.Http.URI.Port.omitted },
     path := { segments := #["private"], absolute := true },
     query := #[],
     fragment := none }
@@ -847,7 +887,7 @@ info: Std.Http.RequestTarget.originForm { segments := #["caf%C3%A9"], absolute :
 
 /--
 info: Std.Http.RequestTarget.authorityForm
-  { userInfo := none, host := Std.Http.URI.Host.name "proxy.example.com", port := some 3128 }
+  { userInfo := none, host := Std.Http.URI.Host.name "proxy.example.com", port := Std.Http.URI.Port.value 3128 }
 -/
 #guard_msgs in
 #eval show IO _ from do
@@ -855,7 +895,8 @@ info: Std.Http.RequestTarget.authorityForm
   IO.println (repr result)
 
 /--
-info: Std.Http.RequestTarget.authorityForm { userInfo := none, host := Std.Http.URI.Host.ipv4 127.0.0.1, port := some 8080 }
+info: Std.Http.RequestTarget.authorityForm
+  { userInfo := none, host := Std.Http.URI.Host.ipv4 127.0.0.1, port := Std.Http.URI.Port.value 8080 }
 -/
 #guard_msgs in
 #eval show IO _ from do
@@ -864,7 +905,7 @@ info: Std.Http.RequestTarget.authorityForm { userInfo := none, host := Std.Http.
 
 /--
 info: Std.Http.RequestTarget.authorityForm
-  { userInfo := none, host := Std.Http.URI.Host.name "1example.com", port := some 8080 }
+  { userInfo := none, host := Std.Http.URI.Host.name "1example.com", port := Std.Http.URI.Port.value 8080 }
 -/
 #guard_msgs in
 #eval show IO _ from do
@@ -874,7 +915,9 @@ info: Std.Http.RequestTarget.authorityForm
 /--
 info: Std.Http.RequestTarget.absoluteForm
   { scheme := "http",
-    authority := some { userInfo := none, host := Std.Http.URI.Host.name "1example.com", port := none },
+    authority := some { userInfo := none,
+                   host := Std.Http.URI.Host.name "1example.com",
+                   port := Std.Http.URI.Port.omitted },
     path := { segments := #["path"], absolute := true },
     query := #[],
     fragment := none }
@@ -888,7 +931,9 @@ info: Std.Http.RequestTarget.absoluteForm
 /--
 info: Std.Http.RequestTarget.absoluteForm
   { scheme := "http",
-    authority := some { userInfo := none, host := Std.Http.URI.Host.name "123abc.example.com", port := none },
+    authority := some { userInfo := none,
+                   host := Std.Http.URI.Host.name "123abc.example.com",
+                   port := Std.Http.URI.Port.omitted },
     path := { segments := #["page"], absolute := true },
     query := #[],
     fragment := none }

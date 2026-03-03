@@ -56,7 +56,7 @@ Returns `none` when any character in `s` cannot be represented by the grammar.
 -/
 @[expose]
 def quoteHttpString? (s : String) : Option String :=
-  if s.all token ∧ ¬s.isEmpty then
+  if s.all tchar ∧ ¬s.isEmpty then
     some s
   else if s.all quotedStringChar then
     some (.append
@@ -101,7 +101,7 @@ def unquoteHttpString? (s : String) : Option String :=
       | .done _ | .invalid => .invalid) .start with
     | .done result => some result
     | _ => none
-  else if s.all Char.token then
+  else if s.all Char.tchar then
     some s
   else
     none
@@ -112,6 +112,6 @@ Checks whether a string is a valid non-empty HTTP token.
 @[expose]
 def isToken (s : String) : Bool :=
   let s := s.toList
-  ¬s.isEmpty ∧ s.all Char.token
+  ¬s.isEmpty ∧ s.all Char.tchar
 
 end Std.Http.Internal

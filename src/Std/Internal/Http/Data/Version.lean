@@ -30,6 +30,11 @@ Reference: https://httpwg.org/specs/rfc9110.html#protocol.version
 -/
 inductive Version
   /--
+  `HTTP/1.0`
+  -/
+  | v10
+
+  /--
   `HTTP/1.1`
   -/
   | v11
@@ -51,6 +56,7 @@ namespace Version
 Converts a pair of `Nat` to the corresponding `Version`.
 -/
 def ofNumber? : Nat → Nat → Option Version
+  | 1, 0 => some .v10
   | 1, 1 => some .v11
   | 2, 0 => some .v20
   | 3, 0 => some .v30
@@ -60,6 +66,7 @@ def ofNumber? : Nat → Nat → Option Version
 Converts `String` to the corresponding `Version`.
 -/
 def ofString? : String → Option Version
+  | "HTTP/1.0" => some .v10
   | "HTTP/1.1" => some .v11
   | "HTTP/2.0" => some .v20
   | "HTTP/3.0" => some .v30
@@ -77,12 +84,14 @@ def ofString! (s : String) : Version :=
 Converts a `Version` to its corresponding major and minor numbers as a pair.
 -/
 def toNumber : Version → (Nat × Nat)
+  | .v10 => (1, 0)
   | .v11 => (1, 1)
   | .v20 => (2, 0)
   | .v30 => (3, 0)
 
 instance : ToString Version where
   toString
+    | .v10 => "HTTP/1.0"
     | .v11 => "HTTP/1.1"
     | .v20 => "HTTP/2.0"
     | .v30 => "HTTP/3.0"

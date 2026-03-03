@@ -39,15 +39,14 @@ abbrev IsValidReasonPhrase (s : String) : Prop :=
 Returns `true` for every status code that has a dedicated named constructor in `Status`.
 Used to ensure `Status.other` is never constructed with a code that already has a name.
 -/
-def isKnownStatusCode : UInt16 → Bool
-  | 100 | 101 | 102 | 103
+def isKnownStatusCode (code: UInt16) : Bool :=
+  code matches 100 | 101 | 102 | 103
   | 200 | 201 | 202 | 203 | 204 | 205 | 206 | 207 | 208 | 226
   | 300 | 301 | 302 | 303 | 304 | 305 | 306 | 307 | 308
   | 400 | 401 | 402 | 403 | 404 | 405 | 406 | 407 | 408 | 409 | 410
   | 411 | 412 | 413 | 414 | 415 | 416 | 417 | 418 | 421 | 422 | 423
   | 424 | 425 | 426 | 428 | 429 | 431 | 451
-  | 500 | 501 | 502 | 503 | 504 | 505 | 506 | 507 | 508 | 510 | 511 => true
-  | _ => false
+  | 500 | 501 | 502 | 503 | 504 | 505 | 506 | 507 | 508 | 510 | 511
 
 /--
 A custom HTTP status with a numeric code and a reason phrase. Used to represent status codes

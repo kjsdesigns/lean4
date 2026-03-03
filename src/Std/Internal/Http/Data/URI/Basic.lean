@@ -112,11 +112,9 @@ namespace UserInfo
 Builds a `UserInfo` value from raw strings by applying userinfo percent-encoding.
 -/
 @[inline]
-def ofStrings (username : String) (password : Option String := none) : UserInfo :=
-  {
-    username := EncodedUserInfo.encode username
-    password := EncodedUserInfo.encode <$> password
-  }
+def ofStrings (username : String) (password : Option String := none) : UserInfo where
+  username := EncodedUserInfo.encode username
+  password := EncodedUserInfo.encode <$> password
 
 /--
 Returns the decoded username, or `none` if decoding fails UTF-8 validation.
@@ -227,11 +225,27 @@ instance : ToString Host where
     | .ipv6 addr => s!"[{toString addr}]"
 
 /--
-TCP port number.
-
-Reference: https://www.rfc-editor.org/rfc/rfc3986.html#section-3.2.3
+Authority port representation, preserving the distinction between:
+* no port separator (`example.com`)
+* empty port (`example.com:`)
+* numeric port (`example.com:443`)
 -/
-abbrev Port := UInt16
+inductive Port where
+  /--
+  No `:` port separator is present (for example, `example.com`).
+  -/
+  | omitted
+
+  /--
+  A `:` port separator is present with no digits after it (for example, `example.com:`).
+  -/
+  | empty
+
+  /--
+  A numeric port value is present (for example, `example.com:443`).
+  -/
+  | value (port : UInt16)
+deriving Inhabited, Repr, DecidableEq
 
 /--
 The authority component of a URI, identifying the network location of the resource.
@@ -250,9 +264,10 @@ structure Authority where
   host : Host
 
   /--
-  Optional port number for connecting to the host.
+  Port component, preserving whether it is omitted (`example.com`),
+  explicitly empty (`example.com:`), or numeric (`example.com:443`).
   -/
-  port : Option Port := none
+  port : Port := .omitted
 deriving Inhabited, Repr
 
 instance : ToString Authority where
@@ -263,8 +278,9 @@ instance : ToString Authority where
       | some ⟨name, none⟩ => s!"{name}@"
     let hostPart := toString auth.host
     let portPart := match auth.port with
-      | none => ""
-      | some p => s!":{p}"
+      | .omitted => ""
+      | .empty => ":"
+      | .value p => s!":{p}"
     s!"{userPart}{hostPart}{portPart}"
 
 /--
@@ -277,7 +293,7 @@ structure Path where
   /--
   The path segments making up the hierarchical structure (each segment is percent-encoded).
   -/
-  segments : Array (EncodedSegment)
+  segments : Array EncodedSegment
 
   /--
   Whether the path is absolute (begins with '/') or relative.
@@ -606,7 +622,7 @@ structure Builder where
   /--
   The port number.
   -/
-  port : Option URI.Port := none
+  port : URI.Port := .omitted
 
   /--
   Path segments (will be encoded when building).
@@ -692,8 +708,8 @@ def setHostIPv6 (b : Builder) (addr : Net.IPv6Addr) : Builder :=
 /--
 Sets the port number.
 -/
-def setPort (b : Builder) (port : Port) : Builder :=
-  { b with port := some port }
+def setPort (b : Builder) (port : UInt16) : Builder :=
+  { b with port := .value port }
 
 /--
 Replaces all path segments. Segments will be automatically percent-encoded when building.
