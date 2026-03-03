@@ -70,7 +70,7 @@ Builds an HTTP Response.
 -/
 structure Response.Builder where
   /--
-  The response status-line information.
+  The start-line of an HTTP request (method, request-target, and version).
   -/
   line : Head := {}
 
