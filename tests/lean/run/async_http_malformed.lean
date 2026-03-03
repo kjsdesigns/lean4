@@ -94,7 +94,9 @@ def notImplemented : String :=
 
 -- Client-mode response parsing regressions.
 #eval show IO _ from do
-  let machineA : Protocol.H1.Machine .sending := { config := {} }
+  -- Initialize reader to needStartLine: for .sending machines the reader starts in .pending
+  -- and only advances after send/request is issued. Here we test the reader in isolation.
+  let machineA : Protocol.H1.Machine .sending := { config := {}, reader := { state := .needStartLine } }
   let rawA := "HTTP/1.1 200 OK\x0d\nContent-Length: 0\x0d\nConnection: close\x0d\n\x0d\n"
   let (machineA, stepA) := (machineA.feed rawA.toUTF8).step
   let failedA := stepA.events.any fun
@@ -115,7 +117,7 @@ def notImplemented : String :=
   unless machineA.reader.messageHead.headers.hasEntry Header.Name.contentLength (Header.Value.ofString! "0") do
     throw <| IO.userError s!"Test 'Client mode parses response status-line with headers' failed:\nMissing Content-Length header in parsed response"
 
-  let machineB : Protocol.H1.Machine .sending := { config := {} }
+  let machineB : Protocol.H1.Machine .sending := { config := {}, reader := { state := .needStartLine } }
   let rawB := "HTTP/1.1 204 No Content\x0d\n\x0d\n"
   let (_machineB, stepB) := (machineB.feed rawB.toUTF8).step
   let failedB := stepB.events.any fun
@@ -136,7 +138,7 @@ def notImplemented : String :=
   unless endedB do
     throw <| IO.userError s!"Test 'Client mode parses headerless response status-line' failed:\nMissing endHeaders event: {repr stepB.events}"
 
-  let machineC : Protocol.H1.Machine .sending := { config := {} }
+  let machineC : Protocol.H1.Machine .sending := { config := {}, reader := { state := .needStartLine } }
   let rawC := "HTTP/1.1 204 No Content\x0d\nContent-Length: 5\x0d\n\x0d\nHELLO"
   let (machineC, stepC) := (machineC.feed rawC.toUTF8).step
   let failedC := stepC.events.any fun
