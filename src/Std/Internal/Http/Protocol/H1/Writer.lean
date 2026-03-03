@@ -40,17 +40,18 @@ inductive Writer.State
   | pending
 
   /--
-  Ready to write the message.
+  Waiting for the application to provide the outgoing message head via `send`.
   -/
   | waitingHeaders
 
   /--
-  This is the state that the machine waits for a condition to send the response header.
+  The message head has been provided; waiting for `shouldFlush` to become true before
+  serializing headers to output.
   -/
   | waitingForFlush
 
   /--
-  Writing the headers.
+  Reserved; not currently entered by the state machine.
   -/
   | writingHeaders
 
@@ -60,12 +61,12 @@ inductive Writer.State
   | writingBody (mode : Body.Length)
 
   /--
-  It will flush all the remaining data and cause it to shutdown the machine.
+  Waiting for all buffered output to drain before transitioning to `complete`.
   -/
   | shuttingDown
 
   /--
-  State that it completed a single request and can go to the next one.
+  Completed writing a single message and ready to begin the next one.
   -/
   | complete
 
