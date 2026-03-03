@@ -293,7 +293,7 @@ structure Path where
   /--
   The path segments making up the hierarchical structure (each segment is percent-encoded).
   -/
-  segments : Array (EncodedSegment)
+  segments : Array EncodedSegment
 
   /--
   Whether the path is absolute (begins with '/') or relative.
