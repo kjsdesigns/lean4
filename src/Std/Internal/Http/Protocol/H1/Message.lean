@@ -36,7 +36,7 @@ inductive Direction
   | receiving
 
   /--
-  Generating and sending outgoing responses to clients.
+  Client perspective: writing outgoing requests and reading incoming responses.
   -/
   | sending
 deriving BEq

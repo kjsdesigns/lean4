@@ -32,17 +32,28 @@ This parser enforces strict ASCII-only field values and allows only `field-conte
 def isFieldVChar (c : UInt8) : Bool :=
   fieldContent (Char.ofUInt8 c)
 
--- HTAB / SP / %x21 / %x23-5B / %x5D-7E (strict ASCII-only; no obs-text)
+/--
+Checks if a byte may appear unescaped inside a quoted-string value.
+
+Allows `HTAB / SP / %x21 / %x23-5B / %x5D-7E` (strict ASCII-only; no obs-text).
+-/
 @[inline]
 def isQdText (c : UInt8) : Bool :=
   qdtext (Char.ofUInt8 c)
 
+/--
+Checks if a byte is optional whitespace (`OWS = SP / HTAB`, RFC 9110 §5.6.3).
+-/
 @[inline]
 def isOwsByte (c : UInt8) : Bool :=
   ows (Char.ofUInt8 c)
 
 -- Parser blocks
 
+/--
+Repeatedly applies `parser` until it returns `none` or the `maxCount` limit is
+exceeded. Returns the collected results as an array.
+-/
 partial def manyItems {α : Type} (parser : Parser (Option α)) (maxCount : Nat) : Parser (Array α) := do
   let rec go (acc : Array α) : Parser (Array α) := do
     let step ← optional <| attempt do
@@ -124,6 +135,9 @@ def ows (limits : H1.Config) : Parser Unit := do
   else
     pure ()
 
+/--
+Parses a single ASCII hex digit and returns its numeric value (`0`–`15`).
+-/
 def hexDigit : Parser UInt8 := do
   let b ← any
   if isHexDigitByte b then
@@ -132,6 +146,10 @@ def hexDigit : Parser UInt8 := do
     else return b - 'a'.toUInt8 + 10
   else fail s!"invalid hex digit {Char.ofUInt8 b |>.quote}"
 
+/--
+Parses a hexadecimal integer (one or more hex digits, up to 16 digits).
+Used for chunk-size lines in chunked transfer encoding.
+-/
 partial def hex : Parser Nat := do
   let rec go (acc : Nat) (count : Nat) : Parser Nat := do
     match ← optional (attempt hexDigit) with
@@ -152,9 +170,9 @@ partial def hex : Parser Nat := do
 
 -- Actual parsers
 
-/-
-HTTP-version  = HTTP-name "/" DIGIT "." DIGIT
-HTTP-name     = %s"HTTP"
+/--
+Parses `HTTP-version = HTTP-name "/" DIGIT "." DIGIT` and returns the major and
+minor version numbers as a pair.
 -/
 def parseHttpVersionNumber : Parser (Nat × Nat) := do
   skipBytes "HTTP/".toUTF8
@@ -163,6 +181,10 @@ def parseHttpVersionNumber : Parser (Nat × Nat) := do
   let minor ← digit
   pure ((major.toNat - 48), (minor.toNat - 48))
 
+/--
+Parses an HTTP version string and returns the corresponding `Version` value.
+Fails if the version is not recognized by `Version.ofNumber?`.
+-/
 def parseHttpVersion : Parser Version := do
   let (major, minor) ← parseHttpVersionNumber
   liftOption <| Version.ofNumber? major minor
@@ -219,6 +241,10 @@ def parseMethod : Parser Method :=
   <|> (attempt <| skipBytes "VERSION-CONTROL".toUTF8 <&> fun _ => Method.versionControl)
   <|> (parseToken 64 *> fail "unrecognized method")
 
+/--
+Parses a request-target URI, up to `limits.maxUriLength` bytes.
+Fails with `"uri too long"` if the target exceeds the configured limit.
+-/
 def parseURI (limits : H1.Config) : Parser ByteArray := do
   let uri ← takeUntilUpTo (· == ' '.toUInt8) limits.maxUriLength
   if uri.size == limits.maxUriLength then
@@ -266,7 +292,11 @@ public def parseRequestLineRawVersion (limits : H1.Config) : Parser (Method × R
   let (uri, (major, minor)) ← parseRequestLineBody limits
   return (method, uri, Version.ofNumber? major minor)
 
--- field-line   = field-name ":" OWS field-value OWS
+/--
+Parses a single header field line.
+
+`field-line = field-name ":" OWS field-value OWS`
+-/
 def parseFieldLine (limits : H1.Config) : Parser (String × String) := do
   let name ← parseToken limits.maxHeaderNameLength
   let value ← skipByte ':'.toUInt8 *> ows limits *> optional (takeWhileUpTo isFieldVChar limits.maxHeaderValueLength) <* ows limits
@@ -290,7 +320,11 @@ public def parseSingleHeader (limits : H1.Config) : Parser (Option (String × St
   else
     some <$> (parseFieldLine limits <* crlf)
 
--- quoted-pair = "\" ( HTAB / SP / VCHAR ) ; strict ASCII-only (no obs-text)
+/--
+Parses a backslash-escaped character inside a quoted-string.
+
+`quoted-pair = "\" ( HTAB / SP / VCHAR )` — strict ASCII-only (no obs-text).
+-/
 def parseQuotedPair : Parser UInt8 := do
   skipByte '\\'.toUInt8
   let b ← any
@@ -300,7 +334,11 @@ def parseQuotedPair : Parser UInt8 := do
   else
     fail s!"invalid quoted-pair byte: {Char.ofUInt8 b |>.quote}"
 
--- quoted-string = DQUOTE *( qdtext / quoted-pair ) DQUOTE
+/--
+Parses a quoted-string value, unescaping quoted-pairs.
+
+`quoted-string = DQUOTE *( qdtext / quoted-pair ) DQUOTE`
+-/
 partial def parseQuotedString (maxLength : Nat) : Parser String := do
   skipByte '"'.toUInt8
 

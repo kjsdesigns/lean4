@@ -747,7 +747,9 @@ def feed (machine : Machine dir) (data : ByteArray) : Machine dir :=
       machine
 
 /--
-Signals that the reader will not receive any more input bytes.
+Signals EOF on the reader's input without changing the reader state.
+Used internally for flow control (e.g., after rejecting `Expect: 100-continue`).
+To also transition the reader to `.closed`, follow this with `setReaderState .closed`.
 -/
 @[inline]
 def closeReader (machine : Machine dir) : Machine dir :=
@@ -891,7 +893,7 @@ def canContinue (machine : Machine dir) (status : Status) : Machine dir :=
         |>.setReaderState .closed
   | .receiving, _ => machine
 
-/-- Sends data to the socket. -/
+/-- Enqueues body chunks into the writer buffer for encoding and sending. -/
 @[inline]
 def sendData (machine : Machine dir) (data : Array Chunk) : Machine dir :=
   if data.isEmpty then
@@ -899,7 +901,7 @@ def sendData (machine : Machine dir) (data : Array Chunk) : Machine dir :=
   else
     machine.modifyWriter (fun writer => { writer with userData := writer.userData ++ data })
 
-/-- Gets all events of the machine. -/
+/-- Takes and clears all accumulated events, returning the drained array. -/
 @[inline]
 def takeEvents (machine : Machine dir) : Machine dir × Array (Event dir) :=
   ({ machine with events := #[] }, machine.events)
