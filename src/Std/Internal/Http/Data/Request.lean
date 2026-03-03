@@ -59,7 +59,7 @@ structure Request (t : Type) where
   /--
   The request line information (`method`, `version`, and request-target `uri`).
   -/
-  head : Request.Head
+  line : Request.Head
 
   /--
   The request body content of type t.
@@ -79,7 +79,7 @@ structure Request.Builder where
   /--
   The head of the request.
   -/
-  head : Head := { method := .get, version := .v11, uri := "*" }
+  line : Head := { method := .get, version := .v11, uri := "*" }
 
   /--
   Optional dynamic metadata attached to the request.
@@ -123,19 +123,19 @@ def empty : Builder := { }
 Sets the HTTP method for the request being built.
 -/
 def method (builder : Builder) (method : Method) : Builder :=
-  { builder with head := { builder.head with method := method } }
+  { builder with line := { builder.line with method := method } }
 
 /--
 Sets the HTTP version for the request being built.
 -/
 def version (builder : Builder) (version : Version) : Builder :=
-  { builder with head := { builder.head with version := version } }
+  { builder with line := { builder.line with version := version } }
 
 /--
 Sets the request target/URI for the request being built.
 -/
 def uri (builder : Builder) (uri : String) : Builder :=
-  { builder with head := { builder.head with uri := uri } }
+  { builder with line := { builder.line with uri := uri } }
 
 /--
 Inserts a typed extension value into the request being built.
@@ -147,7 +147,7 @@ def extension (builder : Builder) [TypeName α] (data : α) : Builder :=
 Builds and returns the final HTTP Request with the specified body.
 -/
 def body (builder : Builder) (body : t) : Request t :=
-  { head := builder.head, body := body, extensions := builder.extensions }
+  { line := builder.line, body := body, extensions := builder.extensions }
 
 end Builder
 
@@ -193,9 +193,8 @@ def patch (uri : String) : Builder :=
 
 /--
 Creates a new HTTP HEAD Request builder with the specified URI.
-Named `head'` to avoid conflict with the `head` field accessor.
 -/
-def head' (uri : String) : Builder :=
+def head (uri : String) : Builder :=
   new
   |>.method .head
   |>.uri uri

@@ -51,7 +51,7 @@ structure ExtensionName where
   /--
   The proof that it's a valid extension name.
   -/
-  validExtensionName : IsValidExtensionName value := by decide
+  isValidExtensionName : IsValidExtensionName value := by decide
 deriving Repr, DecidableEq, BEq
 
 instance : Hashable ExtensionName where
