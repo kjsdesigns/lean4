@@ -66,7 +66,7 @@ structure Request (t : Type) where
   /--
   The request line information (`method`, `version`, and request-target `uri`).
   -/
-  head : Request.Head
+  line : Request.Head
 
   /--
   The request body content of type t.
@@ -84,9 +84,9 @@ Builds an HTTP Request.
 -/
 structure Request.Builder where
   /--
-  The head of the request.
+  The request-line of an HTTP request.
   -/
-  head : Head := { method := .get, version := .v11, uri := .asteriskForm }
+  line : Head := { method := .get, version := .v11, uri := .asteriskForm }
 
   /--
   Optional dynamic metadata attached to the request.
@@ -134,38 +134,38 @@ def empty : Builder := { }
 Sets the HTTP method for the request being built.
 -/
 def method (builder : Builder) (method : Method) : Builder :=
-  { builder with head := { builder.head with method := method } }
+  { builder with line := { builder.line with method := method } }
 
 /--
 Sets the HTTP version for the request being built.
 -/
 def version (builder : Builder) (version : Version) : Builder :=
-  { builder with head := { builder.head with version := version } }
+  { builder with line := { builder.line with version := version } }
 
 /--
 Sets the request target/URI for the request being built.
 -/
 def uri (builder : Builder) (uri : RequestTarget) : Builder :=
-  { builder with head := { builder.head with uri := uri } }
+  { builder with line := { builder.line with uri := uri } }
 
 /--
 Sets the request target/URI for the request being built
 -/
 def uri! (builder : Builder) (uri : String) : Builder :=
   let uri := RequestTarget.parse! uri
-  { builder with head := { builder.head with uri } }
+  { builder with line := { builder.line with uri } }
 
 /--
 Sets the headers for the request being built
 -/
 def headers (builder : Builder) (headers : Headers) : Builder :=
-  { builder with head := { builder.head with headers } }
+  { builder with line := { builder.line with headers } }
 
 /--
 Adds a single header to the request being built.
 -/
 def header (builder : Builder) (key : Header.Name) (value : Header.Value) : Builder :=
-  { builder with head := { builder.head with headers := builder.head.headers.insert key value } }
+  { builder with line := { builder.line with headers := builder.line.headers.insert key value } }
 
 /--
 Adds a single header to the request being built, panics if the header is invalid.
@@ -173,7 +173,7 @@ Adds a single header to the request being built, panics if the header is invalid
 def header! (builder : Builder) (key : String) (value : String) : Builder :=
   let key := Header.Name.ofString! key
   let value := Header.Value.ofString! value
-  { builder with head := { builder.head with headers := builder.head.headers.insert key value } }
+  { builder with line := { builder.line with headers := builder.line.headers.insert key value } }
 
 /--
 Adds a single header to the request being built.
@@ -182,7 +182,7 @@ Returns `none` if the header name or value is invalid.
 def header? (builder : Builder) (key : String) (value : String) : Option Builder := do
   let key ← Header.Name.ofString? key
   let value ← Header.Value.ofString? value
-  pure <| { builder with head := { builder.head with headers := builder.head.headers.insert key value } }
+  pure <| { builder with line := { builder.line with headers := builder.line.headers.insert key value } }
 
 /--
 Adds a header to the request being built only if the Option Header.Value is some.
@@ -202,7 +202,7 @@ def extension (builder : Builder) [TypeName α] (data : α) : Builder :=
 Builds and returns the final HTTP Request with the specified body.
 -/
 def body (builder : Builder) (body : t) : Request t :=
-  { head := builder.head, body := body, extensions := builder.extensions }
+  { line := builder.line, body := body, extensions := builder.extensions }
 
 end Builder
 
@@ -248,9 +248,8 @@ def patch (uri : RequestTarget) : Builder :=
 
 /--
 Creates a new HTTP HEAD Request builder with the specified URI.
-Named `head'` to avoid conflict with the `head` field accessor.
 -/
-def head' (uri : RequestTarget) : Builder :=
+def head (uri : RequestTarget) : Builder :=
   new
   |>.method .head
   |>.uri uri

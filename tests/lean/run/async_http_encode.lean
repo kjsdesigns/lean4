@@ -116,7 +116,7 @@ info: "999 Unknown"
 #guard_msgs in
 #eval encodeStr (Status.other ⟨999, "Unknown", by decide, by decide, by decide⟩)
 
-/-! ## Request.Head encoding -/
+/-! ## Request.line encoding -/
 
 /--
 info: ""
@@ -160,7 +160,7 @@ info: "PUT /resource HTTP/2.0\x0d\nContent-Type: application/json\x0d\n\x0d\n"
     headers := Headers.empty.insert! "content-type" "application/json"
   } : Request.Head)
 
-/-! ## Response.Head encoding -/
+/-! ## Response.line encoding -/
 
 /--
 info: "HTTP/1.1 200 OK\x0d\n\x0d\n"
@@ -222,61 +222,61 @@ info: "a\x0d\n0123456789\x0d\n"
 info: "GET /index.html HTTP/1.1\x0d\n\x0d\n"
 -/
 #guard_msgs in
-#eval encodeStr (Request.get (.parse! "/index.html") |>.body ()).head
+#eval encodeStr (Request.get (.parse! "/index.html") |>.body ()).line
 
 /--
 info: "POST /api/data HTTP/1.1\x0d\n\x0d\n"
 -/
 #guard_msgs in
-#eval encodeStr (Request.post (.parse! "/api/data") |>.body ()).head
+#eval encodeStr (Request.post (.parse! "/api/data") |>.body ()).line
 
 /--
 info: "PUT /resource HTTP/1.1\x0d\n\x0d\n"
 -/
 #guard_msgs in
-#eval encodeStr (Request.put (.parse! "/resource") |>.body ()).head
+#eval encodeStr (Request.put (.parse! "/resource") |>.body ()).line
 
 /--
 info: "DELETE /item HTTP/1.1\x0d\n\x0d\n"
 -/
 #guard_msgs in
-#eval encodeStr (Request.delete (.parse! "/item") |>.body ()).head
+#eval encodeStr (Request.delete (.parse! "/item") |>.body ()).line
 
 /--
 info: "PATCH /update HTTP/1.1\x0d\n\x0d\n"
 -/
 #guard_msgs in
-#eval encodeStr (Request.patch (.parse! "/update") |>.body ()).head
+#eval encodeStr (Request.patch (.parse! "/update") |>.body ()).line
 
 /--
 info: "HEAD /check HTTP/1.1\x0d\n\x0d\n"
 -/
 #guard_msgs in
-#eval encodeStr (Request.head' (.parse! "/check") |>.body ()).head
+#eval encodeStr (Request.head (.parse! "/check") |>.body ()).line
 
 /--
 info: "OPTIONS * HTTP/1.1\x0d\n\x0d\n"
 -/
 #guard_msgs in
-#eval encodeStr (Request.options (.parse! "*") |>.body ()).head
+#eval encodeStr (Request.options (.parse! "*") |>.body ()).line
 
 /--
 info: "CONNECT proxy:8080 HTTP/1.1\x0d\n\x0d\n"
 -/
 #guard_msgs in
-#eval encodeStr (Request.connect (.parse! "proxy:8080") |>.body ()).head
+#eval encodeStr (Request.connect (.parse! "proxy:8080") |>.body ()).line
 
 /--
 info: "TRACE /debug HTTP/1.1\x0d\n\x0d\n"
 -/
 #guard_msgs in
-#eval encodeStr (Request.trace (.parse! "/debug") |>.body ()).head
+#eval encodeStr (Request.trace (.parse! "/debug") |>.body ()).line
 
 /--
 info: "POST /v2 HTTP/2.0\x0d\n\x0d\n"
 -/
 #guard_msgs in
-#eval encodeStr (Request.new |>.method .post |>.uri (.parse! "/v2") |>.version .v20 |>.body ()).head
+#eval encodeStr (Request.new |>.method .post |>.uri (.parse! "/v2") |>.version .v20 |>.body ()).line
 
 /-! ## Response builder -/
 
@@ -284,67 +284,67 @@ info: "POST /v2 HTTP/2.0\x0d\n\x0d\n"
 info: "HTTP/1.1 200 OK\x0d\n\x0d\n"
 -/
 #guard_msgs in
-#eval encodeStr (Response.ok |>.body ()).head
+#eval encodeStr (Response.ok |>.body ()).line
 
 /--
 info: "HTTP/1.1 404 Not Found\x0d\n\x0d\n"
 -/
 #guard_msgs in
-#eval encodeStr (Response.notFound |>.body ()).head
+#eval encodeStr (Response.notFound |>.body ()).line
 
 /--
 info: "HTTP/1.1 500 Internal Server Error\x0d\n\x0d\n"
 -/
 #guard_msgs in
-#eval encodeStr (Response.internalServerError |>.body ()).head
+#eval encodeStr (Response.internalServerError |>.body ()).line
 
 /--
 info: "HTTP/1.1 400 Bad Request\x0d\n\x0d\n"
 -/
 #guard_msgs in
-#eval encodeStr (Response.badRequest |>.body ()).head
+#eval encodeStr (Response.badRequest |>.body ()).line
 
 /--
 info: "HTTP/1.1 201 Created\x0d\n\x0d\n"
 -/
 #guard_msgs in
-#eval encodeStr (Response.created |>.body ()).head
+#eval encodeStr (Response.created |>.body ()).line
 
 /--
 info: "HTTP/1.1 202 Accepted\x0d\n\x0d\n"
 -/
 #guard_msgs in
-#eval encodeStr (Response.accepted |>.body ()).head
+#eval encodeStr (Response.accepted |>.body ()).line
 
 /--
 info: "HTTP/1.1 401 Unauthorized\x0d\n\x0d\n"
 -/
 #guard_msgs in
-#eval encodeStr (Response.unauthorized |>.body ()).head
+#eval encodeStr (Response.unauthorized |>.body ()).line
 
 /--
 info: "HTTP/1.1 403 Forbidden\x0d\n\x0d\n"
 -/
 #guard_msgs in
-#eval encodeStr (Response.forbidden |>.body ()).head
+#eval encodeStr (Response.forbidden |>.body ()).line
 
 /--
 info: "HTTP/1.1 409 Conflict\x0d\n\x0d\n"
 -/
 #guard_msgs in
-#eval encodeStr (Response.conflict |>.body ()).head
+#eval encodeStr (Response.conflict |>.body ()).line
 
 /--
 info: "HTTP/1.1 503 Service Unavailable\x0d\n\x0d\n"
 -/
 #guard_msgs in
-#eval encodeStr (Response.serviceUnavailable |>.body ()).head
+#eval encodeStr (Response.serviceUnavailable |>.body ()).line
 
 /--
 info: "HTTP/1.1 418 I'm a teapot\x0d\n\x0d\n"
 -/
 #guard_msgs in
-#eval encodeStr (Response.withStatus .imATeapot |>.body ()).head
+#eval encodeStr (Response.withStatus .imATeapot |>.body ()).line
 
 /-! ## Edge cases: Status encoding -/
 

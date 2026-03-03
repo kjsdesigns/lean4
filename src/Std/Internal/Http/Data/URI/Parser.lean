@@ -62,10 +62,9 @@ private def parseScheme (config : URI.Config) : Parser URI.Scheme := do
   else
     fail "invalid scheme"
 
--- port = *DIGIT
+-- port = 1*DIGIT
 private def parsePortNumber : Parser UInt16 := do
   let portBytes ← takeWhileAtMost isDigit 5
-  if portBytes.size = 0 then fail "empty port number"
   let portStr := String.fromUTF8! portBytes.toByteArray
 
   let some portNum := String.toNat? portStr
@@ -158,18 +157,28 @@ private def parseHost (config : URI.Config) : Parser URI.Host := do
 
 -- authority = [ userinfo "@" ] host [ ":" port ]
 private def parseAuthority (config : URI.Config) : Parser URI.Authority := do
-  let userinfo ← tryOpt do
+  let userInfo ← tryOpt do
     let ui ← parseUserInfo config
     skipByte '@'.toUInt8
     return ui
 
   let host ← parseHost config
 
-  let port ← optional do
-    skipByte ':'.toUInt8
-    parsePortNumber
+  let port : URI.AuthorityPort ←
+    if ← peekIs (· == ':'.toUInt8) then
+      skipByte ':'.toUInt8
+      if (← peekWhen? Internal.Char.isDigit).isSome then
+        pure (.value (← parsePortNumber))
+      else
+        let next ← peek?
+        if next.isNone || next.any (fun c => c = '/'.toUInt8 ∨ c = '?'.toUInt8 ∨ c = '#'.toUInt8) then
+          pure .empty
+        else
+          fail "invalid port number"
+    else
+      pure .omitted
 
-  return { userInfo := userinfo, host := host, port := port }
+  return { userInfo, host, port }
 
 -- segment = *pchar
 private def parseSegment (config : URI.Config) : Parser ByteSlice := do
@@ -385,17 +394,27 @@ where
     let host ← parseHost config
     skipByteChar ':'
     let port ← parsePortNumber
-    return .authorityForm { host, port := some port }
+    return .authorityForm { host, port := .value port }
 
 /--
 Parses an HTTP `Host` header value.
 -/
-public def parseHostHeader (config : URI.Config := {}) : Parser (URI.Host × Option UInt16) := do
+public def parseHostHeader (config : URI.Config := {}) : Parser (URI.Host × URI.Port) := do
   let host ← parseHost config
 
-  let port ← optional do
-    skipByte ':'.toUInt8
-    parsePortNumber
+  let port : URI.AuthorityPort ←
+    if ← peekIs (· == ':'.toUInt8) then
+      skipByte ':'.toUInt8
+      if (← peekWhen? Internal.Char.isDigit).isSome then
+        pure (.value (← parsePortNumber))
+      else
+        let next ← peek?
+        if next.isNone then
+          pure .empty
+        else
+          fail "invalid host header port"
+    else
+      pure .omitted
 
   if ¬(← isEof) then
     fail "invalid host header"

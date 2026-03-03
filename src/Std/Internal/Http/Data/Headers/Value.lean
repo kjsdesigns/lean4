@@ -55,7 +55,7 @@ structure Value where
   /--
   The proof that it's a valid header value.
   -/
-  validHeaderValue : IsValidHeaderValue value := by decide
+  isValidHeaderValue : IsValidHeaderValue value := by decide
 deriving BEq, DecidableEq, Repr
 
 instance : Hashable Value where
