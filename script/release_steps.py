@@ -479,6 +479,20 @@ def execute_release_steps(repo, version, config):
         print(blue("Updating lakefile.toml..."))
         run_command(f'perl -pi -e \'s/"v4\\.[0-9]+(\\.[0-9]+)?(-rc[0-9]+)?"/"' + version + '"/g\' lakefile.*', cwd=repo_path)
         run_command("lake update", cwd=repo_path, stream_output=True)
+    elif repo_name == "verso":
+        # verso has nested Lake projects in test-projects/ that each have their own
+        # lake-manifest.json with a subverso pin. After updating the root manifest via
+        # `lake update`, sync the subverso rev into all sub-manifests so the
+        # "SubVerso version consistency" CI check passes.
+        run_command("lake update", cwd=repo_path, stream_output=True)
+        print(blue("Syncing subverso rev from root manifest to test-project sub-manifests..."))
+        sync_script = (
+            'ROOT_REV=$(jq -r \'.packages[] | select(.name == "subverso") | .rev\' lake-manifest.json); '
+            'find test-projects -name lake-manifest.json -print0 | '
+            'xargs -0 -I{} sh -c \'jq --arg rev "$ROOT_REV" \'.packages |= map(if .name == "subverso" then .rev = $rev else . end)\' "{}" > /tmp/lm_tmp.json && mv /tmp/lm_tmp.json "{}"\''
+        )
+        run_command(sync_script, cwd=repo_path)
+        print(green("Synced subverso rev to all test-project sub-manifests"))
     elif dependencies:
         run_command(f'perl -pi -e \'s/"v4\\.[0-9]+(\\.[0-9]+)?(-rc[0-9]+)?"/"' + version + '"/g\' lakefile.*', cwd=repo_path)
         run_command("lake update", cwd=repo_path, stream_output=True)
