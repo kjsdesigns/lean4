@@ -437,16 +437,26 @@ class instantiate_delayed_fn {
         }
     };
 
-    struct cache_entry { expr result; unsigned scope_level; unsigned scope_gen; };
+    struct cache_entry {
+        expr result;
+        unsigned scope_level;  /* scope at which this entry was stored */
+        unsigned scope_gen;    /* generation of scope_level at store time */
+        unsigned result_scope; /* original m_result_scope for propagation */
+    };
 
-    typedef lean::unordered_map<std::pair<lean_object *, unsigned>, cache_entry, key_hasher> flat_cache;
+    typedef lean::unordered_map<std::pair<lean_object *, unsigned>,
+        std::vector<cache_entry>, key_hasher> flat_cache;
 
     metavar_ctx & m_mctx;
     name_set const & m_resolvable_delayed;
     name_hash_map<fvar_subst_entry> m_fvar_subst;
     unsigned m_depth;
 
-    /* Single flat cache with generation-based staleness detection. */
+    /* Flat cache mapping (ptr, depth) to a stack of entries ordered by scope
+       (innermost/highest scope at the back). The stack-based approach handles
+       both fvar shadowing and late-binding of fvars without special-case logic:
+       - Lookup: drop stale entries from the back, accept only exact scope match.
+       - Insert: store entries for each scope in [result_scope, current_scope]. */
     flat_cache m_cache;
     std::vector<unsigned> m_scope_gens;  /* m_scope_gens[level] = generation */
     unsigned m_gen_counter;
@@ -483,26 +493,48 @@ class instantiate_delayed_fn {
         return optional<expr>(lift_loose_bvars(it->second.value, d));
     }
 
-    /* Cache lookup — O(1) with generation-based staleness check.
-       An entry at scope_level 0 (no fvar dependency) is valid at any scope.
-       An entry at scope_level > 0 is only valid at exactly that scope level,
-       because an inner scope may shadow the fvars it depends on. */
+    /* Cache lookup: scan the entry stack from the back (innermost scope first),
+       drop stale entries, and accept only an exact scope match.
+       This is always correct: an entry at scope S is only returned when
+       m_scope == S, so shadowed or late-bound fvars cannot produce stale hits. */
     optional<expr> cache_lookup(lean_object * ptr) {
         auto key = mk_pair(ptr, m_depth);
         auto it = m_cache.find(key);
         if (it == m_cache.end()) return {};
-        auto & entry = it->second;
-        if ((entry.scope_level == 0 || entry.scope_level == m_scope) &&
-            m_scope_gens[entry.scope_level] == entry.scope_gen) {
-            m_result_scope = std::max(m_result_scope, entry.scope_level);
-            return optional<expr>(entry.result);
+        auto & stack = it->second;
+        /* Drop stale entries from the back. In a LIFO scope structure,
+           if scope S is stale, all scopes > S were popped earlier. */
+        while (!stack.empty()) {
+            auto & top = stack.back();
+            if (top.scope_level <= m_scope &&
+                m_scope_gens[top.scope_level] == top.scope_gen) {
+                /* First valid entry — accept only if at current scope. */
+                if (top.scope_level == m_scope) {
+                    m_result_scope = std::max(m_result_scope, top.result_scope);
+                    return optional<expr>(top.result);
+                }
+                return {}; /* valid but at a lower scope — miss */
+            }
+            stack.pop_back();
         }
         return {};
     }
 
+    /* Cache insert: store the result at each scope level in
+       [m_result_scope, m_scope], so that lookups at any of those scopes
+       will find an entry with an exact scope match. */
     void cache_insert(lean_object * ptr, expr const & result) {
         auto key = mk_pair(ptr, m_depth);
-        m_cache[key] = { result, m_result_scope, m_scope_gens[m_result_scope] };
+        auto & stack = m_cache[key];
+        /* Drop entries at scope_level >= m_result_scope — they are
+           superseded by the new result (or stale from a popped scope). */
+        while (!stack.empty() && stack.back().scope_level >= m_result_scope) {
+            stack.pop_back();
+        }
+        /* Push entries for each scope in [m_result_scope, m_scope]. */
+        for (unsigned s = m_result_scope; s <= m_scope; s++) {
+            stack.push_back({result, s, m_scope_gens[s], m_result_scope});
+        }
     }
 
     /* Get a direct mvar assignment. Visit it to resolve delayed mvars
