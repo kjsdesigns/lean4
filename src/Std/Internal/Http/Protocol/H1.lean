@@ -453,7 +453,7 @@ Returns `true` when body chunks should be drained internally rather than surface
 private def shouldIgnoreBodyPull (machine : Machine dir) : Bool :=
   match dir with
   | .receiving => machine.writer.sentMessage
-  | .sending => false
+  | .sending => machine.reader.messageHead.status.isInformational
 
 /--
 Builds the externally exposed `PulledChunk` value from parsed body bytes.
@@ -1503,10 +1503,29 @@ message or transition to `.closed`.
 -/
 private partial def processReaderCompleteState (machine : Machine dir) : Machine dir :=
   let reader := machine.reader
-  if (reader.noMoreInput ∧ reader.input.atEnd) ∨ ¬machine.keepAlive then
-    machine.setReaderState .closed
-  else
-    machine
+  match dir, machine with
+  | .sending, machine =>
+      -- After an informational (1xx) response, loop back to read the real response
+      -- without resetting the request/writer state (still in the same exchange).
+      if machine.reader.messageHead.status.isInformational then
+        { machine with reader := {
+          state := .needStartLine,
+          input := reader.input,
+          messageHead := (∅ : Message.Head .sending),
+          messageCount := reader.messageCount + 1,
+          bodyBytesRead := 0,
+          headerBytesRead := 0,
+          noMoreInput := reader.noMoreInput
+        }}
+      else if (reader.noMoreInput ∧ reader.input.atEnd) ∨ ¬machine.keepAlive then
+        machine.setReaderState .closed
+      else
+        machine
+  | _, machine =>
+      if (reader.noMoreInput ∧ reader.input.atEnd) ∨ ¬machine.keepAlive then
+        machine.setReaderState .closed
+      else
+        machine
 
 /--
 Advances reader-side state machine by one logical transition.
