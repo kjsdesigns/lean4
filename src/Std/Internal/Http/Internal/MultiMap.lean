@@ -27,9 +27,7 @@ open Std Internal
 set_option linter.all true
 
 /--
-A structure for managing key-value pairs where each key can have multiple values.
-Invariant: each key must have at least one value, and all indices stored in `index`
-are valid positions into `entries`.
+A structure for managing ordered key-value pairs where each key can have multiple values.
 -/
 structure MultiMap (α : Type u) (β : Type v) [BEq α] [Hashable α] where
 
@@ -195,7 +193,8 @@ If the key is absent, returns the map unchanged.
 -/
 @[inline]
 def update [EquivBEq α] [LawfulHashable α] (map : MultiMap α β) (key : α) (f : β → β) : MultiMap α β :=
-  if key ∉ map then map
+  if key ∉ map then
+    map
   else
     map.entries.foldl (fun acc (k, v) => acc.insert k (if k == key then f v else v)) empty
 
@@ -233,18 +232,18 @@ def erase [EquivBEq α] [LawfulHashable α] (map : MultiMap α β) (key : α) : 
     |>.foldl (fun acc (k, v) => acc.insert k v) empty
 
 /--
-Gets the number of keys in the map.
+Gets the number of entries in the map.
 -/
 @[inline]
 def size (map : MultiMap α β) : Nat :=
-  map.indexes.size
+  map.entries.size
 
 /--
 Checks if the map is empty.
 -/
 @[inline]
 def isEmpty (map : MultiMap α β) : Bool :=
-  map.indexes.isEmpty
+  map.entries.isEmpty
 
 /--
 Converts the multimap to an array of key-value pairs (flattened).

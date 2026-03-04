@@ -31,20 +31,6 @@ def isAscii (c : Char) : Bool :=
   c.toNat < 128
 
 /--
-Checks if a character is a decimal digit (0-9).
--/
-@[inline, expose]
-def isDigitChar (c : Char) : Bool :=
-  c ≥ '0' ∧ c ≤ '9'
-
-/--
-Checks if a character is an alphabetic character (a-z or A-Z).
--/
-@[inline, expose]
-def isAlphaChar (c : Char) : Bool :=
-  (c ≥ 'A' ∧ c ≤ 'Z') ∨ (c ≥ 'a' ∧ c ≤ 'z')
-
-/--
 Checks if a byte represents an ASCII character (value < 128).
 -/
 @[inline, expose]
@@ -55,14 +41,14 @@ def isAsciiByte (c : UInt8) : Bool :=
 Checks if a byte is a decimal digit (0-9).
 -/
 @[inline, expose]
-def isDigit (c : UInt8) : Bool :=
+def isDigitByte (c : UInt8) : Bool :=
   c >= '0'.toUInt8 && c <= '9'.toUInt8
 
 /--
 Checks if a byte is an alphabetic character (a-z or A-Z).
 -/
 @[inline, expose]
-def isAlpha (c : UInt8) : Bool :=
+def isAlphaByte (c : UInt8) : Bool :=
   (c >= 'A'.toUInt8 && c <= 'Z'.toUInt8) || (c >= 'a'.toUInt8 && c <= 'z'.toUInt8)
 
 /--
@@ -74,8 +60,8 @@ tchar = "!" / "#" / "$" / "%" / "&" / "'" / "*"
 @[inline]
 def tchar (c : Char) : Bool :=
   (c matches '!' | '#' | '$' | '%' | '&' | '\'' | '*' | '+' | '-' | '.' | '^' | '_' | '`' | '|' | '~') ||
-  isDigitChar c ||
-  isAlphaChar c
+  Char.isDigit c ||
+  Char.isAlpha c
 
 /--
 vchar = %x21-7E
@@ -192,7 +178,7 @@ Checks if a character is a hexadecimal digit (0-9, a-f, or A-F).
 @[inline, expose]
 def isHexDigit (c : Char) : Bool :=
   (c matches 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'A' | 'B' | 'C' | 'D' | 'E' | 'F') ||
-  isDigitChar c
+  Char.isDigit c
 
 /--
 Checks if a byte is a hexadecimal digit (0-9, a-f, or A-F).
@@ -217,7 +203,7 @@ Checks whether `c` is an ASCII alphanumeric character.
 -/
 @[inline, expose]
 def isAsciiAlphaNumChar (c : Char) : Bool :=
-  isAscii c && (isDigitChar c || isAlphaChar c)
+  isAscii c && (Char.isDigit c || Char.isAlpha c)
 
 /--
 Checks if a character is valid after the first character of a URI scheme.
