@@ -63,4 +63,6 @@ theorem isLowerCase_toLower {s : String} : IsLowerCase s.toLower := by
 theorem isLowerCase_empty : IsLowerCase "" := by
   simp [IsLowerCase, String.toLower]
 
-end Std.Http.Internal.IsLowerCase
+end IsLowerCase
+
+end Std.Http.Internal
