@@ -38,15 +38,15 @@ protected def Extensions.compareName : Name → Name → Ordering
   | .anonymous, _ => .lt
   | _, .anonymous => .gt
   | .str p₁ s₁, .str p₂ s₂ =>
-      match Extensions.compareName p₁ p₂ with
-      | .eq => compareOfLessAndEq s₁ s₂
-      | ord => ord
+    match Extensions.compareName p₁ p₂ with
+    | .eq => compareOfLessAndEq s₁ s₂
+    | ord => ord
   | .str _ _, .num _ _ => .lt
   | .num _ _, .str _ _ => .gt
   | .num p₁ n₁, .num p₂ n₂ =>
-      match Extensions.compareName p₁ p₂ with
-      | .eq => compare n₁ n₂
-      | ord => ord
+    match Extensions.compareName p₁ p₂ with
+    | .eq => compare n₁ n₂
+    | ord => ord
 
 /--
 A dynamically typed map for optional metadata that can be attached to HTTP requests and responses.

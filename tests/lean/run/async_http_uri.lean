@@ -214,6 +214,7 @@ info: some " "
 #eval parseCheck "http://user%40example:pass%3Aword@host.com"
 #eval parseCheck "http://example.com:/"
 #eval parseCheck "http://example.com:/?q=1"
+#eval parseCheck "///////"
 
 -- `&` in a key must be percent-encoded so toRawString round-trips correctly.
 #guard
@@ -263,6 +264,8 @@ info: some " "
 #eval parseCheckFail "#frag"
 #eval parseCheckFail "/path/\n"
 #eval parseCheckFail "/path/\u0000"
+#eval parseCheckFail "/page#section"
+#eval parseCheckFail "/api/v1/users/[id]:action"
 
 -- maxPathSegments should apply to trailing empty segments as well.
 #guard
