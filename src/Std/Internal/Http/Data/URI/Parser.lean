@@ -171,7 +171,7 @@ private def parseAuthority (config : URI.Config) : Parser URI.Authority := do
   let port : URI.AuthorityPort ←
     if ← peekIs (· == ':'.toUInt8) then
       skipByte ':'.toUInt8
-      if (← peekWhen? isAlphaByte).isSome then
+      if (← peekWhen? isDigitByte).isSome then
         pure (.value (← parsePortNumber))
       else
         let next ← peek?
