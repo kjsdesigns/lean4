@@ -8,6 +8,7 @@ module
 prelude
 public import Std.Internal.Http.Data.Headers.Name
 public import Std.Internal.Http.Data.Headers.Value
+public import Std.Internal.Parsec.Basic
 
 public section
 
@@ -31,12 +32,12 @@ Typeclass for typed HTTP headers that can be parsed from and serialized to heade
 class Header (α : Type) where
 
   /--
-  Parse a header value into the typed representation.
+  Parses a header value into the typed representation.
   -/
   parse : Header.Value → Option α
 
   /--
-  Serialize the typed representation back to a name-value pair.
+  Serializes the typed representation back to a name-value pair.
   -/
   serialize : α → Header.Name × Header.Value
 
@@ -47,8 +48,13 @@ instance [h : Header α] : Encode .v11 α where
 
 namespace Header
 
-private def parseTokenList (v : Value) : Array String :=
-  v.value.split (· == ',') |>.toArray.map (·.trimAscii.toString.toLower)
+private def parseTokenList (v : Value) : Option (Array String) := do
+  let rawParts := v.value.split (· == ',')
+  let parts := rawParts.map (·.trimAscii)
+
+  guard (parts.all (¬·.isEmpty))
+
+  return parts.toArray.map (fun s => s.toString.toLower)
 
 /--
 The `Content-Length` header, representing the size of the message body in bytes.
@@ -124,7 +130,7 @@ structure TransferEncoding where
   /--
   Proof that the transfer codings satisfy the chunked placement rules.
   -/
-  valid : TransferEncoding.Validate codings = true
+  isValid : TransferEncoding.Validate codings = true
 
 deriving Repr
 
@@ -139,8 +145,8 @@ def isChunked (te : TransferEncoding) : Bool :=
 /--
 Parses a comma-separated list of transfer codings from a header value, validating chunked placement.
 -/
-def parse (v : Value) : Option TransferEncoding :=
-  let codings := parseTokenList v
+def parse (v : Value) : Option TransferEncoding := do
+  let codings ← parseTokenList v
   if h : TransferEncoding.Validate codings then
     some ⟨codings, h⟩
   else
@@ -192,8 +198,8 @@ def shouldClose (connection : Connection) : Bool :=
 /--
 Parses a `Connection` header value into normalized tokens.
 -/
-def parse (v : Value) : Option Connection :=
-  let tokens := parseTokenList v
+def parse (v : Value) : Option Connection := do
+  let tokens ← parseTokenList v
   if h : tokens.all isToken = true then
     some ⟨tokens, h⟩
   else
