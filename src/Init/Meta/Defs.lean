@@ -132,7 +132,8 @@ def isSubScriptAlnum (c : Char) : Bool :=
   isAlphaAscii c || '0'.toUInt8 ≤ c && c ≤ '9'.toUInt8
 
 @[inline] def isIdRest (c : Char) : Bool :=
-  c.isAlphanum || c = '_' || c = '\'' || c == '!' || c == '?' || c.isXID_Continue
+  c.isAlphanum || c = '_' || c = '\'' || c == '!' || c == '?' || isNumericSubscript c ||
+  c.isXID_Continue
 
 @[inline] def isIdRestAscii (c : UInt8) : Bool :=
   isAlphanumAscii c || c = '_'.toUInt8 || c = '\''.toUInt8 || c == '!'.toUInt8 || c == '?'.toUInt8
