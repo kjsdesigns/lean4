@@ -1,4 +1,8 @@
 import Lean
+import Lean.Meta.InstMVarsAll
+import Lean.Meta.InstMVarsNU
+
+set_option maxHeartbeats 4000000
 
 open Lean Meta
 
@@ -193,18 +197,6 @@ def _root_.Lean.Meta.instantiateMVarsNoUpdate2 (e : Expr) : MetaM Expr := do
 
 /-! ## Benchmark 1: delayed assignments (from original benchmark) -/
 
-partial def runBench1 (name : String) (n : Nat) (mk : Nat → MetaM MVarId) : MetaM Unit := do
-  let mvarId ← mk n
-  let startTime ← IO.monoNanosNow
-  solve mvarId
-  let endTime ← IO.monoNanosNow
-  let ms := (endTime - startTime).toFloat / 1000000.0
-  let startTime ← IO.monoNanosNow
-  discard <| instantiateMVars (mkMVar mvarId)
-  let endTime ← IO.monoNanosNow
-  let instMs := (endTime - startTime).toFloat / 1000000.0
-  IO.println s!"{name}_{n}: {ms} ms, instantiateMVars: {instMs} ms"
-
 def mkBench1 (n : Nat) : MetaM MVarId := do
   let type := mkType n
   return (← mkFreshExprSyntheticOpaqueMVar type).mvarId!
@@ -219,8 +211,37 @@ where
     | 0 => mkResultType n
     | i+1 => .forallE `x Nat.mkType (mkAnd (mkType i) (mkLE (n - i - 1))) .default
 
+/-- Run a single implementation on a fresh copy of the benchmark, return (result, time_ms). -/
+def runImpl (n : Nat) (f : Expr → MetaM Expr) : MetaM (Expr × Float) := do
+  let mvarId ← mkBench1 n
+  solve mvarId
+  let t0 ← IO.monoNanosNow
+  let r ← f (mkMVar mvarId)
+  let t1 ← IO.monoNanosNow
+  let ms := (t1 - t0).toFloat / 1000000.0
+  return (r, ms)
+
 partial def bench1 (n : Nat) : MetaM Unit := do
-  runBench1 "bench1" n mkBench1
+  let (rDefault, msDefault) ← runImpl n instantiateMVars
+  let (rOriginal, msOriginal) ← runImpl n instantiateMVarsOriginal
+  let (rAll, msAll) ← runImpl n instantiateAllMVars
+  let (rNUCpp, msNUCpp) ← runImpl n instantiateMVarsNoUpdate
+  let (rNULean, msNULean) ← runImpl n instantiateMVarsNoUpdateLean
+  let (rNU2, msNU2) ← runImpl n instantiateMVarsNoUpdate2
+
+  -- Verify correctness
+  unless Expr.eqv rDefault rOriginal do
+    IO.println s!"ERROR: instantiateMVars vs Original differ for n={n}"
+  unless Expr.eqv rDefault rAll do
+    IO.println s!"ERROR: instantiateMVars vs AllMVars differ for n={n}"
+  unless Expr.eqv rDefault rNUCpp do
+    IO.println s!"ERROR: instantiateMVars vs NoUpdate(C++) differ for n={n}"
+  unless Expr.eqv rDefault rNULean do
+    IO.println s!"ERROR: instantiateMVars vs NoUpdate(Lean) differ for n={n}"
+  unless Expr.eqv rDefault rNU2 do
+    IO.println s!"ERROR: instantiateMVars vs NoUpdate2 differ for n={n}"
+
+  IO.println s!"bench1_{n}: instantiateMVars {msDefault} ms, Original {msOriginal} ms, AllMVars {msAll} ms, NoUpdate(C++) {msNUCpp} ms, NoUpdate(Lean) {msNULean} ms, NoUpdate2 {msNU2} ms"
 
 /-! ## Benchmark 2: shared closed sub-expression across binder depths
 
@@ -248,31 +269,33 @@ def mkNestedForall (bigExpr : Expr) (depth : Nat) : Expr := Id.run do
     term := .forallE `x bigExpr term .default
   return term
 
+def timeMs (f : MetaM α) : MetaM (α × Float) := do
+  let t0 ← IO.monoNanosNow
+  let r ← f
+  let t1 ← IO.monoNanosNow
+  return (r, (t1 - t0).toFloat / 1000000.0)
+
 def bench2 (depth : Nat) (bodySize : Nat) : MetaM Unit := do
   -- Each test gets fresh mvars to avoid cross-contamination from instantiateMVars updating assignments
   let bigExpr1 ← mkMVarConj bodySize
-  let term1 := mkNestedForall bigExpr1 depth
-  let t0 ← IO.monoNanosNow
-  let _r1 ← instantiateMVarsNoUpdate term1
-  let t1 ← IO.monoNanosNow
+  let (_, instMs) ← timeMs (instantiateMVars (mkNestedForall bigExpr1 depth))
+
+  let bigExpr1b ← mkMVarConj bodySize
+  let (_, origMs) ← timeMs (instantiateMVarsOriginal (mkNestedForall bigExpr1b depth))
+
+  let bigExpr1c ← mkMVarConj bodySize
+  let (_, allMs) ← timeMs (instantiateAllMVars (mkNestedForall bigExpr1c depth))
 
   let bigExpr2 ← mkMVarConj bodySize
-  let term2 := mkNestedForall bigExpr2 depth
-  let t2 ← IO.monoNanosNow
-  let _r2 ← instantiateMVarsNoUpdate2 term2
-  let t3 ← IO.monoNanosNow
+  let (_, nuMs) ← timeMs (instantiateMVarsNoUpdate (mkNestedForall bigExpr2 depth))
+
+  let bigExpr2b ← mkMVarConj bodySize
+  let (_, nuLeanMs) ← timeMs (instantiateMVarsNoUpdateLean (mkNestedForall bigExpr2b depth))
 
   let bigExpr3 ← mkMVarConj bodySize
-  let term3 := mkNestedForall bigExpr3 depth
-  let t4 ← IO.monoNanosNow
-  let _r3 ← instantiateMVars term3
-  let t5 ← IO.monoNanosNow
+  let (_, nu2Ms) ← timeMs (instantiateMVarsNoUpdate2 (mkNestedForall bigExpr3 depth))
 
-  let nuMs := (t1 - t0).toFloat / 1000000.0
-  let nu2Ms := (t3 - t2).toFloat / 1000000.0
-  let instMs := (t5 - t4).toFloat / 1000000.0
-
-  IO.println s!"bench2 depth={depth} body={bodySize}: instantiateMVars {instMs} ms, NoUpdate {nuMs} ms, NoUpdate2 {nu2Ms} ms"
+  IO.println s!"bench2 depth={depth} body={bodySize}: instantiateMVars {instMs} ms, Original {origMs} ms, AllMVars {allMs} ms, NoUpdate(C++) {nuMs} ms, NoUpdate(Lean) {nuLeanMs} ms, NoUpdate2 {nu2Ms} ms"
 
 /-! ## Run benchmarks -/
 
