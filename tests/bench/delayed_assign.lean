@@ -64,7 +64,7 @@ partial def bench1 (n : Nat) : MetaM Unit := do
   unless Expr.eqv rDefault rNULean do
     IO.println s!"ERROR: instantiateMVars vs NoUpdate(Lean) differ for n={n}"
 
-  IO.println s!"bench1_{n}: instantiateMVars {msDefault} ms, Original {msOriginal} ms, AllMVars {msAll} ms, NoUpdate(C++) {msNUCpp} ms, NoUpdate(Lean) {msNULean} ms"
+  IO.println s!"bench1_{n}: Default {msDefault} ms, Original {msOriginal} ms, AllMVars {msAll} ms, NoUpdate(C++) {msNUCpp} ms, NoUpdate(Lean) {msNULean} ms"
 
 run_meta do
   IO.println "Example (n = 5):"
