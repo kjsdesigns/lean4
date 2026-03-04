@@ -49,7 +49,7 @@ Reference: https://www.rfc-editor.org/rfc/rfc3986.html#section-3.1
 abbrev IsValidScheme (s : String) : Prop :=
   IsLowerCase s ∧
   s.toList.all isValidSchemeChar ∧
-  (s.toList.head?.map isAlphaChar |>.getD false) -- first character must be ALPHA
+  (s.toList.head?.map isAlpha |>.getD false) -- first character must be ALPHA
 
 /--
 URI scheme identifier (e.g., "http", "https", "ftp").
