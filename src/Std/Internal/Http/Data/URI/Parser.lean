@@ -48,7 +48,10 @@ private def peekIs (p : UInt8 → Bool) : Parser Bool := do
 
 -- scheme = ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )
 private def parseScheme (config : URI.Config) : Parser URI.Scheme := do
-  let first : UInt8 ← satisfy (fun b : UInt8 => Internal.Char.isAlpha b)
+  if config.maxSchemeLength = 0 then
+    fail "scheme length limit is 0 (no scheme allowed)"
+
+  let first : UInt8 ← satisfy (fun b : UInt8 => Internal.Char.isAlphaByte b)
   let rest ← takeWhileAtMost
     (fun c =>
       isAlphaNum c ∨
@@ -64,7 +67,8 @@ private def parseScheme (config : URI.Config) : Parser URI.Scheme := do
 
 -- port = 1*DIGIT
 private def parsePortNumber : Parser UInt16 := do
-  let portBytes ← takeWhileAtMost isDigit 5
+  let portBytes ← takeWhileAtMost isDigitByte 5
+
   let portStr := String.fromUTF8! portBytes.toByteArray
 
   let some portNum := String.toNat? portStr
@@ -123,7 +127,7 @@ private def parseIPv6 : Parser Net.IPv6Addr := do
 -- IPv4address = dec-octet "." dec-octet "." dec-octet "." dec-octet
 private def parseIPv4 : Parser Net.IPv4Addr := do
   let result ← takeWhile1AtMost
-    (fun x => x = '.'.toUInt8 ∨ isDigit x)
+    (fun x => x = '.'.toUInt8 ∨ isDigitByte x)
     256
 
   let ipv4Str := String.fromUTF8! result.toByteArray
@@ -139,7 +143,7 @@ private def parseHost (config : URI.Config) : Parser URI.Host := do
   if (← peekWhen? (· == '['.toUInt8)).isSome then
     return .ipv6 (← parseIPv6)
   else
-    if (← peekWhen? Internal.Char.isDigit).isSome then
+    if (← peekWhen? isDigitByte).isSome then
       if let some ipv4 ← tryOpt parseIPv4 then
         return .ipv4 ipv4
 
@@ -167,7 +171,7 @@ private def parseAuthority (config : URI.Config) : Parser URI.Authority := do
   let port : URI.AuthorityPort ←
     if ← peekIs (· == ':'.toUInt8) then
       skipByte ':'.toUInt8
-      if (← peekWhen? Internal.Char.isDigit).isSome then
+      if (← peekWhen? isAlphaByte).isSome then
         pure (.value (← parsePortNumber))
       else
         let next ← peek?
@@ -405,7 +409,7 @@ public def parseHostHeader (config : URI.Config := {}) : Parser (URI.Host × URI
   let port : URI.AuthorityPort ←
     if ← peekIs (· == ':'.toUInt8) then
       skipByte ':'.toUInt8
-      if (← peekWhen? Internal.Char.isDigit).isSome then
+      if (← peekWhen? isDigitByte).isSome then
         pure (.value (← parsePortNumber))
       else
         let next ← peek?
