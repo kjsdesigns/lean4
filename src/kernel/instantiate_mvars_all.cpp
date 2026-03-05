@@ -39,6 +39,8 @@ extern "C" object * lean_get_lmvar_assignment(obj_arg mctx, obj_arg mid);
 extern "C" object * lean_assign_lmvar(obj_arg mctx, obj_arg mid, obj_arg val);
 extern "C" object * lean_get_mvar_assignment(obj_arg mctx, obj_arg mid);
 extern "C" object * lean_get_delayed_mvar_assignment(obj_arg mctx, obj_arg mid);
+extern "C" object * lean_delayed_mvar_assignment_fvars(obj_arg d);
+extern "C" object * lean_delayed_mvar_assignment_mvar_id_pending(obj_arg d);
 extern "C" object * lean_assign_mvar(obj_arg mctx, obj_arg mid, obj_arg val);
 typedef object_ref metavar_ctx;
 typedef object_ref delayed_assignment;
@@ -63,6 +65,14 @@ static option_ref<expr> get_mvar_assignment(metavar_ctx & mctx, name const & mid
 
 static option_ref<delayed_assignment> get_delayed_mvar_assignment(metavar_ctx & mctx, name const & mid) {
     return option_ref<delayed_assignment>(lean_get_delayed_mvar_assignment(mctx.to_obj_arg(), mid.to_obj_arg()));
+}
+
+static array_ref<expr> delayed_assignment_fvars(delayed_assignment const & d) {
+    return array_ref<expr>(lean_delayed_mvar_assignment_fvars(d.to_obj_arg()));
+}
+
+static name delayed_assignment_mvar_id_pending(delayed_assignment const & d) {
+    return name(lean_delayed_mvar_assignment_mvar_id_pending(d.to_obj_arg()));
 }
 
 /* Level metavariable instantiation. */
@@ -225,7 +235,7 @@ class instantiate_direct_fn {
             /* Pre-normalize the pending value so pass 2 finds it ready.
                Only trigger pass 2 if the pending mvar is actually assigned;
                unassigned pending values will clearly fail the resolvability check. */
-            name mid_pending(cnstr_get(d.get_val().raw(), 1), true);
+            name mid_pending = delayed_assignment_mvar_id_pending(d.get_val());
             if (get_assignment(mid_pending))
                 m_has_delayed = true;
         }
@@ -240,7 +250,7 @@ class instantiate_direct_fn {
         /* Not directly assigned. Check if delayed-assigned. */
         option_ref<delayed_assignment> d = get_delayed_mvar_assignment(m_mctx, mid);
         if (d) {
-            name mid_pending(cnstr_get(d.get_val().raw(), 1), true);
+            name mid_pending = delayed_assignment_mvar_id_pending(d.get_val());
             if (get_assignment(mid_pending))
                 m_has_delayed = true;
         }
@@ -377,10 +387,10 @@ class instantiate_delayed_fn {
                 option_ref<delayed_assignment> d =
                     get_delayed_mvar_assignment(m_mctx, mid);
                 if (!d) return false;
-                array_ref<expr> fvars(cnstr_get(d.get_val().raw(), 0), true);
+                array_ref<expr> fvars = delayed_assignment_fvars(d.get_val());
                 if (fvars.size() > get_app_num_args(e))
                     return false; /* not enough args */
-                name mid_pending(cnstr_get(d.get_val().raw(), 1), true);
+                name mid_pending = delayed_assignment_mvar_id_pending(d.get_val());
                 if (!is_resolvable_pending(mid_pending))
                     return false;
                 /* Check args too. */
@@ -543,8 +553,8 @@ class instantiate_delayed_fn {
         if (!d) {
             return visit_mvar_app_args(e);
         }
-        array_ref<expr> fvars(cnstr_get(d.get_val().raw(), 0), true);
-        name mid_pending(cnstr_get(d.get_val().raw(), 1), true);
+        array_ref<expr> fvars = delayed_assignment_fvars(d.get_val());
+        name mid_pending = delayed_assignment_mvar_id_pending(d.get_val());
         if (fvars.size() > get_app_num_args(e)) {
             return visit_mvar_app_args(e);
         }

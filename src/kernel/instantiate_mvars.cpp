@@ -100,6 +100,8 @@ extern "C" LEAN_EXPORT object * lean_instantiate_level_mvars(object * m, object 
 
 extern "C" object * lean_get_mvar_assignment(obj_arg mctx, obj_arg mid);
 extern "C" object * lean_get_delayed_mvar_assignment(obj_arg mctx, obj_arg mid);
+extern "C" object * lean_delayed_mvar_assignment_fvars(obj_arg d);
+extern "C" object * lean_delayed_mvar_assignment_mvar_id_pending(obj_arg d);
 extern "C" object * lean_assign_mvar(obj_arg mctx, obj_arg mid, obj_arg val);
 typedef object_ref delayed_assignment;
 
@@ -114,6 +116,14 @@ option_ref<expr> get_mvar_assignment(metavar_ctx & mctx, name const & mid) {
 
 option_ref<delayed_assignment> get_delayed_mvar_assignment(metavar_ctx & mctx, name const & mid) {
     return option_ref<delayed_assignment>(lean_get_delayed_mvar_assignment(mctx.to_obj_arg(), mid.to_obj_arg()));
+}
+
+array_ref<expr> delayed_assignment_fvars(delayed_assignment const & d) {
+    return array_ref<expr>(lean_delayed_mvar_assignment_fvars(d.to_obj_arg()));
+}
+
+name delayed_assignment_mvar_id_pending(delayed_assignment const & d) {
+    return name(lean_delayed_mvar_assignment_mvar_id_pending(d.to_obj_arg()));
 }
 
 expr replace_fvars(expr const & e, array_ref<expr> const & fvars, expr const * rev_args) {
@@ -290,8 +300,8 @@ class instantiate_mvars_fn {
             metavariables, we replace the free variables `fvars` in `newVal` with the first
             `fvars.size` elements of `args`.
             */
-            array_ref<expr> fvars(cnstr_get(d.get_val().raw(), 0), true);
-            name mid_pending(cnstr_get(d.get_val().raw(), 1), true);
+            array_ref<expr> fvars = delayed_assignment_fvars(d.get_val());
+            name mid_pending = delayed_assignment_mvar_id_pending(d.get_val());
             if (fvars.size() > get_app_num_args(e)) {
                 /*
                 We don't have sufficient arguments for instantiating the free variables `fvars`.
