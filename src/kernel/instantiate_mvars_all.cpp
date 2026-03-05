@@ -447,9 +447,6 @@ class instantiate_delayed_fn {
        the save/reset/restore pattern in visit(). */
     unsigned m_result_scope;
 
-    /* Global cache for fvar-free expressions — scope-independent. */
-    lean::unordered_map<lean_object *, expr> m_global_cache;
-
     /* Write-back support: when fvar_subst is empty, normalize and write back
        mvar assignments to match the original instantiateMVars mctx side effects.
        Downstream code (e.g. MutualDef.mkInitialUsedFVarsMap) reads stored
@@ -486,7 +483,7 @@ class instantiate_delayed_fn {
             return optional<expr>();
         expr a(r.get_val());
         if (fvar_subst_empty()) {
-            if (!has_mvar(a))
+            if (!has_expr_mvar(a))
                 return optional<expr>(a);
             if (m_already_normalized.contains(mid))
                 return optional<expr>(a);
@@ -498,7 +495,7 @@ class instantiate_delayed_fn {
             }
             return optional<expr>(a_new);
         } else {
-            if (!has_mvar(a) && !has_fvar(a))
+            if (!has_expr_mvar(a) && !has_fvar(a))
                 return optional<expr>(a);
             return optional<expr>(visit(a));
         }
@@ -649,25 +646,13 @@ public:
           m_depth(0), m_result_scope(0) {}
 
     expr visit(expr const & e) {
-        if (fvar_subst_empty()) {
-            if (!has_mvar(e))
-                return e;
-        } else {
-            if (!has_mvar(e) && !has_fvar(e))
-                return e;
-        }
+        if ((!has_fvar(e) || fvar_subst_empty()) && !has_expr_mvar(e))
+            return e;
 
-        bool use_global = !has_fvar(e) && !has_expr_mvar(e);
         bool shared = false;
         if (is_shared(e)) {
-            if (use_global) {
-                auto it = m_global_cache.find(e.raw());
-                if (it != m_global_cache.end())
-                    return it->second;
-            } else {
-                if (auto r = m_cache.lookup(cache_key(e.raw(), m_depth), m_result_scope))
-                    return *r;
-            }
+            if (auto r = m_cache.lookup(cache_key(e.raw(), m_depth), m_result_scope))
+                return *r;
             shared = true;
         }
 
@@ -723,10 +708,7 @@ public:
         }
         }
         if (shared) {
-            if (use_global)
-                m_global_cache.insert(mk_pair(e.raw(), r));
-            else
-                r = m_cache.insert(cache_key(e.raw(), m_depth), r, m_result_scope);
+            r = m_cache.insert(cache_key(e.raw(), m_depth), r, m_result_scope);
         }
 
     done:
