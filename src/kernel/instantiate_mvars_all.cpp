@@ -439,8 +439,6 @@ class instantiate_delayed_fn {
             return optional<expr>();
         expr a(r.get_val());
         if (fvar_subst_empty()) {
-            if (!has_expr_mvar(a))
-                return optional<expr>(a);
             if (m_already_normalized.contains(mid))
                 return optional<expr>(a);
             m_already_normalized.insert(mid);
@@ -451,8 +449,6 @@ class instantiate_delayed_fn {
             }
             return optional<expr>(a_new);
         } else {
-            if (!has_expr_mvar(a) && !has_fvar(a))
-                return optional<expr>(a);
             return optional<expr>(visit(a));
         }
     }
