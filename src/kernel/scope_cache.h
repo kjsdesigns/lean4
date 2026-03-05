@@ -92,14 +92,15 @@ public:
                 top.scope_gens = top.scope_gens->tail;
                 top.scope_level--;
             }
-            /* scope_level < m_scope: entry is at a lower scope, stop. */
-            if (top.scope_level < m_scope) return;
-            /* scope_level == m_scope: check generation. */
-            if (top.scope_gens->gen == m_scope_gens_list->gen) return;
+            /* Check generation at scope_level. When scope_level < m_scope,
+               walk the current list down to scope_level first. */
+            scope_gen_node * current_node = m_scope_gens_list;
+            for (unsigned i = m_scope; i > top.scope_level; i--)
+                current_node = current_node->tail;
+            if (top.scope_gens->gen == current_node->gen) return;
             /* Generation mismatch: scope was re-entered. Walk both lists
                in lockstep to find a valid level or exhaust to result_scope. */
             scope_gen_node * entry_node = top.scope_gens;
-            scope_gen_node * current_node = m_scope_gens_list;
             unsigned level = top.scope_level;
             while (level > top.result_scope) {
                 entry_node = entry_node->tail;
