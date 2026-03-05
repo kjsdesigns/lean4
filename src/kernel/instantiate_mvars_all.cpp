@@ -5,7 +5,6 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Joachim Breitner
 */
 #include <vector>
-#include <deque>
 #include <unordered_map>
 #include "util/name_set.h"
 #include "util/name_hash_map.h"
@@ -13,6 +12,7 @@ Authors: Joachim Breitner
 #include "runtime/array_ref.h"
 #include "kernel/instantiate.h"
 #include "kernel/expr.h"
+#include "kernel/scope_cache.h"
 
 /*
 This module provides a two-pass variant of `instantiateMVars` with improved sharing.
@@ -418,14 +418,6 @@ public:
 /* ============================================================================
    Pass 2: Resolve delayed assignments with fused fvar substitution.
    Direct mvar chains have been pre-resolved by pass 1.
-
-   Uses a flat (ptr, depth)-keyed cache with lazy staleness detection.
-   Each visit_delayed scope gets a unique generation number. Scope
-   generations are stored in a persistent linked list (arena-allocated
-   for pointer stability). Cache entries store a single snapshot of the
-   scope_gens list at insert time. On lookup, entries are lazily degraded
-   by walking the snapshot and current lists in lockstep until a valid
-   scope level is found or the entry is evicted.
    ============================================================================ */
 
 struct fvar_subst_entry {
@@ -434,44 +426,20 @@ struct fvar_subst_entry {
     expr     value;
 };
 
-/* Persistent linked-list node for scope generations.
-   Allocated from an arena (std::deque) for pointer stability. */
-struct scope_gen_node {
-    unsigned gen;
-    scope_gen_node * tail; /* parent scope, or nullptr for scope -1 */
-};
-
 class instantiate_delayed_fn {
-    struct key_hasher {
-        std::size_t operator()(std::pair<lean_object *, unsigned> const & p) const {
-            return hash((size_t)p.first >> 3, p.second);
-        }
-    };
-
-    struct cache_entry {
-        expr result;
-        unsigned scope_level;  /* scope at which this entry is (currently) valid */
-        scope_gen_node * scope_gens; /* snapshot of scope_gens list at store time */
-        unsigned result_scope; /* original m_result_scope for propagation */
-    };
-
-    typedef lean::unordered_map<std::pair<lean_object *, unsigned>,
-        std::vector<cache_entry>, key_hasher> flat_cache;
-
     metavar_ctx & m_mctx;
     name_set const & m_resolvable_delayed;
     name_hash_map<fvar_subst_entry> m_fvar_subst;
     unsigned m_depth;
 
-    /* Flat cache mapping (ptr, depth) to a stack of entries ordered by scope
-       (innermost/highest scope at the back). */
-    flat_cache m_cache;
-    /* Persistent linked list of scope generations for O(1) snapshot copies.
-       Arena (deque) provides pointer stability across push_back. */
-    std::deque<scope_gen_node> m_gen_arena;
-    scope_gen_node * m_scope_gens_list;
-    unsigned m_gen_counter;
-    unsigned m_scope;
+    /* Scope-aware cache for (ptr, depth) → expr with lazy staleness detection. */
+    struct key_hasher {
+        std::size_t operator()(std::pair<lean_object *, unsigned> const & p) const {
+            return hash((size_t)p.first >> 3, p.second);
+        }
+    };
+    typedef std::pair<lean_object *, unsigned> cache_key;
+    scope_cache<cache_key, expr, key_hasher> m_cache;
 
     /* After visit() returns, this holds the maximum fvar-substitution
        scope that contributed to the result — i.e., the outermost scope at which the
@@ -502,73 +470,6 @@ class instantiate_delayed_fn {
         if (d == 0)
             return optional<expr>(it->second.value);
         return optional<expr>(lift_loose_bvars(it->second.value, d));
-    }
-
-    optional<expr> cache_lookup(lean_object * ptr) {
-        auto key = mk_pair(ptr, m_depth);
-        auto it = m_cache.find(key);
-        if (it == m_cache.end()) return {};
-        auto & stack = it->second;
-        /* Entries store a persistent scope_gens snapshot. On lookup, degrade
-           entries whose top scopes have been popped or re-entered, walking
-           the snapshot and current lists in lockstep. */
-        while (!stack.empty()) {
-            auto & top = stack.back();
-            /* Degrade: if scope_level > m_scope, those scopes were popped. */
-            while (top.scope_level > m_scope) {
-                top.scope_gens = top.scope_gens->tail;
-                top.scope_level--;
-            }
-            /* If the result depends on a scope that has been popped, the
-               entry is invalid — discard it. */
-            if (top.result_scope > m_scope) {
-                stack.pop_back();
-                continue;
-            }
-            /* Now scope_level <= m_scope. */
-            if (top.scope_level == m_scope) {
-                /* Compare generation at this level. */
-                if (top.scope_gens->gen == m_scope_gens_list->gen) {
-                    m_result_scope = std::max(m_result_scope, top.result_scope);
-                    return optional<expr>(top.result);
-                }
-                /* Generation mismatch: scope was re-entered. Walk both
-                   lists down in lockstep until we find a valid level or
-                   exhaust to result_scope. */
-                scope_gen_node * entry_node = top.scope_gens;
-                scope_gen_node * current_node = m_scope_gens_list;
-                unsigned level = top.scope_level;
-                while (level > top.result_scope) {
-                    entry_node = entry_node->tail;
-                    current_node = current_node->tail;
-                    level--;
-                    if (entry_node->gen == current_node->gen) {
-                        /* Valid at this level. Update entry in place. */
-                        top.scope_level = level;
-                        top.scope_gens = entry_node;
-                        /* level < m_scope → valid but at lower scope → miss */
-                        return {};
-                    }
-                }
-                /* Reached result_scope without finding valid level → delete. */
-                stack.pop_back();
-                continue;
-            }
-            /* scope_level < m_scope: valid but at a lower scope — miss */
-            return {};
-        }
-        return {};
-    }
-
-    void cache_insert(lean_object * ptr, expr const & result) {
-        auto key = mk_pair(ptr, m_depth);
-        auto & stack = m_cache[key];
-        /* Single entry with scope_gens snapshot. On later lookup, the
-           entry is lazily degraded by walking the snapshot list. */
-        while (!stack.empty() && stack.back().scope_level >= m_result_scope) {
-            stack.pop_back();
-        }
-        stack.push_back({result, m_scope, m_scope_gens_list, m_result_scope});
     }
 
     /* Get a direct mvar assignment. Visit it to resolve delayed mvars
@@ -648,11 +549,11 @@ class instantiate_delayed_fn {
         size_t fvar_count = fvars.size();
         size_t extra_count = args.size() - fvar_count;
 
-        /* Save and extend the fvar substitution. */
+        /* Push a new scope and extend the fvar substitution. */
+        m_cache.push();
         struct saved_entry { name key; bool had_old; fvar_subst_entry old; };
         std::vector<saved_entry> saved_entries;
         saved_entries.reserve(fvar_count);
-        m_scope++;
         for (size_t i = 0; i < fvar_count; i++) {
             name const & fid = fvar_name(fvars[i]);
             auto old_it = m_fvar_subst.find(fid);
@@ -661,21 +562,13 @@ class instantiate_delayed_fn {
             } else {
                 saved_entries.push_back({fid, false, {0, 0, expr()}});
             }
-            m_fvar_subst[fid] = {m_depth, m_scope, args[args.size() - 1 - i]};
+            m_fvar_subst[fid] = {m_depth, m_cache.scope(), args[args.size() - 1 - i]};
         }
-
-        /* Push: bump generation so stale entries at this scope level are detected.
-           Prepend a new node to the persistent scope_gens list. */
-        m_gen_counter++;
-        m_gen_arena.push_back({m_gen_counter, m_scope_gens_list});
-        m_scope_gens_list = &m_gen_arena.back();
 
         expr val_new = visit(mk_mvar(mid_pending));
 
-        /* Pop: follow the tail of the persistent list back to the parent scope.
-           Stale entries are detected by generation mismatch on lookup. */
-        m_scope--;
-        m_scope_gens_list = m_scope_gens_list->tail;
+        /* Pop scope; stale entries are detected by generation mismatch on lookup. */
+        m_cache.pop();
 
         /* Restore the fvar substitution. */
         for (auto & se : saved_entries) {
@@ -753,11 +646,7 @@ class instantiate_delayed_fn {
 public:
     instantiate_delayed_fn(metavar_ctx & mctx, name_set const & resolvable_delayed)
         : m_mctx(mctx), m_resolvable_delayed(resolvable_delayed),
-          m_depth(0), m_scope_gens_list(nullptr),
-          m_gen_counter(0), m_scope(0), m_result_scope(0) {
-        m_gen_arena.push_back({0, nullptr});
-        m_scope_gens_list = &m_gen_arena.back();
-    }
+          m_depth(0), m_result_scope(0) {}
 
     expr visit(expr const & e) {
         if (fvar_subst_empty()) {
@@ -776,7 +665,7 @@ public:
                 if (it != m_global_cache.end())
                     return it->second;
             } else {
-                if (auto r = cache_lookup(e.raw()))
+                if (auto r = m_cache.lookup(cache_key(e.raw(), m_depth), m_result_scope))
                     return *r;
             }
             shared = true;
@@ -837,7 +726,7 @@ public:
             if (use_global)
                 m_global_cache.insert(mk_pair(e.raw(), r));
             else
-                cache_insert(e.raw(), r);
+                m_cache.insert(cache_key(e.raw(), m_depth), r, m_result_scope);
         }
 
     done:
