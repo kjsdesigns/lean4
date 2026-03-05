@@ -579,19 +579,16 @@ class instantiate_delayed_fn {
         if (fvars.size() > get_app_num_args(e)) {
             return visit_mvar_app_args(e);
         }
-        /* Only resolve when the pending value is fully resolvable
-           (assigned and all nested delayed mvars also resolvable). */
-        if (!is_resolvable_pending(mid_pending)) {
-            /* Still normalize the pending value for mctx write-back when
-               fvar_subst is empty. Downstream code (MutualDef.mkInitialUsedFVarsMap)
-               reads stored assignments and relies on inner delayed assignments
-               being resolved even when the outer one cannot be. */
+        if (is_resolvable_pending(mid_pending)) {
+            return visit_delayed(fvars, mid_pending, e);
+        } else {
+            /* Normalize the pending value for mctx write-back when
+               fvar_subst is empty (see write-back comment above). */
             if (fvar_subst_empty()) {
                 (void)get_assignment(mid_pending);
             }
             return visit_mvar_app_args(e);
         }
-        return visit_delayed(fvars, mid_pending, e);
     }
 
     expr visit_fvar(expr const & e) {
