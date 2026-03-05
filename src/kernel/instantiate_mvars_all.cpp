@@ -15,23 +15,62 @@ Authors: Joachim Breitner
 #include "kernel/scope_cache.h"
 
 /*
-This module provides a two-pass implementation of `instantiateMVars` with
-linear complexity in the presence of nested delayed-assigned metavariables and
-improved sharing.
+This module provides an implementation of `instantiateMVars` with linear
+complexity in the presence of nested delayed-assigned metavariables and
+improved sharing. It proceeds in two passes.
+
+Terminology (for this file):
+
+* Direct MVar: an MVar that is not delayed-assigned.
+* Pending MVar: the direct MVar stored in a `DelayedMetavarAssignment`.
+* Assigned MVar: a direct MVar with an assignment, or a delayed-assigned MVar
+  with an assigned pending MVar.
+* MVar DAG: the directed acyclic graph of MVars reachable from the expression.
+* Resolvable MVar: an MVar where all MVars reachable from it (including itself)
+  are assigned.
+* Updateable MVar: an assigned direct MVar, or a delayed-assigned MVar that is
+  resolvable but not reachable from any other resolvable delayed-assigned MVar.
+
+In the MVar DAG, the updateable delayed-assigned MVars form a cut with only
+assigned MVars behind it and no resolvable delayed-assigned MVars before it.
 
 Pass 1 (`instantiate_direct_fn`):
-  First traversal that resolves **direct** mvar assignments with write-back.
-  For delayed assignments, it pre-normalizes the pending value (resolving its
-  direct chain) but leaves the delayed mvar application in the expression.
-  Also assigns level metavariables.
+  Traverses all MVars and expressions reachable from the initial expression and
+  * instantiates all updateable direct MVars, updating their assignment with
+    its instantiation,
+  * instantiates all level MVars,
+  * determines if there are any updateable delayed-assigned MVars.
 
 Pass 2 (`instantiate_delayed_fn`):
-  Second traversal that resolves delayed assignments by carrying a fvar
-  substitution. Checks resolvability on-demand when encountering each delayed
-  mvar (caching results across invocations). Since pass 1 has pre-normalized
-  all direct chains, each pending value is compact and visited once, avoiding
-  the O(n³) sharing loss that occurs when the fused approach must also chase
-  direct chains.
+  Only run if there are updateable delayed-assigned MVars. Has an "outer" and
+  an "inner" mode, depending on whether it has crossed the updateable-MVar cut.
+
+  In outer mode (empty substitution), all MVars are either unassigned direct
+  MVars (left alone), non-updateable delayed-assigned MVars (pending MVar
+  traversed in outer mode and updated with the result), or updateable
+  delayed-assigned MVars.
+
+  When a delayed-assigned MVar is encountered, its MVar DAG is explored (via
+  `is_resolvable_pending`) to determine if it is resolvable (and thus
+  updateable). Results are cached across invocations.
+
+  If it is updateable, the substitution is initialized from its arguments and
+  traversal continues with the value of its pending MVar in inner mode.
+
+  In inner mode (non-empty substitution), all encountered delayed-assigned
+  MVars are, by construction, resolvable but not updateable. The substitution
+  is carried along and extended as we cross such MVars. Pending MVars of these
+  delayed-assigned MVars are NOT updated with the result (as the result is
+  valid only for this substitution, not in general).
+
+  Applying the substitution in one go, rather than instantiating each
+  delayed-assigned MVar on its own from inside out, avoids the quadratic
+  overhead of that approach when there are long chains of delayed-assigned
+  MVars.
+
+  A special-crafted caching data structure, the `scope_cache`, ensures that
+  sharing is preserved even across different delayed-assigned MVars (and hence
+  with different substitutions), when possible.
 */
 
 namespace lean {
@@ -130,19 +169,20 @@ public:
 };
 
 /* ============================================================================
-   Pass 1: Resolve direct mvar assignments with write-back.
-   For delayed assignments, pre-normalize the pending value (resolving its
-   direct chains) but leave the delayed mvar application in the expression.
-   Unassigned mvars are left in place.
+   Pass 1: Instantiate updateable direct MVars with write-back.
+   For delayed-assigned MVars, pre-normalize the pending MVar's value
+   (resolving its direct MVar chains) but leave the delayed-assigned MVar
+   application in the expression. Also instantiates level MVars.
+   Unassigned MVars are left in place.
    ============================================================================ */
 
 class instantiate_direct_fn {
     metavar_ctx & m_mctx;
     instantiate_lmvars_all_fn m_level_fn;
     name_set m_already_normalized;
-    /* Set to true when any delayed assignment is encountered, even if not
-       resolvable. Pass 2 is needed for write-back normalization in that case. */
-    bool m_has_delayed;
+    /* Set to true when a delayed-assigned MVar with an assigned pending MVar
+       is encountered. Pass 2 is needed to resolve or write back such MVars. */
+    bool m_has_updateable_delayed;
 
     lean::unordered_map<lean_object *, expr> m_cache;
     std::vector<expr> m_saved;
@@ -165,7 +205,8 @@ class instantiate_direct_fn {
         return r;
     }
 
-    /* Get and normalize a direct mvar assignment. Write back the normalized value. */
+    /* Get and normalize an updateable direct MVar's assignment. Write back the
+       normalized value. */
     optional<expr> get_assignment(name const & mid) {
         option_ref<expr> r = get_mvar_assignment(m_mctx, mid);
         if (!r) {
@@ -224,20 +265,20 @@ class instantiate_direct_fn {
             return visit_app_default(e);
         }
         name const & mid = mvar_name(f);
-        /* Direct assignment takes precedence. */
+        /* Direct MVar assignment takes precedence. */
         if (auto f_new = get_assignment(mid)) {
             buffer<expr> args;
             return visit_args_and_beta(*f_new, e, args);
         }
-        /* Check for delayed assignment. */
+        /* Check for delayed-assigned MVar. */
         option_ref<delayed_assignment> d = get_delayed_mvar_assignment(m_mctx, mid);
         if (d) {
-            /* Pre-normalize the pending value so pass 2 finds it ready.
-               Only trigger pass 2 if the pending mvar is actually assigned;
-               unassigned pending values will clearly fail the resolvability check. */
+            /* Pre-normalize the pending MVar's value so pass 2 finds it ready.
+               Only trigger pass 2 if the pending MVar is actually assigned;
+               unassigned pending MVars will clearly fail the resolvability check. */
             name mid_pending = delayed_assignment_mvar_id_pending(d.get_val());
             if (get_assignment(mid_pending))
-                m_has_delayed = true;
+                m_has_updateable_delayed = true;
         }
         return visit_mvar_app_args(e);
     }
@@ -247,20 +288,20 @@ class instantiate_direct_fn {
         if (auto r = get_assignment(mid)) {
             return *r;
         }
-        /* Not directly assigned. Check if delayed-assigned. */
+        /* Not a direct MVar with assignment. Check if delayed-assigned. */
         option_ref<delayed_assignment> d = get_delayed_mvar_assignment(m_mctx, mid);
         if (d) {
             name mid_pending = delayed_assignment_mvar_id_pending(d.get_val());
             if (get_assignment(mid_pending))
-                m_has_delayed = true;
+                m_has_updateable_delayed = true;
         }
         return e;
     }
 
 public:
     instantiate_direct_fn(metavar_ctx & mctx)
-        : m_mctx(mctx), m_level_fn(mctx), m_has_delayed(false) {}
-    bool has_delayed() const { return m_has_delayed; }
+        : m_mctx(mctx), m_level_fn(mctx), m_has_updateable_delayed(false) {}
+    bool has_updateable_delayed() const { return m_has_updateable_delayed; }
 
     expr visit(expr const & e) {
         if (!has_mvar(e))
@@ -301,28 +342,29 @@ public:
 };
 
 /* ============================================================================
-   Pass 2: Resolve delayed assignments with fused fvar substitution.
-   Direct mvar chains have been pre-resolved by pass 1.
+   Pass 2: Resolve delayed-assigned MVars with fused fvar substitution.
+   Direct MVar chains have been pre-resolved by pass 1.
 
    Write-back behavior:
 
-   Delayed-assigned mvars (d-a-mvars) form a dependency tree: each d-a-mvar's
-   pending value may reference other d-a-mvars. Some subtrees of this tree are
-   fully resolvable (all d-a-mvars within have assigned, mvar-free pending
-   values with sufficient arguments), while others are not.
+   Delayed-assigned MVars form a dependency tree: each delayed-assigned MVar's
+   pending MVar value may reference other delayed-assigned MVars. Some subtrees
+   of this tree are fully resolvable (all delayed-assigned MVars within are
+   resolvable), while others are not.
 
    Pass 2 fully resolves every maximal resolvable subtree. The roots of these
-   subtrees — d-a-mvars that are themselves resolvable but whose parent in the
-   tree is not — form a horizontal cut through the dependency tree. Above the
-   cut sit non-resolvable d-a-mvars; below the cut, everything is resolved.
+   subtrees — updateable delayed-assigned MVars that are resolvable but whose
+   parent in the tree is not — form the updateable-MVar cut through the
+   dependency tree. Above the cut sit non-resolvable delayed-assigned MVars;
+   below the cut, everything is resolved.
 
-   Pass 2 writes back the normalized pending values of d-a-mvars above the cut
-   (the non-resolvable ones whose children may have been resolved). This is
-   exactly the right set: these d-a-mvars are visited with an empty fvar
-   substitution, so their normalized values are suitable for storing in the
-   mctx. D-a-mvars below the cut are visited with a non-empty substitution
-   (fvars replaced by arguments), so their intermediate values cannot be
-   written back.
+   Pass 2 writes back the normalized pending MVar values of delayed-assigned
+   MVars above the cut (the non-resolvable ones whose children may have been
+   resolved). This is exactly the right set: these MVars are visited in outer
+   mode (empty fvar substitution), so their normalized values are suitable for
+   storing in the mctx. MVars below the cut are visited in inner mode
+   (non-empty substitution, fvars replaced by arguments), so their intermediate
+   values cannot be written back.
    ============================================================================ */
 
 struct fvar_subst_entry {
@@ -351,18 +393,17 @@ class instantiate_delayed_fn {
        the save/reset/restore pattern in visit(). */
     unsigned m_result_scope;
 
-    /* Write-back support: when fvar_subst is empty, normalize and write back
-       mvar assignments to match the original instantiateMVars mctx side effects.
-       Downstream code (e.g. MutualDef.mkInitialUsedFVarsMap) reads stored
-       assignments and expects them to be normalized. */
+    /* Write-back support: in outer mode, normalize and write back direct MVar
+       assignments. Downstream code (e.g. MutualDef.mkInitialUsedFVarsMap) reads
+       stored assignments and expects inner delayed-assigned MVars to be resolved. */
     name_set m_already_normalized;
     std::vector<expr> m_saved;
 
-    /* Resolvability caches — persistent across all delayed mvar resolutions.
-       A pending mvar is resolvable if its assigned value (normalized by pass 1)
-       would become mvar-free after resolution: all remaining mvars must be
-       delayed-assigned heads in app position with enough arguments, whose own
-       pending values are also resolvable. */
+    /* Resolvability caches — persistent across all delayed-assigned MVar
+       resolutions. A pending MVar is resolvable if its assigned value
+       (normalized by pass 1) would become MVar-free after resolution: all
+       remaining MVars must be delayed-assigned MVars in app position with
+       enough arguments, whose own pending MVars are also resolvable. */
     lean::unordered_map<lean_object *, bool> m_resolvable_expr_cache;
     name_hash_map<unsigned> m_resolvable_pending_cache; /* 0 = in-progress, 1 = yes, 2 = no */
 
@@ -398,7 +439,7 @@ class instantiate_delayed_fn {
     bool is_resolvable_expr_core(expr const & e) {
         switch (e.kind()) {
         case expr_kind::MVar:
-            /* Bare mvar — direct assignments were resolved by pass 1. Stuck. */
+            /* Bare MVar — direct MVar assignments were resolved by pass 1. Stuck. */
             return false;
         case expr_kind::App: {
             expr const & f = get_app_fn(e);
@@ -440,7 +481,9 @@ class instantiate_delayed_fn {
         }
     }
 
-    bool fvar_subst_empty() const {
+    /* Outer mode: no fvar substitution active; inner mode: inside a
+       resolvable delayed-assigned MVar with fvars mapped to arguments. */
+    bool in_outer_mode() const {
         return m_fvar_subst.empty();
     }
 
@@ -455,20 +498,19 @@ class instantiate_delayed_fn {
         return optional<expr>(lift_loose_bvars(it->second.value, d));
     }
 
-    /* Get a direct mvar assignment. Visit it to resolve delayed mvars
-       and apply the fvar substitution.
-       When fvar_subst is empty, normalize and write back the result to
-       the mctx. This matches the original instantiateMVars behavior:
-       downstream code (e.g. MutualDef.mkInitialUsedFVarsMap) reads stored
-       assignments and expects inner delayed assignments to be resolved.
-       When fvar_subst is non-empty, no write-back (values contain
-       fvar-substituted terms not suitable for the mctx). */
+    /* Get a direct MVar assignment. Visit it to resolve delayed-assigned
+       MVars and apply the fvar substitution.
+       In outer mode, normalize and write back the result to the mctx.
+       Downstream code (e.g. MutualDef.mkInitialUsedFVarsMap) reads stored
+       assignments and expects inner delayed-assigned MVars to be resolved.
+       In inner mode, no write-back: the result contains fvar-substituted
+       terms not suitable for the mctx. */
     optional<expr> get_assignment(name const & mid) {
         option_ref<expr> r = get_mvar_assignment(m_mctx, mid);
         if (!r)
             return optional<expr>();
         expr a(r.get_val());
-        if (fvar_subst_empty()) {
+        if (in_outer_mode()) {
             if (m_already_normalized.contains(mid))
                 return optional<expr>(a);
             m_already_normalized.insert(mid);
@@ -534,8 +576,8 @@ class instantiate_delayed_fn {
             m_fvar_subst[fid] = {m_depth, m_cache.scope(), args[args.size() - 1 - i]};
         }
 
-        /* Get the pending value directly — it must be assigned (pass 1
-           pre-normalized it). No write-back needed since fvar_subst is non-empty. */
+        /* Get the pending MVar's value directly — it must be assigned (pass 1
+           pre-normalized it). No write-back: we are in inner mode. */
         option_ref<expr> pending_val = get_mvar_assignment(m_mctx, mid_pending);
         lean_assert(!!pending_val);
         expr val_new = visit(expr(pending_val.get_val()));
@@ -553,9 +595,9 @@ class instantiate_delayed_fn {
         }
 
         /* Use apply_beta instead of mk_rev_app: pass 1's beta-reduction may have
-           changed delayed mvar arguments (e.g., substituting a bvar with a concrete
-           value), so the resolved pending value may be a lambda that needs beta-
-           reduction with the extra args, matching the original's behavior. */
+           changed delayed-assigned MVar arguments (e.g., substituting a bvar with a
+           concrete value), so the resolved pending MVar value may be a lambda that
+           needs beta-reduction with the extra args. */
         bool preserve_data = false;
         bool zeta = true;
         return apply_beta(val_new, extra_count, args.data(), preserve_data, zeta);
@@ -567,9 +609,9 @@ class instantiate_delayed_fn {
             return visit_app_default(e);
         }
         name const & mid = mvar_name(f);
-        /* Direct assignments were resolved by pass 1. */
+        /* Direct MVar assignments were resolved by pass 1. */
         lean_assert(!get_mvar_assignment(m_mctx, mid));
-        /* Check delayed assignment. */
+        /* Check for delayed-assigned MVar. */
         option_ref<delayed_assignment> d = get_delayed_mvar_assignment(m_mctx, mid);
         if (!d) {
             return visit_mvar_app_args(e);
@@ -580,12 +622,14 @@ class instantiate_delayed_fn {
             return visit_mvar_app_args(e);
         }
         if (is_resolvable_pending(mid_pending)) {
+            /* Updateable delayed-assigned MVar: cross the cut into inner mode. */
             return visit_delayed(fvars, mid_pending, e);
         } else {
-            /* Non-resolvable d-a-mvars only appear in outer mode: inside a
-               resolvable subtree all nested d-a-mvars are resolvable too. */
-            lean_assert(fvar_subst_empty());
-            /* Normalize the pending value for mctx write-back
+            /* Non-resolvable delayed-assigned MVars only appear in outer mode:
+               inside a resolvable subtree all nested delayed-assigned MVars are
+               resolvable too. */
+            lean_assert(in_outer_mode());
+            /* Normalize the pending MVar's value for mctx write-back
                (see write-back comment above). */
             (void)get_assignment(mid_pending);
             return visit_mvar_app_args(e);
@@ -605,7 +649,7 @@ public:
         : m_mctx(mctx), m_depth(0), m_result_scope(0) {}
 
     expr visit(expr const & e) {
-        if ((!has_fvar(e) || fvar_subst_empty()) && !has_expr_mvar(e))
+        if ((!has_fvar(e) || in_outer_mode()) && !has_expr_mvar(e))
             return e;
 
         bool shared = false;
@@ -637,11 +681,11 @@ public:
             r = update_const(e, visit_levels(const_levels(e)));
             break;
         case expr_kind::MVar:
-            /* Bare mvars in pass 2 are unassigned: direct assignments were
-               resolved by pass 1, and resolvable pending values contain no
-               bare unassigned mvars. They only appear at the top level or
-               during write-back normalization (both with empty fvar_subst). */
-            lean_assert(fvar_subst_empty());
+            /* Bare MVars in pass 2 are unassigned direct MVars: direct MVar
+               assignments were resolved by pass 1, and resolvable pending MVar
+               values contain no bare unassigned MVars. They only appear in
+               outer mode (at the top level or during write-back normalization). */
+            lean_assert(in_outer_mode());
             lean_assert(!get_mvar_assignment(m_mctx, mvar_name(e)));
             r = e;
             goto done;
@@ -682,7 +726,7 @@ public:
     }
 
     level visit_level(level const & l) {
-        /* Pass 2 does not handle level mvars — pass 1 already resolved them.
+        /* Pass 2 does not handle level MVars — pass 1 already resolved them.
            But we still need this for the visit_levels call in update_sort/update_const.
            Since levels have no fvars, we can just return them as-is. */
         return l;
@@ -702,15 +746,15 @@ public:
 static object * run_instantiate_all(object * m, object * e) {
     metavar_ctx mctx(m);
 
-    /* Pass 1: resolve direct mvar assignments, pre-normalize pending values. */
+    /* Pass 1: instantiate updateable direct MVars, pre-normalize pending MVar values. */
     instantiate_direct_fn pass1(mctx);
     expr e1 = pass1(expr(e));
 
-    /* Pass 2: resolve delayed assignments with fused fvar substitution.
-       Skip if pass 1 found no delayed assignments at all — the expression
-       has no delayed mvars that need resolution or write-back. */
+    /* Pass 2: resolve delayed-assigned MVars with fused fvar substitution.
+       Skip if pass 1 found no delayed-assigned MVars with assigned pending
+       MVars — none need resolution or write-back. */
     expr e2;
-    if (!pass1.has_delayed()) {
+    if (!pass1.has_updateable_delayed()) {
         e2 = e1;
     } else {
         instantiate_delayed_fn pass2(mctx);
