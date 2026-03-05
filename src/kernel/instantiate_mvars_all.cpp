@@ -726,7 +726,7 @@ public:
             if (use_global)
                 m_global_cache.insert(mk_pair(e.raw(), r));
             else
-                m_cache.insert(cache_key(e.raw(), m_depth), r, m_result_scope);
+                r = m_cache.insert(cache_key(e.raw(), m_depth), r, m_result_scope);
         }
 
     done:

@@ -133,13 +133,21 @@ public:
 
     /* Insert a result for the given key at the current scope.
        `result_scope` is the maximum scope that contributed to the result;
-       the entry is only valid when all scopes up to result_scope are unchanged. */
-    void insert(Key const & key, Value const & result, unsigned result_scope) {
+       the entry is only valid when all scopes up to result_scope are unchanged.
+       If a valid entry with the same `result_scope` already exists, its value
+       is reused for sharing; the returned reference is the stored value. */
+    Value const & insert(Key const & key, Value const & result, unsigned result_scope) {
         auto & stack = m_cache[key];
+        rewind(stack);
+        Value shared = result;
+        if (!stack.empty() && stack.back().result_scope == result_scope) {
+            shared = stack.back().result;
+        }
         while (!stack.empty() && stack.back().scope_level >= result_scope) {
             stack.pop_back();
         }
-        stack.push_back({result, m_scope, m_scope_gens_list, result_scope});
+        stack.push_back({std::move(shared), m_scope, m_scope_gens_list, result_scope});
+        return stack.back().result;
     }
 };
 
