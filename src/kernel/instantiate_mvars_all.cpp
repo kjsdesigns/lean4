@@ -507,7 +507,8 @@ class instantiate_delayed_fn {
     }
 
     expr visit_delayed(array_ref<expr> const & fvars, name const & mid_pending,
-                       expr const & e, buffer<expr> & args) {
+                       expr const & e) {
+        buffer<expr> args;
         expr const * curr = &e;
         while (is_app(*curr)) {
             args.push_back(visit(app_arg(*curr)));
@@ -590,8 +591,7 @@ class instantiate_delayed_fn {
             }
             return visit_mvar_app_args(e);
         }
-        buffer<expr> args;
-        return visit_delayed(fvars, mid_pending, e, args);
+        return visit_delayed(fvars, mid_pending, e);
     }
 
     expr visit_fvar(expr const & e) {
