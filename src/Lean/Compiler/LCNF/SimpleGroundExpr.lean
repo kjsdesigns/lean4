@@ -133,10 +133,16 @@ public def getSimpleGroundExprWithResolvedRefs (env : Environment) (declName : N
   return none
 
 /--
-Check if `declName` is recorded as being a `SimpleGroundExpr`.
+Check if `declName` is recorded as being a `SimpleGroundExpr` in any module.
 -/
 public def isSimpleGroundDecl (env : Environment) (declName : Name) : Bool :=
   simpleGroundTagExt.isTagged env declName
+
+/--
+Check if `declName` is recorded as being a `SimpleGroundExpr` in this module.
+-/
+public def isLocalSimpleGroundDecl (env : Environment) (declName : Name) : Bool :=
+  (getSimpleGroundExpr env declName).isSome
 
 public def uint64ToByteArrayLE (n : UInt64) : Array UInt8 :=
   #[
@@ -200,7 +206,7 @@ where
   compileNonFinalLet (decl : LetDecl .impure) (k : Code .impure) : DetectM SimpleGroundExpr := do
     match decl.value with
     | .fap c #[] =>
-      guard <| isSimpleGroundDecl (← getEnv) c
+      guard <| isLocalSimpleGroundDecl (← getEnv) c
       record decl.fvarId (.arg (.reference c))
       go k
     | .lit v =>
@@ -359,7 +365,7 @@ where
       let .arg elemArg := (← get).groundMap[elemId]! | failure
       return .array (elemArg :: elems).toArray.reverse
     | .fap c #[] =>
-      guard <| isSimpleGroundDecl (← getEnv) c
+      guard <| isLocalSimpleGroundDecl (← getEnv) c
       return .reference c
     | .box _ fvarId =>
       match (← get).groundMap[fvarId]! with

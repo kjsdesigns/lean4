@@ -22,7 +22,7 @@ import Lean.Runtime
 public section
 
 namespace Lean.IR.EmitC
-open Lean.Compiler.LCNF (isBoxedName isSimpleGroundDecl getSimpleGroundExpr
+open Lean.Compiler.LCNF (isBoxedName isSimpleGroundDecl isLocalSimpleGroundDecl getSimpleGroundExpr
   getSimpleGroundExprWithResolvedRefs uint64ToByteArrayLE SimpleGroundExpr SimpleGroundArg
   addSimpleGroundDecl)
 
@@ -139,13 +139,13 @@ structure GroundState where
 
 abbrev GroundM := StateT GroundState M
 
-partial def emitGroundDecl (decl : Decl) (cppBaseName : String) : M Unit := do
-  let some ground := getSimpleGroundExpr (← getEnv) decl.name | unreachable!
-  discard <| compileGround ground |>.run {}
+private partial def emitGroundDecl (e : SimpleGroundExpr) (declName : Name)
+    (cppBaseName : String) : M Unit := do
+  discard <| compileGround e |>.run {}
 where
   compileGround (e : SimpleGroundExpr) : GroundM Unit := do
     let valueName ← compileGroundToValue e
-    let declPrefix := if isClosedTermName (← getEnv) decl.name then "static" else "LEAN_EXPORT"
+    let declPrefix := if isClosedTermName (← getEnv) declName then "static" else "LEAN_EXPORT"
     emitLn <| s!"{declPrefix} const lean_object* {cppBaseName} = (const lean_object*)&{valueName};"
 
   compileGroundToValue (e : SimpleGroundExpr) : GroundM String := do
@@ -283,8 +283,8 @@ def emitFnDeclAux (decl : Decl) (cppBaseName : String) (isExternal : Bool) : M U
   let ps := decl.params
   let env ← getEnv
 
-  if isSimpleGroundDecl env decl.name then
-    emitGroundDecl decl cppBaseName
+  if let some groundExpr := getSimpleGroundExpr env decl.name then
+    emitGroundDecl groundExpr decl.name cppBaseName
   else if isClosedTermName env decl.name then
     emitFnClosedDecl decl cppBaseName
   else
@@ -619,7 +619,7 @@ def emitExternCall (f : FunId) (ps : Array Param) (extData : ExternAttrData) (ys
 
 def emitLeanFunReference (t : IRType) (f : FunId) : M Unit := do
   let env ← getEnv
-  if isSimpleGroundDecl env f then
+  if isLocalSimpleGroundDecl env f then
     emit s!"((lean_object*)({← toCName f}))"
   else if isClosedTermName env f then
     emitClosedTermRead t f
@@ -855,7 +855,7 @@ def emitDeclAux (d : Decl) : M Unit := do
   let env ← getEnv
   let (_, jpMap) := mkVarJPMaps d
   withReader (fun ctx => { ctx with jpMap := jpMap }) do
-  unless hasInitAttr env d.name || isSimpleGroundDecl env d.name do
+  unless hasInitAttr env d.name || isLocalSimpleGroundDecl env d.name do
     match d with
     | .fdecl (f := f) (xs := xs) (type := t) (body := b) .. =>
       let baseName ← toCName f;
