@@ -15,23 +15,26 @@ Authors: Joachim Breitner
 #include "kernel/scope_cache.h"
 
 /*
-This module provides a two-pass variant of `instantiateMVars` with improved sharing.
+This module provides a two-pass implementation of `instantiateMVars` with
+linear complexity in the presence of nested delayed-assigned metavariables and
+improved sharing.
 
 Pass 1 (`instantiate_direct_fn`):
-  Standard `instantiateMVars`-like traversal that resolves direct mvar assignments
-  with write-back and a single persistent cache. For delayed assignments, it
-  pre-normalizes the pending value (resolving its direct chain) but leaves the
-  delayed mvar application in the expression. Unassigned mvars are left in place.
+  First traversal that resolves **direct** mvar assignments with write-back.
+  For delayed assignments, it pre-normalizes the pending value (resolving its
+  direct chain) but leaves the delayed mvar application in the expression.
+
+  Also assigns level metavariables.
 
 Between passes, a `resolvability_checker` determines which delayed assignments can
 be fully resolved (assigned, mvar-free after resolution, sufficient arguments).
 
 Pass 2 (`instantiate_delayed_fn`):
-  Fused traversal that resolves delayed assignments by carrying a fvar substitution.
+  Second traversal that resolves delayed assignments in one go, by carrying a
+  fvar substitution.
   Since pass 1 has pre-normalized all direct chains, each pending value is compact
   and visited once, avoiding the O(n³) sharing loss that occurs when the fused
-  approach must also chase direct chains. Unassigned mvars are left as-is (matching
-  the original `instantiateMVars` behavior).
+  approach must also chase direct chains.
 */
 
 namespace lean {
