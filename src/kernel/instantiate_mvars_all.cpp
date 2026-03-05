@@ -23,18 +23,15 @@ Pass 1 (`instantiate_direct_fn`):
   First traversal that resolves **direct** mvar assignments with write-back.
   For delayed assignments, it pre-normalizes the pending value (resolving its
   direct chain) but leaves the delayed mvar application in the expression.
-
   Also assigns level metavariables.
 
-Between passes, a `resolvability_checker` determines which delayed assignments can
-be fully resolved (assigned, mvar-free after resolution, sufficient arguments).
-
 Pass 2 (`instantiate_delayed_fn`):
-  Second traversal that resolves delayed assignments in one go, by carrying a
-  fvar substitution.
-  Since pass 1 has pre-normalized all direct chains, each pending value is compact
-  and visited once, avoiding the O(n³) sharing loss that occurs when the fused
-  approach must also chase direct chains.
+  Second traversal that resolves delayed assignments by carrying a fvar
+  substitution. Checks resolvability on-demand when encountering each delayed
+  mvar (caching results across invocations). Since pass 1 has pre-normalized
+  all direct chains, each pending value is compact and visited once, avoiding
+  the O(n³) sharing loss that occurs when the fused approach must also chase
+  direct chains.
 */
 
 namespace lean {
@@ -136,10 +133,6 @@ class instantiate_direct_fn {
     /* Set to true when any delayed assignment is encountered, even if not
        resolvable. Pass 2 is needed for write-back normalization in that case. */
     bool m_has_delayed;
-    /* Mapping from delayed-assigned mvar head to its pending mvar name.
-       Collected during traversal; used after pass 1 to compute the set of
-       resolvable delayed assignments without adding per-entry overhead. */
-    name_hash_map<name> m_delayed_head_to_pending;
 
     lean::unordered_map<lean_object *, expr> m_cache;
     std::vector<expr> m_saved;
@@ -229,14 +222,13 @@ class instantiate_direct_fn {
         /* Check for delayed assignment. */
         option_ref<delayed_assignment> d = get_delayed_mvar_assignment(m_mctx, mid);
         if (d) {
-            m_has_delayed = true;
+            /* Pre-normalize the pending value so pass 2 finds it ready.
+               Only trigger pass 2 if the pending mvar is actually assigned;
+               unassigned pending values will clearly fail the resolvability check. */
             name mid_pending(cnstr_get(d.get_val().raw(), 1), true);
-            m_delayed_head_to_pending.insert(mk_pair(mid, mid_pending));
-            /* Pre-normalize the pending value so pass 2 finds it ready. */
-            (void)get_assignment(mid_pending);
-            return visit_mvar_app_args(e);
+            if (get_assignment(mid_pending))
+                m_has_delayed = true;
         }
-        /* Not delayed: unassigned mvar. */
         return visit_mvar_app_args(e);
     }
 
@@ -248,11 +240,9 @@ class instantiate_direct_fn {
         /* Not directly assigned. Check if delayed-assigned. */
         option_ref<delayed_assignment> d = get_delayed_mvar_assignment(m_mctx, mid);
         if (d) {
-            m_has_delayed = true;
             name mid_pending(cnstr_get(d.get_val().raw(), 1), true);
-            m_delayed_head_to_pending.insert(mk_pair(mid, mid_pending));
-            /* Pre-normalize the pending value so pass 2 finds it ready. */
-            (void)get_assignment(mid_pending);
+            if (get_assignment(mid_pending))
+                m_has_delayed = true;
         }
         return e;
     }
@@ -261,7 +251,6 @@ public:
     instantiate_direct_fn(metavar_ctx & mctx)
         : m_mctx(mctx), m_level_fn(mctx), m_has_delayed(false) {}
     bool has_delayed() const { return m_has_delayed; }
-    name_hash_map<name> const & head_to_pending() const { return m_delayed_head_to_pending; }
 
     expr visit(expr const & e) {
         if (!has_mvar(e))
@@ -302,123 +291,6 @@ public:
 };
 
 /* ============================================================================
-   Resolvability computation (between pass 1 and pass 2).
-   Determines which delayed assignments can be fully resolved by pass 2.
-   A pending mvar is resolvable if:
-     1. It is directly assigned, AND
-     2. Its assigned value (normalized by pass 1) would become mvar-free
-        after pass 2 resolution — i.e., all remaining mvars are delayed-
-        assigned heads in app position with enough arguments, whose own
-        pending values are also resolvable.
-   Uses a cached bottom-up traversal (no fixpoint needed since the mvar
-   dependency graph is acyclic).
-   ============================================================================ */
-
-class resolvability_checker {
-    metavar_ctx & m_mctx;
-    name_hash_map<name> const & m_head_to_pending;
-
-    /* Expression cache: is this subexpression fully resolvable?
-       Keyed by raw pointer — safe because we only traverse normalized
-       values from mctx that outlive this checker. */
-    lean::unordered_map<lean_object *, bool> m_expr_cache;
-
-    /* Pending mvar cache: 0 = in-progress, 1 = resolvable, 2 = not. */
-    name_hash_map<unsigned> m_pending_cache;
-
-    bool is_pending_resolvable(name const & pending) {
-        auto it = m_pending_cache.find(pending);
-        if (it != m_pending_cache.end())
-            return it->second == 1;
-        /* Mark in-progress (cycle guard — shouldn't happen). */
-        m_pending_cache[pending] = 0;
-        option_ref<expr> r = get_mvar_assignment(m_mctx, pending);
-        if (!r) {
-            m_pending_cache[pending] = 2;
-            return false;
-        }
-        bool ok = is_resolvable(expr(r.get_val()));
-        m_pending_cache[pending] = ok ? 1 : 2;
-        return ok;
-    }
-
-    bool is_resolvable(expr const & e) {
-        if (!has_expr_mvar(e)) return true;
-        if (is_shared(e)) {
-            auto it = m_expr_cache.find(e.raw());
-            if (it != m_expr_cache.end())
-                return it->second;
-        }
-        bool r = is_resolvable_core(e);
-        if (is_shared(e))
-            m_expr_cache[e.raw()] = r;
-        return r;
-    }
-
-    bool is_resolvable_core(expr const & e) {
-        switch (e.kind()) {
-        case expr_kind::MVar:
-            /* Bare mvar — pass 2's visit_mvar only checks direct
-               assignments, which pass 1 already resolved. Stuck. */
-            return false;
-        case expr_kind::App: {
-            expr const & f = get_app_fn(e);
-            if (is_mvar(f)) {
-                name const & mid = mvar_name(f);
-                auto it = m_head_to_pending.find(mid);
-                if (it == m_head_to_pending.end())
-                    return false; /* not a delayed head */
-                option_ref<delayed_assignment> d =
-                    get_delayed_mvar_assignment(m_mctx, mid);
-                if (!d) return false;
-                array_ref<expr> fvars(cnstr_get(d.get_val().raw(), 0), true);
-                if (fvars.size() > get_app_num_args(e))
-                    return false; /* not enough args */
-                if (!is_pending_resolvable(it->second))
-                    return false;
-                /* Check args too. */
-                expr const * curr = &e;
-                while (is_app(*curr)) {
-                    if (!is_resolvable(app_arg(*curr)))
-                        return false;
-                    curr = &app_fn(*curr);
-                }
-                return true;
-            }
-            return is_resolvable(app_fn(e)) && is_resolvable(app_arg(e));
-        }
-        case expr_kind::Lambda: case expr_kind::Pi:
-            return is_resolvable(binding_domain(e)) &&
-                   is_resolvable(binding_body(e));
-        case expr_kind::Let:
-            return is_resolvable(let_type(e)) &&
-                   is_resolvable(let_value(e)) &&
-                   is_resolvable(let_body(e));
-        case expr_kind::MData:
-            return is_resolvable(mdata_expr(e));
-        case expr_kind::Proj:
-            return is_resolvable(proj_expr(e));
-        default:
-            return true;
-        }
-    }
-
-public:
-    resolvability_checker(metavar_ctx & mctx,
-                          name_hash_map<name> const & head_to_pending)
-        : m_mctx(mctx), m_head_to_pending(head_to_pending) {}
-
-    name_set compute() {
-        name_set resolvable;
-        for (auto & kv : m_head_to_pending) {
-            if (is_pending_resolvable(kv.second))
-                resolvable.insert(kv.second);
-        }
-        return resolvable;
-    }
-};
-
-/* ============================================================================
    Pass 2: Resolve delayed assignments with fused fvar substitution.
    Direct mvar chains have been pre-resolved by pass 1.
    ============================================================================ */
@@ -431,7 +303,6 @@ struct fvar_subst_entry {
 
 class instantiate_delayed_fn {
     metavar_ctx & m_mctx;
-    name_set const & m_resolvable_delayed;
     name_hash_map<fvar_subst_entry> m_fvar_subst;
     unsigned m_depth;
 
@@ -456,6 +327,88 @@ class instantiate_delayed_fn {
        assignments and expects them to be normalized. */
     name_set m_already_normalized;
     std::vector<expr> m_saved;
+
+    /* Resolvability caches — persistent across all delayed mvar resolutions.
+       A pending mvar is resolvable if its assigned value (normalized by pass 1)
+       would become mvar-free after resolution: all remaining mvars must be
+       delayed-assigned heads in app position with enough arguments, whose own
+       pending values are also resolvable. */
+    lean::unordered_map<lean_object *, bool> m_resolvable_expr_cache;
+    name_hash_map<unsigned> m_resolvable_pending_cache; /* 0 = in-progress, 1 = yes, 2 = no */
+
+    bool is_resolvable_pending(name const & pending) {
+        auto it = m_resolvable_pending_cache.find(pending);
+        if (it != m_resolvable_pending_cache.end())
+            return it->second == 1;
+        /* Mark in-progress (cycle guard — shouldn't happen). */
+        m_resolvable_pending_cache[pending] = 0;
+        option_ref<expr> r = get_mvar_assignment(m_mctx, pending);
+        if (!r) {
+            m_resolvable_pending_cache[pending] = 2;
+            return false;
+        }
+        bool ok = is_resolvable_expr(expr(r.get_val()));
+        m_resolvable_pending_cache[pending] = ok ? 1 : 2;
+        return ok;
+    }
+
+    bool is_resolvable_expr(expr const & e) {
+        if (!has_expr_mvar(e)) return true;
+        if (is_shared(e)) {
+            auto it = m_resolvable_expr_cache.find(e.raw());
+            if (it != m_resolvable_expr_cache.end())
+                return it->second;
+        }
+        bool r = is_resolvable_expr_core(e);
+        if (is_shared(e))
+            m_resolvable_expr_cache[e.raw()] = r;
+        return r;
+    }
+
+    bool is_resolvable_expr_core(expr const & e) {
+        switch (e.kind()) {
+        case expr_kind::MVar:
+            /* Bare mvar — direct assignments were resolved by pass 1. Stuck. */
+            return false;
+        case expr_kind::App: {
+            expr const & f = get_app_fn(e);
+            if (is_mvar(f)) {
+                name const & mid = mvar_name(f);
+                option_ref<delayed_assignment> d =
+                    get_delayed_mvar_assignment(m_mctx, mid);
+                if (!d) return false;
+                array_ref<expr> fvars(cnstr_get(d.get_val().raw(), 0), true);
+                if (fvars.size() > get_app_num_args(e))
+                    return false; /* not enough args */
+                name mid_pending(cnstr_get(d.get_val().raw(), 1), true);
+                if (!is_resolvable_pending(mid_pending))
+                    return false;
+                /* Check args too. */
+                expr const * curr = &e;
+                while (is_app(*curr)) {
+                    if (!is_resolvable_expr(app_arg(*curr)))
+                        return false;
+                    curr = &app_fn(*curr);
+                }
+                return true;
+            }
+            return is_resolvable_expr(app_fn(e)) && is_resolvable_expr(app_arg(e));
+        }
+        case expr_kind::Lambda: case expr_kind::Pi:
+            return is_resolvable_expr(binding_domain(e)) &&
+                   is_resolvable_expr(binding_body(e));
+        case expr_kind::Let:
+            return is_resolvable_expr(let_type(e)) &&
+                   is_resolvable_expr(let_value(e)) &&
+                   is_resolvable_expr(let_body(e));
+        case expr_kind::MData:
+            return is_resolvable_expr(mdata_expr(e));
+        case expr_kind::Proj:
+            return is_resolvable_expr(proj_expr(e));
+        default:
+            return true;
+        }
+    }
 
     bool fvar_subst_empty() const {
         return m_fvar_subst.empty();
@@ -599,11 +552,9 @@ class instantiate_delayed_fn {
         if (fvars.size() > get_app_num_args(e)) {
             return visit_mvar_app_args(e);
         }
-        /* Only resolve the delayed assignment when the resolvability
-           computation determined the pending value is fully resolvable
-           (assigned and all nested delayed mvars also resolvable). This
-           matches the original instantiateMVars behavior. */
-        if (!m_resolvable_delayed.contains(mid_pending)) {
+        /* Only resolve when the pending value is fully resolvable
+           (assigned and all nested delayed mvars also resolvable). */
+        if (!is_resolvable_pending(mid_pending)) {
             /* Still normalize the pending value for mctx write-back when
                fvar_subst is empty. Downstream code (MutualDef.mkInitialUsedFVarsMap)
                reads stored assignments and relies on inner delayed assignments
@@ -626,9 +577,8 @@ class instantiate_delayed_fn {
     }
 
 public:
-    instantiate_delayed_fn(metavar_ctx & mctx, name_set const & resolvable_delayed)
-        : m_mctx(mctx), m_resolvable_delayed(resolvable_delayed),
-          m_depth(0), m_result_scope(0) {}
+    instantiate_delayed_fn(metavar_ctx & mctx)
+        : m_mctx(mctx), m_depth(0), m_result_scope(0) {}
 
     expr visit(expr const & e) {
         if ((!has_fvar(e) || fvar_subst_empty()) && !has_expr_mvar(e))
@@ -739,9 +689,7 @@ static object * run_instantiate_all(object * m, object * e) {
     if (!pass1.has_delayed()) {
         e2 = e1;
     } else {
-        resolvability_checker checker(mctx, pass1.head_to_pending());
-        name_set resolvable = checker.compute();
-        instantiate_delayed_fn pass2(mctx, resolvable);
+        instantiate_delayed_fn pass2(mctx);
         e2 = pass2(e1);
     }
 
