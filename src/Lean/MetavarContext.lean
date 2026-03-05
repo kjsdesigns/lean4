@@ -1486,8 +1486,8 @@ def getExprAssignmentDomain (mctx : MetavarContext) : Array MVarId :=
 /--
 Abstract the given fvars from an unassigned mvar by creating a delayed-assigned mvar.
 Returns `(mctx', result)` where `result` has the fvars replaced by `values`.
-This is used by `instantiateMVarsNoUpdate` when encountering an unassigned mvar
-with an active fvar substitution.
+This can be used when encountering an unassigned mvar with an active fvar
+substitution.
 -/
 @[export lean_abstract_mvar_fvars]
 def abstractMVarFVars (mctx : MetavarContext) (mvarId : MVarId) (fvars : Array Expr) (values : Array Expr) : MetavarContext × Expr :=

@@ -1,6 +1,5 @@
 import Lean
 import Lean.Meta.InstMVarsAll
-import Lean.Meta.InstMVarsNU
 
 set_option maxHeartbeats 4000000
 
@@ -51,20 +50,14 @@ partial def bench1 (n : Nat) : MetaM Unit := do
   let (rDefault, msDefault) ← runImpl n instantiateMVars
   let (rOriginal, msOriginal) ← runImpl n instantiateMVarsOriginal
   let (rAll, msAll) ← runImpl n instantiateAllMVars
-  let (rNUCpp, msNUCpp) ← runImpl n instantiateMVarsNoUpdate
-  let (rNULean, msNULean) ← runImpl n instantiateMVarsNoUpdateLean
 
   -- Verify correctness
   unless Expr.eqv rDefault rOriginal do
     IO.println s!"ERROR: instantiateMVars vs Original differ for n={n}"
   unless Expr.eqv rDefault rAll do
     IO.println s!"ERROR: instantiateMVars vs AllMVars differ for n={n}"
-  unless Expr.eqv rDefault rNUCpp do
-    IO.println s!"ERROR: instantiateMVars vs NoUpdate(C++) differ for n={n}"
-  unless Expr.eqv rDefault rNULean do
-    IO.println s!"ERROR: instantiateMVars vs NoUpdate(Lean) differ for n={n}"
 
-  IO.println s!"bench1_{n}: Default {msDefault} ms, Original {msOriginal} ms, AllMVars {msAll} ms, NoUpdate(C++) {msNUCpp} ms, NoUpdate(Lean) {msNULean} ms"
+  IO.println s!"bench1_{n}: Default {msDefault} ms, Original {msOriginal} ms, AllMVars {msAll} ms"
 
 run_meta do
   IO.println "Example (n = 5):"

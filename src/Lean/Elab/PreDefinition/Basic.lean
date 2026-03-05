@@ -12,7 +12,6 @@ public import Lean.Meta.Eqns
 public import Lean.Elab.RecAppSyntax
 public import Lean.Elab.DefView
 import Lean.Meta.InstMVarsAll
-import Lean.Meta.InstMVarsNU
 
 public section
 
