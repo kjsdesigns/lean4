@@ -256,7 +256,7 @@ def checkUnusedActivations (mvarId : MVarId) (counters : Counters) : GrindM Unit
   unless unused.isEmpty do
     let sorted := unused.qsort fun (_, c₁) (_, c₂) => c₁ > c₂
     let data ← sorted.mapM fun (declName, counter) =>
-      return .trace { cls := `thm } m!"{.ofConst (← mkConstWithLevelParams declName)} ↦ {counter}" #[]
+      return .trace { cls := `thm } m!"{declName} ↦ {counter}" #[]
     logWarning <| .trace { cls := `grind } "grind: activated but unused E-matching lemmas" data
 
 /--
