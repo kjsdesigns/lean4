@@ -154,6 +154,13 @@ def year (zdt : ZonedDateTime) : Year.Offset :=
   zdt.date.get.year
 
 /--
+Returns the week-based year for a given `ZonedDateTime`.
+-/
+@[inline]
+def weekBasedYear (zdt : ZonedDateTime) : Year.Offset :=
+  zdt.date.get.weekBasedYear
+
+/--
 Getter for the `Month` inside of a `ZonedDateTime`
 -/
 @[inline]

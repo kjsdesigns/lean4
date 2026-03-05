@@ -147,11 +147,16 @@ The supported formats include:
   - `yy`: Displays the year in a two-digit format, showing the last two digits (e.g., "04" for 2004).
   - `yyyy`: Displays the year in a four-digit format (e.g., "2004").
   - `yyyy+`: Extended format for years with more than four digits.
+- `Y`: Represents the week-based year (ISO-like behavior around year boundaries).
+  - `Y`, `YYY`, `YYYY`: Displays the week-based year (e.g., "2017").
+  - `YY`: Displays the last two digits of the week-based year (e.g., "17").
 - `u`: Represents the year.
   - `u`: Represents the year in its full form, without a fixed length. It can handle years of any size, (e.g., "1", "2025", or "12345678").
   - `uu`: Two-digit year format, showing the last two digits (e.g., "04" for 2004).
   - `uuuu`: Displays the year in a four-digit format (e.g., "2004" or "-1000").
   - `uuuu+`: Extended format for handling years with more than four digits (e.g., "12345" or "-12345"). Useful for historical dates far into the past or future!
+- `U`: Alias for extended year formatting in this library (same behavior as `u`).
+- `r`: Alias for Gregorian year formatting in this library (same behavior as `u`).
 - `D`: Represents the day of the year.
 - `M`: Represents the month of the year, displayed as either a number or text.
   - `M`, `MM`: Displays the month as a number, with `MM` zero-padded (e.g., "7" for July, "07" for July with padding).
@@ -165,18 +170,21 @@ The supported formats include:
   - `QQQQ` (full): Displays the full quarter text (e.g., "3rd quarter").
   - `QQQQQ` (narrow): Displays the quarter as a short number (e.g., "3").
 - `w`: Represents the week of the week-based year, each week starts on Monday (e.g., "27").
-- `W`: Represents the week of the month, each week starts on Monday (e.g., "4").
+- `W`: Represents the week of the month in 7-day blocks starting at day 1 (e.g., "1").
 - `E`: Represents the day of the week as text.
   - `E`, `EE`, `EEE`: Displays the abbreviated weekday name (e.g., "Tue").
   - `EEEE`: Displays the full day name (e.g., "Tuesday").
   - `EEEEE`: Displays the narrow day name (e.g., "T" for Tuesday).
+  - `EEEEEE`: Displays a two-letter weekday form (e.g., "Tu").
 - `e`: Represents the weekday as number or text.
   - `e`, `ee`: Displays the weekday as a number, starting from 1 (Monday) to 7 (Sunday).
   - `eee`, `eeee`, `eeeee`: Displays the weekday as text (same format as `E`).
+  - `eeeeee`: Displays a two-letter weekday form (e.g., "Tu").
+- `c`: Standalone weekday; supports the same widths as `e`.
 - `F`: Represents the week of the month that the first week starts on the first day of the month (e.g., "3").
 - `a`: Represents the AM or PM designation of the day.
-  - `a`, `aa`, `aaa`: Displays AM or PM in a concise format (e.g., "PM").
-  - `aaaa`: Displays the full AM/PM designation (e.g., "Post Meridium").
+  - `a`, `aa`, `aaa`, `aaaa`: Displays AM/PM (e.g., "PM").
+  - `aaaaa`: Displays a narrow form (e.g., "p").
 - `h`: Represents the hour of the AM/PM clock (1-12) (e.g., "12").
   - One or more repetitions of the character indicates the truncation of the value to the specified number of characters.
 - `K`: Represents the hour of the AM/PM clock (0-11) (e.g., "0").
@@ -197,30 +205,41 @@ The supported formats include:
   - One or more repetitions of the character indicates the truncation of the value to the specified number of characters.
 - `N`: Represents the nanosecond of the day (e.g., "1234000000").
   - One or more repetitions of the character indicates the truncation of the value to the specified number of characters.
-- `VV`: Represents the time zone ID, which could be a city-based zone (e.g., "America/Los_Angeles"), a UTC marker (`"Z"`), or a specific offset (e.g., "-08:30").
-  - One or more repetitions of the character indicates the truncation of the value to the specified number of characters.
+- `V`: Time zone ID variants.
+  - `V`: Displays `"unk"` (unknown short zone-id form).
+  - `VV`, `VVV`, `VVVV`: Displays the zone identifier/name (UTC-normalized where applicable).
 - `z`: Represents the time zone name.
-  - `z`, `zz`, `zzz`: Shows an abbreviated time zone name (e.g., "PST" for Pacific Standard Time).
-  - `zzzz`: Displays the full time zone name (e.g., "Pacific Standard Time").
+  - `z`, `zz`, `zzz`: Shows a short zone name (e.g., "PST", or `"UTC"` at zero offset).
+  - `zzzz`: Displays the full zone name (e.g., "Pacific Standard Time", or `"Coordinated Universal Time"` at zero offset).
+- `v`: Generic time zone name.
+  - `v`: Displays a short generic name (e.g., "UTC").
+  - `vvvv`: Displays a full generic name (e.g., "Coordinated Universal Time").
 - `O`: Represents the localized zone offset in the format "GMT" followed by the time difference from UTC.
-  - `O`: Displays the GMT offset in a simple format (e.g., "GMT+8").
-  - `OOOO`: Displays the full GMT offset, including hours and minutes (e.g., "GMT+08:00").
+  - `O`: Displays the GMT offset in a short format (e.g., "GMT+8", "GMT+0").
+  - `OOOO`: Displays the full GMT offset with padded hour and minutes (e.g., "GMT+08:00", "GMT+00:00"), and includes seconds when needed.
 - `X`: Represents the zone offset. It uses 'Z' for UTC and can represent any offset (positive or negative).
-  - `X`: Displays the hour offset (e.g., "-08").
+  - `X`: Displays hour and optional minute offset (e.g., "-08", "-0830", or "Z").
   - `XX`: Displays the hour and minute offset without a colon (e.g., "-0830").
   - `XXX`: Displays the hour and minute offset with a colon (e.g., "-08:30").
-  - `XXXX`: Displays the hour, minute, and second offset without a colon (e.g., "-083045").
-  - `XXXXX`: Displays the hour, minute, and second offset with a colon (e.g., "-08:30:45").
-- `x`: Represents the zone offset. Similar to X, but does not display 'Z' for UTC and focuses only on positive offsets.
-  - `x`: Displays the hour offset (e.g., "+08").
+  - `XXXX`: Displays the hour and minute offset without a colon, with optional seconds (e.g., "-0830", "-083045").
+  - `XXXXX`: Displays the hour and minute offset with a colon, with optional seconds (e.g., "-08:30", "-08:30:45").
+- `x`: Represents the zone offset. Similar to `X`, but never displays `'Z'` for UTC.
+  - `x`: Displays hour and optional minute offset (e.g., "+00", "+0530").
   - `xx`: Displays the hour and minute offset without a colon (e.g., "+0830").
   - `xxx`: Displays the hour and minute offset with a colon (e.g., "+08:30").
-  - `xxxx`: Displays the hour, minute, and second offset without a colon (e.g., "+083045").
-  - `xxxxx`: Displays the hour, minute, and second offset with a colon (e.g., "+08:30:45").
-- `Z`: Always includes an hour and minute offset and may use 'Z' for UTC, providing clear differentiation between UTC and other time zones.
-  - `Z`: Displays the hour and minute offset without a colon (e.g., "+0800").
-  - `ZZ`: Displays "GMT" followed by the time offset (e.g., "GMT+08:00" or "Z").
-  - `ZZZ`: Displays the full hour, minute, and second offset with a colon (e.g., "+08:30:45" or "Z").
+  - `xxxx`: Displays the hour and minute offset without a colon, with optional seconds (e.g., "+0830", "+083045").
+  - `xxxxx`: Displays the hour and minute offset with a colon, with optional seconds (e.g., "+08:30", "+08:30:45").
+- `Z`: Represents the zone offset in RFC/CLDR `Z` forms.
+  - `Z`, `ZZ`, `ZZZ`: Displays hour and minute offset without colon, with optional seconds (e.g., "+0800", "+083045").
+  - `ZZZZ`: Displays localized GMT form (e.g., "GMT+08:00").
+  - `ZZZZZ`: Displays hour and minute offset with a colon and optional seconds, and uses `"Z"` for UTC (e.g., "Z", "+08:30", "+08:30:45").
+
+# Runtime Parsing
+
+- `ZonedDateTime.parse` parses common zoned date-time formats with explicit offsets, but does not resolve timezone identifiers like `[Europe/Paris]`.
+- `ZonedDateTime.parseIO` resolves identifier-based inputs via the default timezone database.
+- `ZonedDateTime.fromLeanDateTimeWithIdentifierString` is pure and does not perform timezone database resolution.
+- `ZonedDateTime.fromLeanDateTimeWithIdentifierStringIO` resolves identifiers using the default timezone database.
 
 # Macros
 
@@ -234,7 +253,7 @@ The `.sssssssss` can be omitted in most cases.
 - **`offset("+HH:mm")`**: Represents a timezone offset in the format `+HH:mm`, where `+` or `-` indicates the direction from UTC.
 - **`timezone("NAME/ID ZZZ")`**: Specifies a timezone using a region-based name or ID, along with its associated offset.
 - **`datespec("FORMAT")`**: Defines a compile-time date format based on the provided string.
-- **`zoned("uuuu-MM-ddTHH:mm:ss.sssssssssZZZ")`**: Represents a `ZonedDateTime` with a fixed timezone and optional nanosecond precision.
+- **`zoned("uuuu-MM-ddTHH:mm:ss.sssssssssZZZZZ")`**: Represents a `ZonedDateTime` with a fixed timezone and optional nanosecond precision.
 - **`zoned("uuuu-MM-ddTHH:mm:ss.sssssssss[IDENTIFIER]")`**: Defines an `IO ZonedDateTime`, where the timezone identifier is dynamically retrieved from the default timezone database.
 - **`zoned("uuuu-MM-ddTHH:mm:ss.sssssssss, timezone")`**: Represents an `IO ZonedDateTime`, using a specified `timezone` term and allowing optional nanoseconds.
 

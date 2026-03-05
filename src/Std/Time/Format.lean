@@ -188,11 +188,12 @@ def format (date : PlainDate) (format : String) : String :=
     let res := res.formatGeneric fun
       | .G _ => some date.era
       | .y _ => some date.year
+      | .Y _ => some date.weekOfYear
       | .u _ => some date.year
       | .D _ => some (Sigma.mk date.year.isLeap date.dayOfYear)
       | .Qorq _ => some date.quarter
       | .w _ => some date.weekOfYear
-      | .W _ => some date.alignedWeekOfMonth
+      | .W _ => some (date.weekOfMonth.expandTop (by decide))
       | .MorL _ => some date.month
       | .d _ => some date.day
       | .E _ => some date.weekday
@@ -385,7 +386,7 @@ def toRFC850String (date : ZonedDateTime) : String :=
   Formats.rfc850.format date.toDateTime
 
 /--
-Parses a `String` in the dateTimeWithZone format and returns a `ZonedDateTime` object in the GMT time zone.
+Parses a `String` in the dateTimeWithZone format and returns a `ZonedDateTime`.
 -/
 def fromDateTimeWithZoneString (input : String) : Except String ZonedDateTime :=
   Formats.dateTimeWithZone.parse input
@@ -405,10 +406,19 @@ def fromLeanDateTimeWithZoneString (input : String) : Except String ZonedDateTim
 
 /--
 Parses a `String` in the lean date time format with identifier and returns a `ZonedDateTime` object.
+This parser does not resolve the timezone identifier with the timezone database.
 -/
 def fromLeanDateTimeWithIdentifierString (input : String) : Except String ZonedDateTime :=
   Formats.leanDateTimeWithIdentifier.parse input
   <|> Formats.leanDateTimeWithIdentifierAndNanos.parse input
+
+/--
+Parses a `String` in the lean date time format with identifier and resolves it using the default timezone database.
+-/
+def fromLeanDateTimeWithIdentifierStringIO (input : String) : IO ZonedDateTime := do
+  let parsed ← IO.ofExcept (fromLeanDateTimeWithIdentifierString input)
+  let rules ← Database.defaultGetZoneRules parsed.timezone.name
+  return ZonedDateTime.ofPlainDateTime parsed.toPlainDateTime rules
 
 /--
 Formats a `DateTime` value into a simple date time with timezone string that can be parsed by the date% notation.
@@ -422,14 +432,29 @@ def toLeanDateTimeWithIdentifierString (zdt : ZonedDateTime) : String :=
   Formats.leanDateTimeWithIdentifierAndNanos.formatBuilder zdt.year zdt.month zdt.day zdt.hour zdt.minute zdt.date.get.time.second zdt.nanosecond zdt.timezone.name
 
 /--
-Parses a `String` in the `ISO8601`, `RFC822` or `RFC850` format and returns a `ZonedDateTime`.
+Parses a `String` in common zoned date-time formats and returns a `ZonedDateTime`.
+This parser does not resolve timezone identifiers like `[Europe/Paris]`; use `parseIO` for that.
 -/
 def parse (input : String) : Except String ZonedDateTime :=
   fromISO8601String input
   <|> fromRFC822String input
   <|> fromRFC850String input
+  <|> fromLeanDateTimeWithZoneString input
   <|> fromDateTimeWithZoneString input
-  <|> fromLeanDateTimeWithIdentifierString input
+
+/--
+Parses a `String` in common zoned date-time formats.
+If the input uses a timezone identifier (for example, `[Europe/Paris]`), it resolves it using the default timezone database.
+-/
+def parseIO (input : String) : IO ZonedDateTime := do
+  match parse input with
+  | .ok zdt => pure zdt
+  | .error err =>
+    match fromLeanDateTimeWithIdentifierString input with
+    | .ok zdt =>
+      let rules ← Database.defaultGetZoneRules zdt.timezone.name
+      pure <| ZonedDateTime.ofPlainDateTime zdt.toPlainDateTime rules
+    | .error _ => throw <| IO.userError err
 
 instance : ToString ZonedDateTime where
   toString := toLeanDateTimeWithIdentifierString
@@ -452,11 +477,20 @@ def format (date : PlainDateTime) (format : String) : String :=
     let res := res.formatGeneric fun
       | .G _ => some date.era
       | .y _ => some date.year
+      | .Y _ =>
+        let week := date.weekOfYear
+        some <|
+          if date.month.val = 1 ∧ week.val ≥ 52 then
+            date.year - 1
+          else if date.month.val = 12 ∧ week.val = 1 then
+            date.year + 1
+          else
+            date.year
       | .u _ => some date.year
       | .D _ => some (Sigma.mk date.year.isLeap date.dayOfYear)
       | .Qorq _ => some date.quarter
       | .w _ => some date.weekOfYear
-      | .W _ => some date.alignedWeekOfMonth
+      | .W _ => some (date.weekOfMonth.expandTop (by decide))
       | .MorL _ => some date.month
       | .d _ => some date.day
       | .E _ => some date.weekday

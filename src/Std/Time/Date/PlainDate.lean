@@ -355,6 +355,18 @@ def weekOfYear (date : PlainDate) : Week.Ordinal :=
     let w := w.truncateBottom h |>.truncateTop (Int.le_trans h₁ y.weeks.property.right)
     w
 
+/--
+Returns the week-based year for a given `PlainDate`.
+-/
+def weekBasedYear (date : PlainDate) : Year.Offset :=
+  let week := date.weekOfYear
+  if date.month.val = 1 ∧ week.val ≥ 52 then
+    date.year - 1
+  else if date.month.val = 12 ∧ week.val = 1 then
+    date.year + 1
+  else
+    date.year
+
 instance : HAdd PlainDate Day.Offset PlainDate where
   hAdd := addDays
 
