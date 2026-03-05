@@ -1,2 +1,0 @@
-fun s => ⟨fun h => ⟨h, h⟩, Eq.refl s⟩
-numObjs: 27

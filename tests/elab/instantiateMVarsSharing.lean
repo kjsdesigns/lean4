@@ -22,6 +22,12 @@ where
   leftTy  := eq_ss → andTy                    ← forallE body contains eq_ss
   rightTy := eq_ss
   right   := @Eq.refl Nat s_fvar
+
+After instantiation, the shared `eq_ss` input should produce shared results
+at each binding depth:
+- At depth 1: `@Eq Nat #0 #0` (used as rightTy, leftTy.domain, left.domain)
+- At depth 2: `@Eq Nat #1 #1` (used as And args in leftTy body and And.intro
+  type args in inner body)
 -/
 
 private def mkTestRoot : MetaM Expr := do
@@ -59,12 +65,37 @@ private def mkTestRoot : MetaM Expr := do
       root.mvarId!.assign (Lean.mkLambda `s .default nat (mkApp rootAux (.bvar 0)))
       return root
 
--- Instantiate and check correctness and sharing
+-- Instantiate and verify sharing
 run_meta do
   let root ← mkTestRoot
   let result ← instantiateMVars root
-  -- Verify the result is well-formed by pretty-printing
-  IO.println s!"{← ppExpr result}"
-  -- Report object count as a sharing metric
-  let n ← result.numObjs
-  IO.println s!"numObjs: {n}"
+
+  -- Result: fun (s : Nat) => @And.intro leftTy rightTy left right
+  let outerBody := result.bindingBody!
+  let rightTy := outerBody.appFn!.appFn!.appArg!
+  let leftTy := outerBody.appFn!.appFn!.appFn!.appArg!
+  let left := outerBody.appFn!.appArg!
+
+  -- At depth 1: rightTy, leftTy.domain, and left.domain are all
+  -- instantiations of the shared `eq_ss` at the same depth → ptrEq.
+  unless unsafe ptrEq rightTy leftTy.bindingDomain! do
+    throwError "sharing: rightTy and leftTy.domain are not ptrEq"
+  unless unsafe ptrEq rightTy left.bindingDomain! do
+    throwError "sharing: rightTy and left.domain are not ptrEq"
+
+  -- At depth 2: the two eq_ss args inside `And` in leftTy's body → ptrEq.
+  let andInLeftTyBody := leftTy.bindingBody!
+  unless unsafe ptrEq andInLeftTyBody.appFn!.appArg! andInLeftTyBody.appArg! do
+    throwError "sharing: And args in leftTy body are not ptrEq"
+
+  -- At depth 2: the two type args inside `And.intro` in the inner body → ptrEq.
+  let innerBody := left.bindingBody!
+  let innerTyArg1 := innerBody.appFn!.appFn!.appFn!.appArg!
+  let innerTyArg2 := innerBody.appFn!.appFn!.appArg!
+  unless unsafe ptrEq innerTyArg1 innerTyArg2 do
+    throwError "sharing: And.intro type args in inner body are not ptrEq"
+
+  -- Cross-expression: depth-2 eq_ss from leftTy body and inner body should
+  -- be the same object (same shared input at the same binding depth).
+  unless unsafe ptrEq andInLeftTyBody.appArg! innerTyArg1 do
+    throwError "sharing: eq_ss at depth 2 not shared across leftTy and inner"

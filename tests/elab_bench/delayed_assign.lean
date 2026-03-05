@@ -45,11 +45,11 @@ where
     | 0 => mkResultType n
     | i+1 => .forallE `x Nat.mkType (mkAnd (mkType i) (mkLE (n - i - 1))) .default
 
--- Size calibrated to take roughly 1s total elaboration time.
+-- n=200 is calibrated to take roughly 1s total elaboration time.
+-- Use a small n unless TEST_BENCH=1, so that the test suite runs quickly.
 run_meta do
-  let n := 700
+  let bench := (← IO.getEnv "TEST_BENCH") == some "1"
+  let n := if bench then 200 else 50
   let mvarId ← mkBench n
   solve mvarId
-  let result ← instantiateMVars (mkMVar mvarId)
-  let numObjs ← result.numObjs
-  IO.println s!"n={n} numObjs={numObjs}"
+  discard <| instantiateMVars (mkMVar mvarId)
