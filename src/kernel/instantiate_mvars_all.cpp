@@ -524,17 +524,6 @@ class instantiate_delayed_fn {
         return mk_rev_app(*curr, args.size(), args.data());
     }
 
-    expr visit_args_and_beta(expr const & f_new, expr const & e, buffer<expr> & args) {
-        expr const * curr = &e;
-        while (is_app(*curr)) {
-            args.push_back(visit(app_arg(*curr)));
-            curr = &app_fn(*curr);
-        }
-        bool preserve_data = false;
-        bool zeta = true;
-        return apply_beta(f_new, args.size(), args.data(), preserve_data, zeta);
-    }
-
     expr visit_delayed(array_ref<expr> const & fvars, name const & mid_pending,
                        expr const & e, buffer<expr> & args) {
         expr const * curr = &e;
@@ -562,7 +551,11 @@ class instantiate_delayed_fn {
             m_fvar_subst[fid] = {m_depth, m_cache.scope(), args[args.size() - 1 - i]};
         }
 
-        expr val_new = visit(mk_mvar(mid_pending));
+        /* Get the pending value directly — it must be assigned (pass 1
+           pre-normalized it). No write-back needed since fvar_subst is non-empty. */
+        option_ref<expr> pending_val = get_mvar_assignment(m_mctx, mid_pending);
+        lean_assert(!!pending_val);
+        expr val_new = visit(expr(pending_val.get_val()));
 
         /* Pop scope; stale entries are detected by generation mismatch on lookup. */
         m_cache.pop();
@@ -591,11 +584,8 @@ class instantiate_delayed_fn {
             return visit_app_default(e);
         }
         name const & mid = mvar_name(f);
-        /* Direct assignment takes precedence. */
-        if (auto f_new = get_assignment(mid)) {
-            buffer<expr> args;
-            return visit_args_and_beta(*f_new, e, args);
-        }
+        /* Direct assignments were resolved by pass 1. */
+        lean_assert(!get_mvar_assignment(m_mctx, mid));
         /* Check delayed assignment. */
         option_ref<delayed_assignment> d = get_delayed_mvar_assignment(m_mctx, mid);
         if (!d) {
@@ -622,14 +612,6 @@ class instantiate_delayed_fn {
         }
         buffer<expr> args;
         return visit_delayed(fvars, mid_pending, e, args);
-    }
-
-    expr visit_mvar(expr const & e) {
-        name const & mid = mvar_name(e);
-        if (auto r = get_assignment(mid)) {
-            return *r;
-        }
-        return e;
     }
 
     expr visit_fvar(expr const & e) {
@@ -678,8 +660,14 @@ public:
             r = update_const(e, visit_levels(const_levels(e)));
             break;
         case expr_kind::MVar:
-            r = visit_mvar(e);
-            goto done; /* mvar results are not (ptr, depth)-cacheable */
+            /* Bare mvars in pass 2 are unassigned: direct assignments were
+               resolved by pass 1, and resolvable pending values contain no
+               bare unassigned mvars. They only appear at the top level or
+               during write-back normalization (both with empty fvar_subst). */
+            lean_assert(fvar_subst_empty());
+            lean_assert(!get_mvar_assignment(m_mctx, mvar_name(e)));
+            r = e;
+            goto done;
         case expr_kind::MData:
             r = update_mdata(e, visit(mdata_expr(e)));
             break;
