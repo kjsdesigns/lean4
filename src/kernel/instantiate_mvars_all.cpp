@@ -582,11 +582,12 @@ class instantiate_delayed_fn {
         if (is_resolvable_pending(mid_pending)) {
             return visit_delayed(fvars, mid_pending, e);
         } else {
-            /* Normalize the pending value for mctx write-back when
-               fvar_subst is empty (see write-back comment above). */
-            if (fvar_subst_empty()) {
-                (void)get_assignment(mid_pending);
-            }
+            /* Non-resolvable d-a-mvars only appear in outer mode: inside a
+               resolvable subtree all nested d-a-mvars are resolvable too. */
+            lean_assert(fvar_subst_empty());
+            /* Normalize the pending value for mctx write-back
+               (see write-back comment above). */
+            (void)get_assignment(mid_pending);
             return visit_mvar_app_args(e);
         }
     }
