@@ -96,12 +96,21 @@ builtin_initialize simpleGroundDeclExt : EnvExtension SimpleGroundExtState ←
     )
 
 /--
+Tracks which declarations are simple ground expressions across modules.
+The non-persistent `simpleGroundDeclExt` stores the actual `SimpleGroundExpr` values within a module,
+while this extension persists just the tag across module boundaries.
+-/
+builtin_initialize simpleGroundTagExt : TagDeclarationExtension ←
+  mkTagDeclarationExtension (asyncMode := .sync)
+
+/--
 Record `declName` as mapping to the simple ground expr `expr`.
 -/
 public def addSimpleGroundDecl (env : Environment) (declName : Name) (expr : SimpleGroundExpr) :
     Environment :=
-  simpleGroundDeclExt.modifyState env fun s =>
+  let env := simpleGroundDeclExt.modifyState env fun s =>
     { s with constNames := s.constNames.insert declName expr, revNames := declName :: s.revNames }
+  simpleGroundTagExt.tag env declName
 
 /--
 Attempt to fetch a `SimpleGroundExpr` associated with `declName` if it exists.
@@ -127,7 +136,7 @@ public def getSimpleGroundExprWithResolvedRefs (env : Environment) (declName : N
 Check if `declName` is recorded as being a `SimpleGroundExpr`.
 -/
 public def isSimpleGroundDecl (env : Environment) (declName : Name) : Bool :=
-  (simpleGroundDeclExt.getState env).constNames.contains declName
+  simpleGroundTagExt.isTagged env declName
 
 public def uint64ToByteArrayLE (n : UInt64) : Array UInt8 :=
   #[
