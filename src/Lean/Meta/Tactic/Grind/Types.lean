@@ -78,6 +78,11 @@ register_builtin_option grind.warning : Bool := {
   descr    := "generate a warning whenever `grind` is used"
 }
 
+register_builtin_option grind.unusedLemmaThreshold : Nat := {
+  defValue := 0
+  descr    := "report E-matching lemmas activated at least this many times but not used in the proof (0 = disabled)"
+}
+
 /--
 Anchors are used to reference terms, local theorems, and case-splits in the `grind` state.
 We also use anchors to prune the search space when they are provided as `grind` parameters

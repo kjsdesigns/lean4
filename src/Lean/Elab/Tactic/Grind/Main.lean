@@ -263,7 +263,10 @@ def grind
           Grind.evalGrindTactic seq
           -- **Note**: We are returning only the first goal that could not be solved.
           let goal? := if let goal :: _ := (← get).goals then some goal else none
-          Grind.liftGrindM <| Grind.mkResult params goal?
+          let result ← Grind.liftGrindM <| Grind.mkResult params goal?
+          if goal?.isNone then
+            Grind.liftGrindM <| Grind.checkUnusedActivations mvarId' result.counters
+          return result
         finalize result
       else
         let result ← Grind.main mvarId' params

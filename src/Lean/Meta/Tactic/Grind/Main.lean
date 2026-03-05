@@ -237,6 +237,29 @@ def Result.toMessageData (result : Result) : MetaM MessageData := do
   return MessageData.joinSep msgs m!"\n"
 
 /--
+Checks whether any E-matching lemmas were activated but do not appear in the final proof term.
+Controlled by `set_option grind.unusedLemmaThreshold`.
+-/
+def checkUnusedActivations (mvarId : MVarId) (counters : Counters) : GrindM Unit := do
+  let threshold := grind.unusedLemmaThreshold.get (← getOptions)
+  if threshold == 0 then return ()
+  let proof ← instantiateMVars (mkMVar mvarId)
+  let usedConsts := proof.getUsedConstantsAsSet
+  let mut unused : Array (Name × Nat) := #[]
+  for (origin, count) in counters.thm do
+    if count < threshold then continue
+    match origin with
+    | .decl declName =>
+      unless usedConsts.contains declName do
+        unused := unused.push (declName, count)
+    | _ => pure ()
+  unless unused.isEmpty do
+    let sorted := unused.qsort fun (_, c₁) (_, c₂) => c₁ > c₂
+    let data ← sorted.mapM fun (declName, counter) =>
+      return .trace { cls := `thm } m!"{.ofConst (← mkConstWithLevelParams declName)} ↦ {counter}" #[]
+    logWarning <| .trace { cls := `grind } "grind: activated but unused E-matching lemmas" data
+
+/--
 When `Config.revert := false`, we preprocess the hypotheses, and add them to the `grind` state.
 It starts at `goal.nextDeclIdx`. If `num?` is `some num`, then at most `num` local declarations are processed.
 Otherwise, all remaining local declarations are processed.
@@ -302,7 +325,10 @@ def GrindM.runAtGoal (mvarId : MVarId) (params : Params) (k : Goal → GrindM α
 def main (mvarId : MVarId) (params : Params) : MetaM Result := do profileitM Exception "grind" (← getOptions) do
   GrindM.runAtGoal mvarId params fun goal => do
     let failure? ← solve goal
-    mkResult params failure?
+    let result ← mkResult params failure?
+    if failure?.isNone then
+      checkUnusedActivations mvarId result.counters
+    return result
 
 /--
 Resolves delayed metavariable assignments created inside the current `withNewMCtxDepth` block.
