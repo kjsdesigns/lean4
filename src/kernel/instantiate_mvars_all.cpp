@@ -303,6 +303,26 @@ public:
 /* ============================================================================
    Pass 2: Resolve delayed assignments with fused fvar substitution.
    Direct mvar chains have been pre-resolved by pass 1.
+
+   Write-back behavior:
+
+   Delayed-assigned mvars (d-a-mvars) form a dependency tree: each d-a-mvar's
+   pending value may reference other d-a-mvars. Some subtrees of this tree are
+   fully resolvable (all d-a-mvars within have assigned, mvar-free pending
+   values with sufficient arguments), while others are not.
+
+   Pass 2 fully resolves every maximal resolvable subtree. The roots of these
+   subtrees — d-a-mvars that are themselves resolvable but whose parent in the
+   tree is not — form a horizontal cut through the dependency tree. Above the
+   cut sit non-resolvable d-a-mvars; below the cut, everything is resolved.
+
+   Pass 2 writes back the normalized pending values of d-a-mvars above the cut
+   (the non-resolvable ones whose children may have been resolved). This is
+   exactly the right set: these d-a-mvars are visited with an empty fvar
+   substitution, so their normalized values are suitable for storing in the
+   mctx. D-a-mvars below the cut are visited with a non-empty substitution
+   (fvars replaced by arguments), so their intermediate values cannot be
+   written back.
    ============================================================================ */
 
 struct fvar_subst_entry {
