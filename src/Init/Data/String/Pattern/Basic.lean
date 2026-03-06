@@ -245,7 +245,7 @@ the given {name}`ForwardPattern` instance.
 It is sometimes possible to give a more efficient implementation; see {name}`ToForwardSearcher`
 for more details.
 -/
-@[inline]
+@[inline, implicit_reducible]
 def defaultImplementation [ForwardPattern pat] :
     ToForwardSearcher pat (DefaultForwardSearcher pat) where
   toSearcher := DefaultForwardSearcher.iter pat
