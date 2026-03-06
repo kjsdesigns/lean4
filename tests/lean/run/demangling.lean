@@ -172,6 +172,11 @@ private def checkRoundTrip (label : String) (parts : List (String ⊕ Nat)) : IO
   checkSome "lp_ underscore pkg" (demangleSymbol mangled) "Lean.Meta.foo (my_pkg)"
 
 #eval do
+  -- Package with escaped chars (hyphen → _x2d): split must not break mid-escape
+  let mangled := Name.mangle `Lean.Meta.foo (s!"lp_{String.mangle "my-pkg"}_")
+  checkSome "lp_ escaped pkg" (demangleSymbol mangled) "Lean.Meta.foo (my-pkg)"
+
+#eval do
   let name := mkName [.inl "_private", .inl "X", .inr 0, .inl "Y", .inl "foo"]
   let mangled := name.mangle (s!"lp_{String.mangle "pkg"}_")
   checkSome "lp_ private decl" (demangleSymbol mangled) "Y.foo [private] (pkg)"
@@ -337,6 +342,21 @@ private def checkRoundTrip (label : String) (parts : List (String ⊕ Nat)) : IO
                        .inl "Lean", .inl "Meta", .inl "_hyg", .inr 42]
   checkSome "hygienic strip" (demangleSymbol (name.mangle "l_"))
     "Lean.Meta.foo"
+
+#eval do
+  -- _boxed after _@ hygienic section should still be recognized
+  let name := mkName [.inl "Lean", .inl "Meta", .inl "foo", .inl "_@",
+                       .inl "Lean", .inl "Meta", .inl "_hyg", .inr 42, .inl "_boxed"]
+  checkSome "hygienic + boxed" (demangleSymbol (name.mangle "l_"))
+    "Lean.Meta.foo [boxed]"
+
+#eval do
+  -- _lam + _boxed after _@ should both be recognized
+  let name := mkName [.inl "Lean", .inl "initFn", .inl "_@",
+                       .inl "Lean", .inl "Elab", .inl "_hyg", .inr 42,
+                       .inl "_lam", .inr 0, .inl "_boxed"]
+  checkSome "hygienic + lam + boxed" (demangleSymbol (name.mangle "l_"))
+    "Lean.initFn [boxed, λ]"
 
 -- ============================================================================
 -- Postprocessing: specialization contexts

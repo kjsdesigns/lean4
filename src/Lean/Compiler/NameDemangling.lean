@@ -34,11 +34,15 @@ where
     | .str pre s, acc => go pre (NamePart.str s :: acc)
     | .num pre n, acc => go pre (NamePart.num n :: acc)
 
+private def namePartsToName (parts : Array NamePart) : Name :=
+  parts.foldl (fun acc p =>
+    match p with
+    | .str s => acc.mkStr s
+    | .num n => acc.mkNum n) .anonymous
+
+/-- Format name parts using `Name.toString` for correct escaping. -/
 private def formatNameParts (comps : Array NamePart) : String :=
-  comps.toList.map (fun
-    | NamePart.str s => s
-    | NamePart.num n => toString n)
-  |> String.intercalate "."
+  if comps.isEmpty then "" else (namePartsToName comps).toString
 
 private def matchSuffix (c : NamePart) : Option String :=
   match c with
@@ -82,7 +86,7 @@ private def processSpecContext (comps : Array NamePart) : SpecEntry := Id.run do
       if comps[i]? == some (NamePart.num 0) && i + 1 < comps.size then
         begin_ := i + 1
         break
-  let mut nameParts : Array String := #[]
+  let mut parts : Array NamePart := #[]
   let mut flags : Array String := #[]
   for i in [begin_:comps.size] do
     let c := comps[i]!
@@ -92,16 +96,39 @@ private def processSpecContext (comps : Array NamePart) : SpecEntry := Id.run do
         flags := flags.push flag
     | none =>
       if isSpecIndex c then pure ()
-      else match c with
-        | NamePart.str s => nameParts := nameParts.push s
-        | NamePart.num n => nameParts := nameParts.push (toString n)
-  { name := String.intercalate "." nameParts.toList, flags }
+      else parts := parts.push c
+  { name := formatNameParts parts, flags }
 
 private def postprocessNameParts (components : Array NamePart) : String := Id.run do
   if components.isEmpty then return ""
 
   let (privStart, isPrivate) := stripPrivate components 0 components.size
   let mut parts := components.extract privStart components.size
+
+  -- Collect suffix flags from the end first, before stripping hygienic suffixes,
+  -- since _boxed etc. may appear after _@ sections.
+  let mut flags : Array String := #[]
+  let mut cont := true
+  while cont && !parts.isEmpty do
+    let last := parts.back!
+    match matchSuffix last with
+    | some flag =>
+      flags := flags.push flag
+      parts := parts.pop
+    | none =>
+      match last with
+      | NamePart.num _ =>
+        if parts.size >= 2 then
+          match matchSuffix parts[parts.size - 2]! with
+          | some flag =>
+            flags := flags.push flag
+            parts := parts.pop.pop
+          | none => cont := false
+        else cont := false
+      | _ => cont := false
+
+  if isPrivate then
+    flags := flags.push "private"
 
   -- Strip hygienic suffixes (_@ onward)
   for i in [:parts.size] do
@@ -163,30 +190,6 @@ private def postprocessNameParts (components : Array NamePart) : String := Id.ru
 
     parts := base ++ remaining
 
-  -- Collect suffix flags from the end
-  let mut flags : Array String := #[]
-  let mut cont := true
-  while cont && !parts.isEmpty do
-    let last := parts.back!
-    match matchSuffix last with
-    | some flag =>
-      flags := flags.push flag
-      parts := parts.pop
-    | none =>
-      match last with
-      | NamePart.num _ =>
-        if parts.size >= 2 then
-          match matchSuffix parts[parts.size - 2]! with
-          | some flag =>
-            flags := flags.push flag
-            parts := parts.pop.pop
-          | none => cont := false
-        else cont := false
-      | _ => cont := false
-
-  if isPrivate then
-    flags := flags.push "private"
-
   let name := if parts.isEmpty then "?" else formatNameParts parts
   let mut result := name
 
@@ -203,53 +206,34 @@ private def postprocessNameParts (components : Array NamePart) : String := Id.ru
 
   return result
 
-private def hasUpperStart (s : String) : Bool :=
-  let s := ((s.dropPrefix? "00").map (·.toString)).getD s
-  go s s.startPos
-where
-  go (s : String) (pos : s.Pos) : Bool :=
-    if h : pos = s.endPos then false
-    else if pos.get h == '_' then go s (pos.next h)
-    else (pos.get h).isUpper
-  termination_by pos
+private def demangleBody (body : String) : String :=
+  let name := Name.demangle body
+  postprocessNameParts (nameToNameParts name)
 
-private def findLpSplit (s : String) : Option (String × String) := Id.run do
-  let mut validSplits : Array (String × String × Bool) := #[]
+/-- Split a `lp_`-prefixed symbol into (demangled body, package name).
+Tries each underscore as a split point; the first valid split (shortest single-component
+package where the remainder is a valid mangled name) is correct. -/
+private def demangleWithPkg (s : String) : Option (String × String) := do
   for ⟨pos, h⟩ in s.positions do
     if pos.get h == '_' && pos ≠ s.startPos then
       let nextPos := pos.next h
       if nextPos == s.endPos then continue
       let pkg := s.extract s.startPos pos
       let body := s.extract nextPos s.endPos
-      -- Package must be a valid single-component mangled name
       let validPkg := match Name.demangle? pkg with
         | some (.str .anonymous _) => true
         | _ => false
       if validPkg && (Name.demangle? body).isSome then
-        validSplits := validSplits.push (pkg, body, hasUpperStart body)
-  if validSplits.isEmpty then return none
-  -- Prefer: shortest valid package (first split point).
-  -- Among splits where body starts uppercase, pick the first.
-  -- If no uppercase, still pick the first.
-  let upperSplits := validSplits.filter (·.2.2)
-  if !upperSplits.isEmpty then
-    return some (upperSplits[0]!.1, upperSplits[0]!.2.1)
-  else
-    return some (validSplits[0]!.1, validSplits[0]!.2.1)
-
-private def unmanglePkg (s : String) : String :=
-  match Name.demangle s with
-  | .str .anonymous s => s
-  | _ => s
+        let pkgName := match Name.demangle pkg with
+          | .str .anonymous s => s
+          | _ => pkg
+        return (demangleBody body, pkgName)
+  none
 
 private def stripColdSuffix (s : String) : String × String :=
   match s.find? ".cold" with
   | some pos => (s.extract s.startPos pos, s.extract pos s.endPos)
   | none => (s, "")
-
-private def demangleBody (body : String) : String :=
-  let name := Name.demangle body
-  postprocessNameParts (nameToNameParts name)
 
 private def demangleCore (s : String) : Option String := do
   -- _init_l_
@@ -258,8 +242,8 @@ private def demangleCore (s : String) : Option String := do
 
   -- _init_lp_
   if let some after := dropPrefix? s "_init_lp_" then
-    if let some (pkg, body) := findLpSplit after then
-      if !body.isEmpty then return s!"[init] {demangleBody body} ({unmanglePkg pkg})"
+    if let some (name, pkg) := demangleWithPkg after then
+      return s!"[init] {name} ({pkg})"
 
   -- initialize_l_
   if let some body := dropPrefix? s "initialize_l_" then
@@ -267,8 +251,8 @@ private def demangleCore (s : String) : Option String := do
 
   -- initialize_lp_
   if let some after := dropPrefix? s "initialize_lp_" then
-    if let some (pkg, body) := findLpSplit after then
-      if !body.isEmpty then return s!"[module_init] {demangleBody body} ({unmanglePkg pkg})"
+    if let some (name, pkg) := demangleWithPkg after then
+      return s!"[module_init] {name} ({pkg})"
 
   -- initialize_ (bare module init)
   if let some body := dropPrefix? s "initialize_" then
@@ -280,8 +264,8 @@ private def demangleCore (s : String) : Option String := do
 
   -- lp_
   if let some after := dropPrefix? s "lp_" then
-    if let some (pkg, body) := findLpSplit after then
-      if !body.isEmpty then return s!"{demangleBody body} ({unmanglePkg pkg})"
+    if let some (name, pkg) := demangleWithPkg after then
+      return s!"{name} ({pkg})"
 
   none
 
