@@ -13,20 +13,39 @@ Authors: Joachim Breitner
 namespace lean {
 
 /*
-A scope-aware cache for use in traversals that carry a substitution
-through nested scopes (e.g., delayed mvar resolution).
+Conceptually, the scope cache is a stack of `Key → (Value × Scope)` hashmaps.
+The `Scope` is a counter indicating the lowest position in the stack for which
+the entry is valid.
 
-Supports push/pop of scopes and caches Key → Value results.
-Each scope gets a unique generation number. Cache entries store a
-single snapshot of the scope generation list (a persistent linked
-list) at insert time. On lookup, entries are lazily degraded by
-walking the snapshot and current lists in lockstep, evicting entries
-whose result depends on popped or re-entered scopes.
+Its purpose is to provide caching for an operation that:
+ * maintains scopes (e.g. local contexts, substitutions). Higher stack
+   positions correspond to inner, more local scopes.
+ * For a given key, the result may depend on all or part of that scope.
+ * At lookup time, it is not known whether the value for a key will depend on
+   all or part of the scope, so only entries for the current innermost scope
+   are considered.
+ * At insert time, it is known which outermost scope the result depends on
+   (the "result scope"), and the result is valid for all scopes between that
+   and the innermost scope.
 
-The caller maintains a `result_scope` watermark: the maximum scope
-level that contributed to a cached result. On insert, the caller
-provides its `result_scope`; on lookup hit, the stored `result_scope`
-is propagated back via a reference parameter.
+The operations are:
+ * push(): push a new (empty) hashmap onto the stack.
+ * pop(): pop the top hashmap from the stack.
+ * scope(): current size of the stack (i.e. the index of the innermost scope).
+ * lookup(key, result_scope): look up in the top hashmap, returning the value
+   and propagating its result scope into `result_scope` via max.
+ * insert(key, value, result_scope): insert a key-value pair into the hashmaps
+   in the stack at depths in the range from `result_scope` to `scope()`. If it
+   encounters an existing value along the way, uses and returns that value for
+   improved sharing.
+
+The implementation inverts the data structure to a hashmap of stacks for
+efficiency. It uses a generation counter to assign a unique identifier to each
+scope, and maintains a persistent linked list of these to represent the current
+scope stack. Cache entries are not touched upon pop(); instead they are lazily
+cleaned up when accessed (the `rewind` operation). Upon insert, instead of
+duplicating the entry for all valid scopes, it stores one entry with the range
+of scopes it is valid for.
 */
 template<typename Key, typename Value, typename Hash = std::hash<Key>>
 class scope_cache {
@@ -74,6 +93,7 @@ public:
         m_scope_gens_list = m_scope_gens_list->tail;
     }
 
+private:
     /* Lazily clean up the top of a per-key entry stack: degrade entries
        whose scopes were popped and evict entries that are stale due to
        popped result scopes or scope re-entry.  After rewind, either the
@@ -117,6 +137,7 @@ public:
         }
     }
 
+public:
     /* Look up a cached result for the given key at the current scope.
        On hit, updates `result_scope = max(result_scope, entry.result_scope)`
        and returns the cached result. On miss, returns none. */
