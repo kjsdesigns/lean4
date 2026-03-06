@@ -1007,11 +1007,11 @@ theorem decide_eq_false : [Decidable p] → Not p → Eq (  decide p)false
 theorem of_decide_eq_true [inst : Decidable p] : Eq (  decide p)true → p := fun h =>
   match (generalizing := false) inst with
   | isTrue  h₁ => h₁
-  | isFalse h₁ => absurd h (  ne_true_of_eq_false (  decide_eq_false h₁) ) 
+  | isFalse h₁ => absurd h (  ne_true_of_eq_false (  decide_eq_false h₁) )
 
 theorem of_decide_eq_false [inst : Decidable p] : Eq (  decide p)false → Not p := fun h =>
   match (generalizing := false) inst with
-  | isTrue  h₁ => absurd h (  ne_false_of_eq_true (  decide_eq_true h₁) ) 
+  | isTrue  h₁ => absurd h (  ne_false_of_eq_true (  decide_eq_true h₁) )
   | isFalse h₁ => h₁
 
 theorem of_decide_eq_self_eq_true [inst : DecidableEq α] (a : α) : Eq (  decide (  Eq a a) ) true :=
@@ -1286,7 +1286,7 @@ export Max (max)
 Constructs a `Max` instance from a decidable `≤` operation.
 -/
 -- Marked inline so that `min x y + max x y` can be optimized to a single branch.
-@[inline]
+@[inline, implicit_reducible]
 def maxOfLe [LE α] [DecidableRel (  @LE.le α _)] : Max α where
   max x y := ite (  LE.le x y)y x
 
@@ -1303,7 +1303,7 @@ export Min (min)
 Constructs a `Min` instance from a decidable `≤` operation.
 -/
 -- Marked inline so that `min x y + max x y` can be optimized to a single branch.
-@[inline]
+@[inline, implicit_reducible]
 def minOfLe [LE α] [DecidableRel (  @LE.le α _)] : Min α where
   min x y := ite (  LE.le x y)x y
 
@@ -1950,7 +1950,7 @@ set_option linter.missingDocs false in
 -- single generic "theorem" used in `WellFounded` reduction in core
 protected def Nat.eq_or_lt_of_le : {n m: Nat} → LE.le n m → Or (  Eq n m)(  LT.lt n m)
   | zero,   zero,   _ => Or.inl rfl
-  | zero,   succ _, _ => Or.inr (  Nat.succ_le_succ (  Nat.zero_le _) ) 
+  | zero,   succ _, _ => Or.inr (  Nat.succ_le_succ (  Nat.zero_le _) )
   | succ _, zero,   h => absurd h (  not_succ_le_zero _)
   | succ n, succ m, h =>
     have : LE.le n m := Nat.le_of_succ_le_succ h
@@ -2146,7 +2146,7 @@ protected def Nat.div (x y : @& Nat) : Nat :=
         dite (  LE.le y x)(  fun h => HAdd.hAdd (  go fuel (  HSub.hSub x y)(  div_rec_fuel_lemma hy h hfuel) ) 1)
           fun _ => 0
       termination_by structural fuel
-    go (  succ x)x (  Nat.lt_succ_self _) ) 
+    go (  succ x)x (  Nat.lt_succ_self _) )
     fun _ => 0
 
 instance Nat.instDiv : Div Nat := ⟨Nat.div⟩
@@ -2172,15 +2172,15 @@ protected noncomputable def Nat.modCore (x y : Nat) : Nat :=
         go (fuel : Nat) (x : Nat) (hfuel : LT.lt x fuel) : Nat :=
         match fuel with
         | succ fuel =>
-          dite (  LE.le y x)(  fun h => go fuel (  HSub.hSub x y)(  div_rec_fuel_lemma hy h hfuel) ) 
+          dite (  LE.le y x)(  fun h => go fuel (  HSub.hSub x y)(  div_rec_fuel_lemma hy h hfuel) )
             fun _ => x
         termination_by structural fuel
-      go (  succ x)x (  Nat.lt_succ_self _) ) 
+      go (  succ x)x (  Nat.lt_succ_self _) )
     fun _ => x
 
 theorem Nat.modCoreGo_lt {fuel y : Nat} (hy : LT.lt 0 y) : (x : Nat) → (hfuel : LT.lt x fuel) →
     LT.lt (  Nat.modCore.go y hy fuel x hfuel)y :=
-  fuel.rec (  fun _ h => absurd h (  Nat.not_lt_zero _) ) 
+  fuel.rec (  fun _ h => absurd h (  Nat.not_lt_zero _) )
     fun _ ih x _ =>
       show LT.lt (  dite _ _ _)_ from
         match Nat.decLe y x with
@@ -2344,7 +2344,7 @@ This should be used via the instance `DecidableEq (BitVec w)`.
 def BitVec.decEq (x y : BitVec w) : Decidable (  Eq x y):=
   match x, y with
   | ⟨n⟩, ⟨m⟩ =>
-    dite (  Eq n m)(  fun h => isTrue (  h ▸ rfl) ) 
+    dite (  Eq n m)(  fun h => isTrue (  h ▸ rfl) )
       fun h => isFalse fun h' => BitVec.noConfusion rfl (  heq_of_eq h')fun h' => absurd (  eq_of_heq h')h
 
 instance : DecidableEq (  BitVec w):= BitVec.decEq
@@ -2371,11 +2371,11 @@ protected def BitVec.toNat (x : BitVec w) : Nat := x.toFin.val
 
 instance : LT (  BitVec w)where lt := LT.lt ·.toNat ·.toNat
 instance (x y : BitVec w) : Decidable (  LT.lt x y):=
-  inferInstanceAs (  Decidable (  LT.lt x.toNat y.toNat) ) 
+  inferInstanceAs (  Decidable (  LT.lt x.toNat y.toNat) )
 
 instance : LE (  BitVec w)where le := LE.le ·.toNat ·.toNat
 instance (x y : BitVec w) : Decidable (  LE.le x y):=
-  inferInstanceAs (  Decidable (  LE.le x.toNat y.toNat) ) 
+  inferInstanceAs (  Decidable (  LE.le x.toNat y.toNat) )
 
 /-- The number of distinct values representable by `UInt8`, that is, `2^8 = 256`. -/
 abbrev UInt8.size : Nat := 256
@@ -2440,7 +2440,7 @@ Examples:
 def UInt8.decEq (a b : UInt8) : Decidable (  Eq a b):=
   match a, b with
   | ⟨n⟩, ⟨m⟩ =>
-    dite (  Eq n m)(  fun h => isTrue (  h ▸ rfl) ) 
+    dite (  Eq n m)(  fun h => isTrue (  h ▸ rfl) )
       fun h => isFalse fun h' => UInt8.noConfusion h' fun h' => absurd h' h
 
 instance : DecidableEq UInt8 := UInt8.decEq
@@ -2474,7 +2474,7 @@ Examples:
 -/
 @[extern "lean_uint8_dec_lt", implicit_reducible]
 def UInt8.decLt (a b : UInt8) : Decidable (  LT.lt a b):=
-  inferInstanceAs (  Decidable (  LT.lt a.toBitVec b.toBitVec) ) 
+  inferInstanceAs (  Decidable (  LT.lt a.toBitVec b.toBitVec) )
 
 /--
 Decides whether one 8-bit unsigned integer is less than or equal to another. Usually accessed via the
@@ -2490,7 +2490,7 @@ Examples:
 -/
 @[extern "lean_uint8_dec_le", implicit_reducible]
 def UInt8.decLe (a b : UInt8) : Decidable (  LE.le a b):=
-  inferInstanceAs (  Decidable (  LE.le a.toBitVec b.toBitVec) ) 
+  inferInstanceAs (  Decidable (  LE.le a.toBitVec b.toBitVec) )
 
 attribute [instance] UInt8.decLt UInt8.decLe
 
@@ -2543,7 +2543,7 @@ Examples:
 def UInt16.decEq (a b : UInt16) : Decidable (  Eq a b):=
   match a, b with
   | ⟨n⟩, ⟨m⟩ =>
-    dite (  Eq n m)(  fun h => isTrue (  h ▸ rfl) ) 
+    dite (  Eq n m)(  fun h => isTrue (  h ▸ rfl) )
       fun h => isFalse fun h' => UInt16.noConfusion h' fun h' => absurd h' h
 
 instance : DecidableEq UInt16 := UInt16.decEq
@@ -2633,7 +2633,7 @@ Examples:
 -/
 @[extern "lean_uint32_dec_lt", implicit_reducible]
 def UInt32.decLt (a b : UInt32) : Decidable (  LT.lt a b):=
-  inferInstanceAs (  Decidable (  LT.lt a.toBitVec b.toBitVec) ) 
+  inferInstanceAs (  Decidable (  LT.lt a.toBitVec b.toBitVec) )
 
 /--
 Decides whether one 32-bit signed integer is less than or equal to another. Usually accessed via the
@@ -2649,7 +2649,7 @@ Examples:
 -/
 @[extern "lean_uint32_dec_le", implicit_reducible]
 def UInt32.decLe (a b : UInt32) : Decidable (  LE.le a b):=
-  inferInstanceAs (  Decidable (  LE.le a.toBitVec b.toBitVec) ) 
+  inferInstanceAs (  Decidable (  LE.le a.toBitVec b.toBitVec) )
 
 attribute [instance] UInt32.decLt UInt32.decLe
 
@@ -2705,7 +2705,7 @@ Examples:
 def UInt64.decEq (a b : UInt64) : Decidable (  Eq a b):=
   match a, b with
   | ⟨n⟩, ⟨m⟩ =>
-    dite (  Eq n m)(  fun h => isTrue (  h ▸ rfl) ) 
+    dite (  Eq n m)(  fun h => isTrue (  h ▸ rfl) )
       fun h => isFalse fun h' => UInt64.noConfusion h' fun h' => absurd h' h
 
 instance : DecidableEq UInt64 := UInt64.decEq
@@ -2774,7 +2774,7 @@ Examples:
 def USize.decEq (a b : USize) : Decidable (  Eq a b):=
   match a, b with
   | ⟨n⟩, ⟨m⟩ =>
-    dite (  Eq n m)(  fun h => isTrue (  h ▸ rfl) ) 
+    dite (  Eq n m)(  fun h => isTrue (  h ▸ rfl) )
       fun h => isFalse fun h' => USize.noConfusion h' fun h' => absurd h' h
 
 instance : DecidableEq USize := USize.decEq
@@ -2787,7 +2787,7 @@ A `Nat` denotes a valid Unicode code point if it is less than `0x110000` and it 
 surrogate code point (the range `0xd800` to `0xdfff` inclusive).
 -/
 abbrev Nat.isValidChar (n : Nat) : Prop :=
-  Or (  LT.lt n 0xd800)(  And (  LT.lt 0xdfff n)(  LT.lt n 0x110000) ) 
+  Or (  LT.lt n 0xd800)(  And (  LT.lt 0xdfff n)(  LT.lt n 0x110000) )
 
 /--
 A `UInt32` denotes a valid Unicode code point if it is less than `0x110000` and it is also not a
@@ -2851,7 +2851,7 @@ instance : DecidableEq Char :=
 /-- Returns the number of bytes required to encode this `Char` in UTF-8. -/
 def Char.utf8Size (c : Char) : Nat :=
   let v := c.val
-  ite (  LE.le v (  UInt32.ofNatLT 0x7F (  of_decide_eq_true rfl) )  ) 1(  ite (  LE.le v (  UInt32.ofNatLT 0x7FF (  of_decide_eq_true rfl) )  ) 2(  ite (  LE.le v (  UInt32.ofNatLT 0xFFFF (  of_decide_eq_true rfl) )  ) 3 4) ) 
+  ite (  LE.le v (  UInt32.ofNatLT 0x7F (  of_decide_eq_true rfl) )  ) 1(  ite (  LE.le v (  UInt32.ofNatLT 0x7FF (  of_decide_eq_true rfl) )  ) 2(  ite (  LE.le v (  UInt32.ofNatLT 0xFFFF (  of_decide_eq_true rfl) )  ) 3 4) )
 
 /--
 Optional values, which are either `some` around a value from the underlying type or `none`.
@@ -3299,7 +3299,7 @@ protected def Array.appendCore {α : Type u}  (as : Array α) (bs : Array α) : 
   let rec loop (i : Nat) (j : Nat) (as : Array α) : Array α :=(  dite (  LT.lt j bs.size)(  fun hlt =>
         match i with
         | 0           => as
-        | Nat.succ i' => loop i' (  hAdd j 1)(  as.push (  bs.getInternal j hlt) )  ) 
+        | Nat.succ i' => loop i' (  hAdd j 1)(  as.push (  bs.getInternal j hlt) )  )
       fun _ => as)
   loop bs.size 0 as
 
@@ -3324,7 +3324,7 @@ def Array.extract (as : Array α) (start : Nat := 0) (stop : Nat := as.size) : A
   let rec loop (i : Nat) (j : Nat) (bs : Array α) : Array α :=(  dite (  LT.lt j as.size)(  fun hlt =>
         match i with
         | 0           => bs
-        | Nat.succ i' => loop i' (  hAdd j 1)(  bs.push (  as.getInternal j hlt) )  ) 
+        | Nat.succ i' => loop i' (  hAdd j 1)(  bs.push (  as.getInternal j hlt) )  )
       fun _ => bs)
   let sz' := Nat.sub (  min stop as.size)start
   loop sz' start (  emptyWithCapacity sz')
@@ -3398,10 +3398,10 @@ Returns the sequence of bytes in a character's UTF-8 encoding.
 -/
 def String.utf8EncodeChar (c : Char) : List UInt8 :=
   let v := c.val.toNat
-  ite (  LE.le v 0x7f)(  List.cons (  UInt8.ofNat v)List.nil)(  ite (  LE.le v 0x7ff)(  List.cons(  UInt8.ofNat (  HAdd.hAdd (  HMod.hMod (  HDiv.hDiv v 64)0x20)0xc0) ) (  List.cons(  UInt8.ofNat (  HAdd.hAdd (  HMod.hMod v 0x40)0x80) ) 
-          List.nil) ) (  ite (  LE.le v 0xffff)(  List.cons(  UInt8.ofNat (  HAdd.hAdd (  HMod.hMod (  HDiv.hDiv v 4096)0x10)0xe0) ) (  List.cons(  UInt8.ofNat (  HAdd.hAdd (  HMod.hMod (  HDiv.hDiv v 64)0x40)0x80) ) (  List.cons(  UInt8.ofNat (  HAdd.hAdd (  HMod.hMod v 0x40)0x80) ) 
-              List.nil) )  ) (  List.cons(  UInt8.ofNat (  HAdd.hAdd (  HMod.hMod (  HDiv.hDiv v 262144)0x08)0xf0) ) (  List.cons(  UInt8.ofNat (  HAdd.hAdd (  HMod.hMod (  HDiv.hDiv v 4096)0x40)0x80) ) (  List.cons(  UInt8.ofNat (  HAdd.hAdd (  HMod.hMod (  HDiv.hDiv v 64)0x40)0x80) ) (  List.cons(  UInt8.ofNat (  HAdd.hAdd (  HMod.hMod v 0x40)0x80) ) 
-                List.nil) )  )  )  )  ) 
+  ite (  LE.le v 0x7f)(  List.cons (  UInt8.ofNat v)List.nil)(  ite (  LE.le v 0x7ff)(  List.cons(  UInt8.ofNat (  HAdd.hAdd (  HMod.hMod (  HDiv.hDiv v 64)0x20)0xc0) ) (  List.cons(  UInt8.ofNat (  HAdd.hAdd (  HMod.hMod v 0x40)0x80) )
+          List.nil) ) (  ite (  LE.le v 0xffff)(  List.cons(  UInt8.ofNat (  HAdd.hAdd (  HMod.hMod (  HDiv.hDiv v 4096)0x10)0xe0) ) (  List.cons(  UInt8.ofNat (  HAdd.hAdd (  HMod.hMod (  HDiv.hDiv v 64)0x40)0x80) ) (  List.cons(  UInt8.ofNat (  HAdd.hAdd (  HMod.hMod v 0x40)0x80) )
+              List.nil) )  ) (  List.cons(  UInt8.ofNat (  HAdd.hAdd (  HMod.hMod (  HDiv.hDiv v 262144)0x08)0xf0) ) (  List.cons(  UInt8.ofNat (  HAdd.hAdd (  HMod.hMod (  HDiv.hDiv v 4096)0x40)0x80) ) (  List.cons(  UInt8.ofNat (  HAdd.hAdd (  HMod.hMod (  HDiv.hDiv v 64)0x40)0x80) ) (  List.cons(  UInt8.ofNat (  HAdd.hAdd (  HMod.hMod v 0x40)0x80) )
+                List.nil) )  )  )  )  )
 
 /-- Encode a list of characters (Unicode scalar value) in UTF-8. This is an inefficient model
 implementation. Use `List.asString` instead. -/
@@ -3581,7 +3581,7 @@ the current runtime:
   a scalar type like `UInt8`).
 -/
 unsafe def unsafeCast {α : Sort u} {β : Sort v} (a : α) : β :=
-  PLift.down (  ULift.down.{max u v} (  cast lcProof (  ULift.up.{max u v} (  PLift.up a) )  )  ) 
+  PLift.down (  ULift.down.{max u v} (  cast lcProof (  ULift.up.{max u v} (  PLift.up a) )  )  )
 
 
 /-- Auxiliary definition for `panic`. -/
@@ -4640,7 +4640,7 @@ with
   @[computed_field, inline] hash : Name → UInt64
     | .anonymous => .ofNatLT 1723 (  of_decide_eq_true rfl)
     | .str p s => mixHash p.hash s.hash
-    | .num p v => mixHash p.hash (  dite (  LT.lt v UInt64.size)(  fun h => UInt64.ofNatLT v h)fun _ => UInt64.ofNatLT 17 (  of_decide_eq_true rfl) ) 
+    | .num p v => mixHash p.hash (  dite (  LT.lt v UInt64.size)(  fun h => UInt64.ofNatLT v h)fun _ => UInt64.ofNatLT 17 (  of_decide_eq_true rfl) )
 
 instance : Inhabited Name where
   default := Name.anonymous
@@ -5819,7 +5819,7 @@ structure Methods where
   /-- Resolves the given name to an overload list of global definitions.
   The `List String` in each alternative is the deduced list of projections
   (which are ambiguous with name components). -/
-  resolveGlobalName : Name → MacroM (  List (  Prod Name (  List String) )  ) 
+  resolveGlobalName : Name → MacroM (  List (  Prod Name (  List String) )  )
   deriving Inhabited
 
 /-- Implementation of `mkMethods`. -/
