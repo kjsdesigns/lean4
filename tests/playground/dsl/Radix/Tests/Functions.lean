@@ -27,6 +27,8 @@ def doubleProgram : Program := {
   ]
 }
 
+#guard (doubleProgram.run 10000).isOk
+
 -- Factorial (iterative)
 def factProgram : Program := {
   funs := [
@@ -48,10 +50,7 @@ def factProgram : Program := {
   ]
 }
 
-#eval do
-  match factProgram.run 10000 with
-  | .ok _ => pure ()
-  | .error msg => IO.println s!"Error: {msg}"
+#guard (factProgram.run 10000).isOk
 
 -- Fibonacci (iterative)
 def fibProgram : Program := {
@@ -77,10 +76,7 @@ def fibProgram : Program := {
   ]
 }
 
-#eval do
-  match fibProgram.run 10000 with
-  | .ok _ => pure ()
-  | .error msg => IO.println s!"Error: {msg}"
+#guard (fibProgram.run 10000).isOk
 
 -- Multiple function calls
 def multiCallProgram : Program := {
@@ -102,9 +98,6 @@ def multiCallProgram : Program := {
   ]
 }
 
-#eval do
-  match multiCallProgram.run 10000 with
-  | .ok _ => pure ()
-  | .error msg => IO.println s!"Error: {msg}"
+#guard (multiCallProgram.run 10000).isOk
 
 end Radix.Tests

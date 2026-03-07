@@ -18,7 +18,7 @@ open Std
 abbrev TyEnv := HashMap String Ty
 abbrev FunSigs := HashMap String (List Ty × Ty)
 
-private def BinOp.typeOfResult : BinOp → Ty → Ty → Option Ty
+@[simp] def BinOp.typeOfResult : BinOp → Ty → Ty → Option Ty
   | .add, .uint64, .uint64 | .sub, .uint64, .uint64
   | .mul, .uint64, .uint64 | .div, .uint64, .uint64
   | .mod, .uint64, .uint64 => some .uint64
@@ -29,7 +29,7 @@ private def BinOp.typeOfResult : BinOp → Ty → Ty → Option Ty
   | .strAppend, .string, .string => some .string
   | _, _, _ => none
 
-private def UnaryOp.typeOfResult : UnaryOp → Ty → Option Ty
+@[simp] def UnaryOp.typeOfResult : UnaryOp → Ty → Option Ty
   | .not, .bool => some .bool
   | .neg, .uint64 => some .uint64
   | _, _ => none

@@ -57,10 +57,7 @@ def strReverseProgram : Program := {
   ]
 }
 
-#eval do
-  match strReverseProgram.run 10000 with
-  | .ok _ => pure ()
-  | .error msg => IO.println s!"Error: {msg}"
+#guard (strReverseProgram.run 10000).isOk
 
 -- Empty string
 def test_empty_str := `[RStmt|

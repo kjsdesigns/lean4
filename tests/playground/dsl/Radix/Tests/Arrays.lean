@@ -59,10 +59,7 @@ def arraySumProgram : Program := {
   main := `[RStmt| arraySum(10); ]
 }
 
-#eval do
-  match arraySumProgram.run 10000 with
-  | .ok _ => pure ()
-  | .error msg => IO.println s!"Error: {msg}"
+#guard (arraySumProgram.run 10000).isOk
 
 -- Bubble sort (simplified — just tests alloc/fill/free cycle)
 def bubbleSortProgram : Program := {
@@ -85,9 +82,6 @@ def bubbleSortProgram : Program := {
   main := `[RStmt| bubbleSort(5); ]
 }
 
-#eval do
-  match bubbleSortProgram.run 10000 with
-  | .ok _ => pure ()
-  | .error msg => IO.println s!"Error: {msg}"
+#guard (bubbleSortProgram.run 10000).isOk
 
 end Radix.Tests
