@@ -202,9 +202,11 @@ jobs:
             fi
           fi
 
-          echo "check-level=$check_level" >> "$GITHUB_OUTPUT"
-          echo "fast=$fast" >> "$GITHUB_OUTPUT"
-          echo "lake-ci=$lake_ci" >> "$GITHUB_OUTPUT"
+          {
+            echo "check-level=$check_level"
+            echo "fast=$fast"
+            echo "lake-ci=$lake_ci"
+          } >> "$GITHUB_OUTPUT"
         env:
           GH_TOKEN: ${{ github.token }}
 
