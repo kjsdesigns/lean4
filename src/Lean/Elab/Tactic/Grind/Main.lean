@@ -253,6 +253,9 @@ def grind
     return ()
   mvarId.withContext do
     let params ← mkGrindParams config only ps mvarId
+    let params := if Grind.grind.unusedLemmaThreshold.get (← getOptions) > 0 then
+      { params with config.markInstances := true }
+    else params
     Grind.withProtectedMCtx config mvarId fun mvarId' => do
       let finalize (result : Grind.Result) : TacticM Unit := do
         if result.hasFailed then
