@@ -502,13 +502,39 @@ structure A' extends A List where
 /-- info: A'.mk (A.mk fun {α β} g xs => List.map g xs) : A' -/
 #guard_msgs in #check { : A'}
 
-/--
-error: Default value for field `x` will never be applied since it contains the field itself:
-  x + 1
+/-!
+Default values cannot refer to the field.
 -/
+/-- error: Unknown identifier `x` -/
 #guard_msgs in
-structure InapplicableDefault where
+structure InapplicableDefault1 where
   x : Nat := x + 1
+
+/-!
+Default values can refer to later fields.
+-/
+structure ApplicableDefault2 where
+  x : Nat := y + 1
+  y : Fin 2
+
+/-!
+Default values cannot refer to later fields if they depend on the field.
+-/
+/-- error: Unknown identifier `y` -/
+#guard_msgs in
+structure InpplicableDefault3 where
+  x : Nat := y + 1
+  y : Fin x
+
+/-!
+Default values cannot refer to the field, even for inherited fields.
+-/
+structure Base2 where
+  x : Nat
+/-- error: Unknown identifier `x` -/
+#guard_msgs in
+structure InapplicableDefault2 extends Base2 where
+  x := x
 
 end TestOptParam
 

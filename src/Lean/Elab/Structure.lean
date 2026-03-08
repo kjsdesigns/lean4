@@ -1083,7 +1083,7 @@ The behavior is slightly different between new fields and inherited fields:
 - New fields: We re-enter the binders elaborated in `elabFieldType`, then elaborate the value.
 - Inherited fields: We wrap the value in `fun` syntax to make use of the binders, then elaborate that.
 
-For inherited fields, we have already checked
+For inherited fields, we have already done checks that the binders and types are suitable.
 -/
 private def elabStructFieldDefaults (views : Array StructFieldView) : StructElabM Unit := do
   for view in views do
@@ -1096,8 +1096,12 @@ private def elabStructFieldDefaults (views : Array StructFieldView) : StructElab
         match defaultView with
         | .optParam valStx =>
           let type ← inferType info.fvar
-          let value ←
+          -- Prevent default values from being able to refer to the field itself,
+          -- since such recursive default values cannot be applied.
+          let fieldDeps ← collectForwardDeps #[info.fvar] (preserveOrder := false)
+          let value ← withErasedFVars (fieldDeps.map (·.fvarId!)) do
             if info.kind.isFromSubobject then
+              -- Inherited field. Use `fun` to elaborate binders.
               let mut valStx := valStx
               if let some fieldType := view.type? then
                 valStx ← `(($valStx:term : $fieldType:term))
@@ -1106,6 +1110,7 @@ private def elabStructFieldDefaults (views : Array StructFieldView) : StructElab
                 valStx ← `(fun $binders* => $valStx:term)
               Term.elabTermEnsuringType valStx type
             else
+              -- New field. Use the pre-elaborated binders.
               forallBoundedTelescope type info.numBinders fun xs type => do
                 let value ← Term.elabTermEnsuringType valStx type
                 mkLambdaFVars xs value
