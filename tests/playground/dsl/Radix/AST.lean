@@ -77,6 +77,7 @@ inductive Stmt where
   | ret : Expr → Stmt
   | block : List Stmt → Stmt
   | callStmt : String → List Expr → Stmt
+  | scope : List (String × Ty) → List Expr → Stmt → Stmt
   deriving Repr, Inhabited
 
 infixr:130 " ;; " => Stmt.seq

@@ -139,6 +139,18 @@ partial def Stmt.interp (fuel : Nat) (s : Stmt) : InterpM (Option Value) := do
           | some (_, σ'') => set σ''; return none
           | none => throw "callStmt: frame stack underflow"
 
+    | .scope params args body =>
+      let vs ← evalArgs args
+      match mkFrame params vs with
+      | .error msg => throw msg
+      | .ok frame =>
+        modify fun σ => σ.pushFrame frame
+        let _retVal ← body.interp fuel
+        let σ' ← get
+        match σ'.popFrame with
+        | some (_, σ'') => set σ''; return none
+        | none => throw "scope: frame stack underflow"
+
 /-- Run a program with the given fuel. -/
 def Program.run (p : Program) (fuel : Nat := 1000) : Except String PState :=
   let σ := PState.initFromProgram p

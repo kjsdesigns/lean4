@@ -1,0 +1,4 @@
+name = "radix"
+
+[[lean_lib]]
+name = "Radix"
