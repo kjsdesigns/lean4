@@ -30,6 +30,7 @@ def Stmt.size : Stmt → Nat
   | .ret _ => 1
   | .block stmts => Stmt.sizeList stmts
   | .callStmt _ _ => 1
+  | .scope _ _ body => 1 + body.size
 
 def Stmt.sizeList : List Stmt → Nat
   | [] => 0
@@ -49,6 +50,7 @@ def Stmt.containsCall (name : String) : Stmt → Bool
   | .while _ b => b.containsCall name
   | .block stmts => Stmt.containsCallList name stmts
   | .callStmt f _ => f == name
+  | .scope _ _ body => body.containsCall name
 
 def Stmt.containsCallList (name : String) : List Stmt → Bool
   | [] => false
@@ -89,6 +91,7 @@ def Stmt.substParams (params : List String) (args : List Expr) : Stmt → Stmt
   | .ret e => .ret (Expr.substVars params args e)
   | .block stmts => .block (Stmt.substParamsList params args stmts)
   | .callStmt f as => .callStmt f (Expr.substVarsList params args as)
+  | .scope ps as body => .scope ps (Expr.substVarsList params args as) (body.substParams params args)
 
 def Stmt.substParamsList (params : List String) (args : List Expr) : List Stmt → List Stmt
   | [] => []
@@ -119,11 +122,11 @@ def Stmt.inline (funs : HashMap String FunDecl) (depth : Nat) : Stmt → Stmt
       match funs.get? name with
       | some fd =>
         if fd.body.size ≤ inlineThreshold && !fd.body.containsCall name then
-          let paramNames := fd.params.map (·.1)
-          .block [fd.body.substParams paramNames args |>.inline funs depth']
+          .scope fd.params args (fd.body.inline funs depth')
         else
           .callStmt name args
       | none => .callStmt name args
+  | .scope ps as body => .scope ps as (body.inline funs depth)
 
 def Stmt.inlineList (funs : HashMap String FunDecl) (depth : Nat) : List Stmt → List Stmt
   | [] => []
@@ -151,61 +154,115 @@ theorem Stmt.inlineList_eq_map (funs : HashMap String FunDecl) (depth : Nat) (st
     simp only [Stmt.inlineList, List.map]
     exact congrArg _ ih
 
--- Correctness: inlining preserves semantics.
--- The `callStmt` case when actual inlining occurs requires showing that
--- parameter substitution + direct execution is equivalent to
--- frame push + body execution + frame pop. This is left as `sorry`.
-theorem Stmt.inline_correct (funs : HashMap String FunDecl) (depth : Nat)
-    (h : BigStep σ s r) : BigStep σ (s.inline funs depth) r := by
+-- Helper: PState.funs is preserved by updateCurrentFrame
+private theorem PState.updateCurrentFrame_funs {σ : PState} {f : Frame → Frame} {σ' : PState}
+    (h : σ.updateCurrentFrame f = some σ') : σ'.funs = σ.funs := by
+  cases σ with | mk frames heap funs =>
+  unfold PState.updateCurrentFrame at h
+  cases frames with
+  | nil => exact absurd h nofun
+  | cons fr rest => simp at h; subst h; rfl
+
+private theorem PState.setVar_funs {σ : PState} {x : String} {v : Value} {σ' : PState}
+    (h : σ.setVar x v = some σ') : σ'.funs = σ.funs :=
+  PState.updateCurrentFrame_funs h
+
+private theorem PState.popFrame_funs {σ : PState} {fr : Frame} {σ' : PState}
+    (h : σ.popFrame = some (fr, σ')) : σ'.funs = σ.funs := by
+  cases σ with | mk frames heap funs =>
+  unfold PState.popFrame at h
+  cases frames with
+  | nil => exact absurd h nofun
+  | cons _ rest => simp at h; obtain ⟨_, rfl⟩ := h; rfl
+
+-- funs field is never modified during execution
+theorem BigStep.funs_preserved (h : BigStep σ s r) : r.state.funs = σ.funs := by
   induction h with
-  | skip => simp only [Stmt.inline]; exact .skip
-  | assign he hs => simp only [Stmt.inline]; exact .assign he hs
-  | decl he hs => simp only [Stmt.inline]; exact .decl he hs
+  | skip => rfl
+  | assign _ hs => exact PState.setVar_funs hs
+  | decl _ hs => exact PState.setVar_funs hs
+  | seqNormal _ _ ih₁ ih₂ =>
+    simp only [StmtResult.state] at ih₁; rw [ih₂, ih₁]
+  | seqReturn _ ih₁ => exact ih₁
+  | ifTrue _ _ ih => exact ih
+  | ifFalse _ _ ih => exact ih
+  | whileTrue _ _ _ ihb ihw =>
+    simp only [StmtResult.state] at ihb; rw [ihw, ihb]
+  | whileReturn _ _ ih => exact ih
+  | whileFalse _ => rfl
+  | alloc _ _ hs => have h := PState.setVar_funs hs; exact h
+  | free _ _ => rfl
+  | arrSet _ _ _ _ => rfl
+  | ret _ => rfl
+  | block _ ih => exact ih
+  | callStmt _ _ _ _ _ hpop ih_body =>
+    simp only [StmtResult.state]
+    rw [PState.popFrame_funs hpop, ih_body]; rfl
+  | scope _ _ _ _ hpop ih_body =>
+    simp only [StmtResult.state]
+    rw [PState.popFrame_funs hpop, ih_body]; rfl
+
+-- Correctness: inlining preserves semantics.
+-- Uses `scope` for frame isolation, with `hfuns` ensuring the inline
+-- function table matches the runtime function table.
+theorem Stmt.inline_correct {funs : HashMap String FunDecl}
+    (h : BigStep σ s r) (hfuns : σ.funs = funs) :
+    ∀ depth, BigStep σ (s.inline funs depth) r := by
+  induction h with
+  | skip => intro; simp only [Stmt.inline]; exact .skip
+  | assign he hs => intro; simp only [Stmt.inline]; exact .assign he hs
+  | decl he hs => intro; simp only [Stmt.inline]; exact .decl he hs
   | seqNormal h₁ h₂ ih₁ ih₂ =>
-    simp only [Stmt.inline]; exact .seqNormal ih₁ ih₂
+    intro depth; simp only [Stmt.inline]
+    exact .seqNormal (ih₁ hfuns depth) (ih₂ ((BigStep.funs_preserved h₁).trans hfuns) depth)
   | seqReturn h₁ ih₁ =>
-    simp only [Stmt.inline]; exact .seqReturn ih₁
+    intro depth; simp only [Stmt.inline]; exact .seqReturn (ih₁ hfuns depth)
   | ifTrue hc ht ih =>
-    simp only [Stmt.inline]; exact .ifTrue hc ih
+    intro depth; simp only [Stmt.inline]; exact .ifTrue hc (ih hfuns depth)
   | ifFalse hc hf ih =>
-    simp only [Stmt.inline]; exact .ifFalse hc ih
+    intro depth; simp only [Stmt.inline]; exact .ifFalse hc (ih hfuns depth)
   | whileTrue hc hb hw ihb ihw =>
-    simp only [Stmt.inline]
-    simp only [Stmt.inline] at ihw
-    exact .whileTrue hc ihb ihw
+    intro depth; simp only [Stmt.inline]
+    have ihw' := ihw ((BigStep.funs_preserved hb).trans hfuns)
+    simp only [Stmt.inline] at ihw'
+    exact .whileTrue hc (ihb hfuns depth) (ihw' depth)
   | whileReturn hc hb ih =>
-    simp only [Stmt.inline]; exact .whileReturn hc ih
+    intro depth; simp only [Stmt.inline]; exact .whileReturn hc (ih hfuns depth)
   | whileFalse hc =>
-    simp only [Stmt.inline]; exact .whileFalse hc
-  | alloc hsz ha hs => simp only [Stmt.inline]; exact .alloc hsz ha hs
-  | free he hf => simp only [Stmt.inline]; exact .free he hf
-  | arrSet harr hidx hval hw => simp only [Stmt.inline]; exact .arrSet harr hidx hval hw
-  | ret he => simp only [Stmt.inline]; exact .ret he
+    intro; simp only [Stmt.inline]; exact .whileFalse hc
+  | alloc hsz ha hs =>
+    intro; simp only [Stmt.inline]; exact .alloc hsz ha hs
+  | free he hf =>
+    intro; simp only [Stmt.inline]; exact .free he hf
+  | arrSet harr hidx hval hw =>
+    intro; simp only [Stmt.inline]; exact .arrSet harr hidx hval hw
+  | ret he =>
+    intro; simp only [Stmt.inline]; exact .ret he
   | block hb ih =>
-    simp only [Stmt.inline]
+    intro depth; simp only [Stmt.inline]
     apply BigStep.block
     rw [Stmt.inlineList_eq_map]
-    rw [Stmt.inline_foldl_seq] at ih
-    simp only [Stmt.inline] at ih
-    exact ih
-  | callStmt hlook hargs hparams hframe hbody hpop _ =>
-    -- Case split on depth: at 0 the function is identity on callStmt
+    have ih' := ih hfuns depth
+    rw [Stmt.inline_foldl_seq] at ih'
+    simp only [Stmt.inline] at ih'
+    exact ih'
+  | callStmt hlook hargs hparams hframe hbody hpop ih_body =>
+    rename_i fd _ _ _ _ _ _ name _
+    intro depth
     match depth with
     | 0 =>
       simp only [Stmt.inline]
       exact .callStmt hlook hargs hparams hframe hbody hpop
     | depth' + 1 =>
       simp only [Stmt.inline]
+      have hget : funs.get? name = some fd := by
+        rw [← hfuns]; exact hlook
+      simp only [hget]
       split
-      · -- funs.get? name = some fd': if-then-else on inlining condition
-        split
-        · -- inlining condition true: actual inlining occurs
-          -- Need: BigStep σ (.block [fd'.body.substParams ... |>.inline funs depth']) (.normal σ')
-          -- This requires substParams semantic equivalence (non-trivial).
-          sorry
-        · -- inlining condition false: identity
-          exact .callStmt hlook hargs hparams hframe hbody hpop
-      · -- funs.get? name = none
-        exact .callStmt hlook hargs hparams hframe hbody hpop
+      · exact .scope hargs hparams hframe (ih_body hfuns depth') hpop
+      · exact .callStmt hlook hargs hparams hframe hbody hpop
+  | scope hargs hlen hframe hbody hpop ih_body =>
+    intro depth; simp only [Stmt.inline]
+    exact .scope hargs hlen hframe (ih_body hfuns depth) hpop
 
 end Radix

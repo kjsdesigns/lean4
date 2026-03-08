@@ -42,6 +42,7 @@ def Stmt.readVars : Stmt → List String
   | .ret e => Expr.readVars e
   | .block stmts => Stmt.readVarsList stmts
   | .callStmt _ args => Expr.readVarsList args
+  | .scope _ args body => Expr.readVarsList args ++ body.readVars
 
 def Stmt.readVarsList : List Stmt → List String
   | [] => []
@@ -79,6 +80,7 @@ def Stmt.deadCodeElim : Stmt → Stmt
   | .ret e => .ret e
   | .block stmts => .block (Stmt.deadCodeElimList stmts)
   | .callStmt f args => .callStmt f args
+  | .scope ps as body => .scope ps as body.deadCodeElim
 
 def Stmt.deadCodeElimList : List Stmt → List Stmt
   | [] => []
@@ -197,5 +199,7 @@ theorem Stmt.deadCodeElim_correct (h : BigStep σ s r) : BigStep σ s.deadCodeEl
     exact BigStep.block (dce_foldl_skip _ _ _ ih)
   | callStmt hlook hargs hparams hframe hbody hpop _ =>
     exact BigStep.callStmt hlook hargs hparams hframe hbody hpop
+  | scope hargs hlen hframe hbody hpop ih_body =>
+    exact BigStep.scope hargs hlen hframe ih_body hpop
 
 end Radix

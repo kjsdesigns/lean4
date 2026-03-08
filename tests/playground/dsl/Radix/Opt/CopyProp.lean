@@ -75,6 +75,8 @@ def Stmt.copyProp (m : CopyMap) : Stmt → Stmt × CopyMap
     (.block stmts', m')
   | .callStmt f args =>
     (.callStmt f (Expr.copyPropList m args), {})
+  | .scope ps as body =>
+    (.scope ps (Expr.copyPropList m as) (body.copyProp {}).1, {})
 
 def Stmt.copyPropList (m : CopyMap) : List Stmt → List Stmt × CopyMap
   | [] => ([], m)
@@ -360,6 +362,15 @@ theorem Stmt.copyProp_correct' (m : CopyMap) (h : BigStep σ s r) (hm : m.agrees
     · exact BigStep.callStmt hlook
         (by rw [Expr.copyPropList_mapM_eval m _ _ hm]; exact hargs)
         hparams hframe hbody hpop
+    · intro σ' heq; cases heq; exact CopyMap.agrees_empty _
+  | scope hargs hlen hframe hbody hpop ih_body =>
+    simp only [Stmt.copyProp]
+    constructor
+    · exact BigStep.scope
+        (by rw [Expr.copyPropList_mapM_eval m _ _ hm]; exact hargs)
+        hlen hframe
+        ((ih_body {} (CopyMap.agrees_empty _)).1)
+        hpop
     · intro σ' heq; cases heq; exact CopyMap.agrees_empty _
 
 theorem Stmt.copyProp_correct (h : BigStep σ s r) :

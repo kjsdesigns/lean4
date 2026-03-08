@@ -62,5 +62,11 @@ theorem BigStep.det (h₁ : BigStep σ s r₁) (h₂ : BigStep σ s r₂) : r₁
       simp_all [PState.lookupFun]
       cases ihbody hbody₂
       simp_all
+  | scope hargs hlen hframe hbody hpop ihbody =>
+    cases h₂ with
+    | scope hargs₂ hlen₂ hframe₂ hbody₂ hpop₂ =>
+      simp_all
+      cases ihbody hbody₂
+      simp_all
 
 end Radix

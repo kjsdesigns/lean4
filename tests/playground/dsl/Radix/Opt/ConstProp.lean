@@ -81,6 +81,8 @@ def Stmt.constProp (m : ConstMap) : Stmt → Stmt × ConstMap
     (.block stmts', m')
   | .callStmt f args =>
     (.callStmt f (Expr.constPropFoldList m args), {})
+  | .scope ps as body =>
+    (.scope ps (Expr.constPropFoldList m as) (body.constProp {}).1, {})
 
 def Stmt.constPropList (m : ConstMap) : List Stmt → List Stmt × ConstMap
   | [] => ([], m)
@@ -384,6 +386,15 @@ theorem Stmt.constProp_correct' (m : ConstMap) (h : BigStep σ s r) (hm : m.agre
     · exact BigStep.callStmt hlook
         (by rw [Expr.constPropFoldList_mapM_eval m _ _ hm]; exact hargs)
         hparams hframe hbody hpop
+    · intro σ' heq; cases heq; exact ConstMap.agrees_empty _
+  | scope hargs hlen hframe hbody hpop ih_body =>
+    simp only [Stmt.constProp]
+    constructor
+    · exact BigStep.scope
+        (by rw [Expr.constPropFoldList_mapM_eval m _ _ hm]; exact hargs)
+        hlen hframe
+        ((ih_body {} (ConstMap.agrees_empty _)).1)
+        hpop
     · intro σ' heq; cases heq; exact ConstMap.agrees_empty _
 
 -- Correctness: constant propagation preserves semantics

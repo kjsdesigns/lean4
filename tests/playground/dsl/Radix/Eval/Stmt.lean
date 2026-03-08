@@ -86,6 +86,13 @@ inductive BigStep : PState → Stmt → StmtResult → Prop where
       (hpop : bodyResult.state.popFrame = some (fr, σ')) :
     BigStep σ (.callStmt name args) (.normal σ')
 
+  | scope (hargs : args.mapM (Expr.eval σ) = some vs)
+      (hlen : params.length = vs.length)
+      (hframe : frame = { env := (params.zip vs).foldl (fun env (p, v) => env.set p.1 v) Env.empty })
+      (hbody : BigStep (σ.pushFrame frame) body bodyResult)
+      (hpop : bodyResult.state.popFrame = some (fr, σ')) :
+    BigStep σ (.scope params args body) (.normal σ')
+
 set_option quotPrecheck false in
 notation:60 "⟨" σ ", " s "⟩" " ⇓ " r:60 => BigStep σ s r
 

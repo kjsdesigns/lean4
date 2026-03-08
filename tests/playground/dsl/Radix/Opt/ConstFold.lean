@@ -299,6 +299,7 @@ def Stmt.constFold : Stmt → Stmt
   | .ret e => .ret (Expr.constFold e)
   | .block stmts => .block (Stmt.constFoldList stmts)
   | .callStmt f args => .callStmt f (Expr.constFoldList args)
+  | .scope ps as body => .scope ps (Expr.constFoldList as) body.constFold
 
 def Stmt.constFoldList : List Stmt → List Stmt
   | [] => []
@@ -515,5 +516,10 @@ theorem Stmt.constFold_correct (h : BigStep σ s r) : BigStep σ s.constFold r :
     exact BigStep.callStmt hlook
       (by rw [constFoldList_mapM_eval]; exact hargs)
       hparams hframe hbody hpop
+  | scope hargs hlen hframe hbody hpop ih_body =>
+    simp only [Stmt.constFold]
+    exact BigStep.scope
+      (by rw [constFoldList_mapM_eval]; exact hargs)
+      hlen hframe ih_body hpop
 
 end Radix
