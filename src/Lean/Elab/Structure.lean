@@ -1360,19 +1360,18 @@ private def addDefaults (levelParams : List Name) (params : Array Expr) (replace
   let parentFVarIds := fieldInfos |>.filter (·.kind.isParent) |>.map (·.fvar.fvarId!)
   let fields := fieldInfos |>.filter (!·.kind.isParent)
   withLCtx lctx (← getLocalInstances) do
-    let addDefault (thisFieldInfo : StructFieldInfo) (declName : Name) (value : Expr) : StructElabM Unit := do
+    let addDefault (declName : Name) (value : Expr) : StructElabM Unit := do
       let value ← instantiateMVars value
       -- If there are mvars, `checkDefaults` already logged an error.
       unless value.hasMVar || value.hasSyntheticSorry do
-        let value ← zetaDeltaFVars value parentFVarIds
         /- The identity function is used as "marker". -/
-        let value ← fields.foldrM (init := ← mkId value) fun fieldInfo val => do
+        let value ← mkId value
+        let value ← zetaDeltaFVars value parentFVarIds
+        let value ← fields.foldrM (init := value) fun fieldInfo val => do
           let decl ← fieldInfo.fvar.fvarId!.getDecl
           let type ← zetaDeltaFVars decl.type parentFVarIds
           let val' := val.abstract #[fieldInfo.fvar]
           if val'.hasLooseBVar 0 then
-            if fieldInfo.fvar == thisFieldInfo.fvar then
-              logErrorAt thisFieldInfo.ref m!"Default value for field `{thisFieldInfo.name}` will never be applied since it contains the field itself:{indentExpr value}"
             return .lam decl.userName type val' .default
           else
             return val
@@ -1388,9 +1387,9 @@ private def addDefaults (levelParams : List Name) (params : Array Expr) (replace
     for fieldInfo in fieldInfos do
       if let some (.optParam value) := fieldInfo.default? then
         withoutExporting (when := isPrivateName fieldInfo.declName) do
-          addDefault fieldInfo (mkDefaultFnOfProjFn fieldInfo.declName) value
+          addDefault (mkDefaultFnOfProjFn fieldInfo.declName) value
       else if let some (.optParam value) := fieldInfo.resolvedDefault? then
-        addDefault fieldInfo (mkInheritedDefaultFnOfProjFn fieldInfo.declName) value
+        addDefault (mkInheritedDefaultFnOfProjFn fieldInfo.declName) value
 
 /--
 Given `type` of the form `forall ... (source : A), B`, return `forall ... [source : A], B`.
