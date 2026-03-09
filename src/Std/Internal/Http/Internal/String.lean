@@ -27,7 +27,7 @@ open Char
 set_option linter.all true
 
 /--
-Core character quoting used by `String.quote`.
+Core character quoting used by `quoteHttpString`.
 
 In string context (`inString := true`), this emits:
 - `qdtext` characters directly
@@ -49,20 +49,35 @@ def quoteCore (c : Char) (inString : Bool := false) : String :=
       panic! "invalid HTTP quoted-pair content"
 
 /--
-Attempts to quote `s` as an HTTP `quoted-string`:
-`DQUOTE *( qdtext / quoted-pair ) DQUOTE`.
+Quotes `s` as an HTTP `quoted-string`: `DQUOTE *( qdtext / quoted-pair ) DQUOTE`.
 
-Returns `none` when any character in `s` cannot be represented by the grammar.
+If every character is a `tchar` and the string is non-empty, the string is returned as-is (it is
+already a valid token). Otherwise the string is wrapped in double quotes, escaping `"` and `\`
+as `quoted-pair`.
+
+Requires a proof that every character passes `quotedStringChar`.
 -/
 @[expose]
-def quoteHttpString? (s : String) : Option String :=
-  if s.all tchar ∧ ¬s.isEmpty then
-    some s
-  else if s.all quotedStringChar then
-    some (.append
+def quoteHttpString (s : String) (_ : s.toList.all quotedStringChar) : String :=
+  let sl := s.toList
+
+  if sl.all tchar ∧ ¬sl.isEmpty then
+    s
+  else
+    (.append
       (.foldl (fun acc c =>
         .append acc (quoteCore c (inString := true))) "\"" s)
       "\"")
+
+/--
+Attempts to quote `s` as an HTTP `quoted-string`.
+
+Returns `some` with the quoted result when every character passes `quotedStringChar`, or `none`
+when any character cannot be represented by the grammar.
+-/
+def quoteHttpString? (s : String) : Option String :=
+  if h : s.toList.all quotedStringChar then
+    some <| quoteHttpString s h
   else
     none
 
