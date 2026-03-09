@@ -548,6 +548,13 @@ class instantiate_delayed_fn {
         /* Pop scope; stale entries are detected by generation mismatch on lookup. */
         m_cache.pop();
 
+        /* The result no longer depends on the popped scope — all fvars from
+           that scope have been substituted. Clamp result_scope to the current
+           scope so that cache entries for this result (and ancestors) are not
+           spuriously invalidated. Dependencies on outer scopes (from fvars of
+           enclosing delayed MVars) are preserved since they are ≤ m_scope. */
+        m_result_scope = std::min(m_result_scope, m_cache.scope());
+
         /* Restore the fvar substitution. */
         for (auto & se : saved_entries) {
             if (!se.had_old) {
