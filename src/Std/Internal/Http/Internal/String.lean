@@ -29,24 +29,17 @@ set_option linter.all true
 /--
 Core character quoting used by `quoteHttpString`.
 
-In string context (`inString := true`), this emits:
-- `qdtext` characters directly
-- `"` and `\\` as `quoted-pair`
-and panics for characters outside the grammar.
+Emits `qdtext` characters directly and `"` / `\\` as `quoted-pair`.
+The proof `h₀ : quotedStringChar c` guarantees the impossible branch is unreachable.
 -/
-def quoteCore (c : Char) (inString : Bool := false) : String :=
-  if inString then
-    if qdtext c then
-      .singleton c
-    else if c = '\\' || c = '\"' then
-      .append "\\" (.singleton c)
-    else
-      panic! "invalid HTTP quoted-string content"
+def quoteCore (c : Char) (h₀ : quotedStringChar c) : String :=
+  if h : qdtext c then
+    .singleton c
+  else if h₁ : c = '\"' || c = '\\' then
+    .append "\\" (.singleton c)
   else
-    if quotedPairChar c then
-      .singleton c
-    else
-      panic! "invalid HTTP quoted-pair content"
+    let h₁ := not_quotedStringChar_of_not_qdtext_not_dquote_backslash _ (quotedStringChar_lt_0x80 h₀) ⟨h, h₁⟩
+    absurd h₀ (h₁)
 
 /--
 Quotes `s` as an HTTP `quoted-string`: `DQUOTE *( qdtext / quoted-pair ) DQUOTE`.
@@ -58,15 +51,15 @@ as `quoted-pair`.
 Requires a proof that every character passes `quotedStringChar`.
 -/
 @[expose]
-def quoteHttpString (s : String) (_ : s.toList.all quotedStringChar) : String :=
-  let sl := s.toList
+def quoteHttpString (s : String) (h : s.toList.attach.all (quotedStringChar ·.val)) : String :=
+  let sl := s.toList.attach
 
-  if sl.all tchar ∧ ¬sl.isEmpty then
+  if sl.all (tchar ·.val) ∧ ¬sl.isEmpty then
     s
   else
     (.append
-      (.foldl (fun acc c =>
-        .append acc (quoteCore c (inString := true))) "\"" s)
+      (sl.foldl (fun acc x =>
+        .append acc (quoteCore x.val (List.all_eq_true.mp h x (List.mem_attach s.toList x)))) "\"")
       "\"")
 
 /--
@@ -77,7 +70,7 @@ when any character cannot be represented by the grammar.
 -/
 def quoteHttpString? (s : String) : Option String :=
   if h : s.toList.all quotedStringChar then
-    some <| quoteHttpString s h
+    some <| quoteHttpString s (List.all_eq_true.mpr fun x _ => List.all_eq_true.mp h x.val x.2)
   else
     none
 

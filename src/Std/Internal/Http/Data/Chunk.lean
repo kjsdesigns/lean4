@@ -88,14 +88,12 @@ end ExtensionName
 
 /--
 A proposition asserting that `s` is a valid extension value, meaning every character passes
-`Char.quotedStringChar` (i.e. is `qdtext` or a valid `quoted-pair` payload). This is equivalent
-to `(quoteHttpString? s).isSome` but is easier for `decide` to compute because it is a simple
-per-character check with no `Option`/string construction.
+`Char.quotedStringChar` (i.e. is `qdtext` or a valid `quoted-pair` payload).
 
 Reference: https://httpwg.org/specs/rfc9112.html#chunked.extension
 -/
 abbrev IsValidExtensionValue (s : String) : Prop :=
-  s.toList.all Char.quotedStringChar
+  s.toList.attach.all (Char.quotedStringChar ·.val)
 
 /--
 A validated chunk extension value that ensures all characters conform to HTTP standards per RFC 9112 §7.1.1.
@@ -139,7 +137,7 @@ Attempts to create an `ExtensionValue` from a `String`, returning `none` if the 
 characters that cannot be encoded as an HTTP quoted-string.
 -/
 def ofString? (s : String) : Option ExtensionValue :=
-  if h : s.toList.all Char.quotedStringChar then
+  if h : IsValidExtensionValue s then
     some ⟨s, h⟩
   else
     none

@@ -6,7 +6,7 @@ Authors: Sofia Rodrigues
 module
 
 prelude
-public import Init.Data.String
+public import Init
 
 @[expose]
 public section
@@ -96,6 +96,32 @@ quoted-string body character class:
 @[inline]
 def quotedStringChar (c : Char) : Bool :=
   qdtext c || quotedPairChar c
+
+private theorem val_le_of_le { a b : Char } (x : a ≤ b) : a.val ≤ b.val := by
+  rw [Char.instLE] at x
+  simpa [Char.lt]
+
+private theorem lt_of_val_lt { a b : Char } (x : a.val < b.val) : a < b := by
+  rw [Char.instLT]
+  simpa [Char.lt]
+
+theorem quotedStringChar_lt_0x80 : quotedStringChar c → c < '\x80' := by
+  simp [quotedStringChar, qdtext, quotedPairChar]
+  split <;> (subst_vars; simp)
+  grind [→ val_le_of_le, lt_of_val_lt, vchar]
+
+private theorem not_quotedStringChar_ofNat_aux :
+    ∀ c : Nat, c < 128 → ¬(qdtext (Char.ofNat c)) ∧ ¬((Char.ofNat c = '\"') ∨ (Char.ofNat c = '\\')) →
+    ¬(quotedStringChar (Char.ofNat c)) := by
+  decide
+
+theorem not_quotedStringChar_of_not_qdtext_not_dquote_backslash :
+    ∀ c : Char, c < '\x80' → ¬(qdtext (c)) ∧ ¬((c = '\"') || (c = '\\')) →
+    ¬(quotedStringChar (c)) := by
+  intro c hlt hq
+  simpa [Char.ofNat_toNat] using
+    (not_quotedStringChar_ofNat_aux
+      c.toNat hlt (by simpa [Char.ofNat_toNat] using hq))
 
 /--
 field-vchar = VCHAR
