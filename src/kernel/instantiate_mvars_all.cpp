@@ -225,30 +225,19 @@ class instantiate_direct_fn {
         return optional<expr>(a_new);
     }
 
-    expr visit_app_default(expr const & e) {
-        buffer<expr> args;
-        expr const * curr = &e;
-        while (is_app(*curr)) {
-            args.push_back(visit(app_arg(*curr)));
-            curr = &app_fn(*curr);
-        }
-        lean_assert(!is_mvar(*curr));
-        expr f = visit(*curr);
-        return mk_rev_app(f, args.size(), args.data());
+    /* Visit an application whose head is not an MVar, preserving sharing of
+       application prefixes (e.g. for `f a b c`, if only `c` changes,
+       the nodes `f a` and `f a b` are pointer-shared with the original). */
+    expr visit_nonmvar_app(expr const & e) {
+        expr new_a = visit(app_arg(e));
+        expr const & fn = app_fn(e);
+        expr new_f = is_app(fn) ? visit_nonmvar_app(fn) : visit(fn);
+        return update_app(e, new_f, new_a);
     }
 
-    expr visit_mvar_app_args(expr const & e) {
+    /* Collect the application spine into a buffer and apply beta reduction. */
+    expr visit_app_beta(expr const & f_new, expr const & e) {
         buffer<expr> args;
-        expr const * curr = &e;
-        while (is_app(*curr)) {
-            args.push_back(visit(app_arg(*curr)));
-            curr = &app_fn(*curr);
-        }
-        lean_assert(is_mvar(*curr));
-        return mk_rev_app(*curr, args.size(), args.data());
-    }
-
-    expr visit_args_and_beta(expr const & f_new, expr const & e, buffer<expr> & args) {
         expr const * curr = &e;
         while (is_app(*curr)) {
             args.push_back(visit(app_arg(*curr)));
@@ -262,13 +251,12 @@ class instantiate_direct_fn {
     expr visit_app(expr const & e) {
         expr const & f = get_app_fn(e);
         if (!is_mvar(f)) {
-            return visit_app_default(e);
+            return visit_nonmvar_app(e);
         }
         name const & mid = mvar_name(f);
         /* Direct MVar assignment takes precedence. */
         if (auto f_new = get_assignment(mid)) {
-            buffer<expr> args;
-            return visit_args_and_beta(*f_new, e, args);
+            return visit_app_beta(*f_new, e);
         }
         /* Check for delayed-assigned MVar. */
         option_ref<delayed_assignment> d = get_delayed_mvar_assignment(m_mctx, mid);
@@ -280,7 +268,8 @@ class instantiate_direct_fn {
             if (get_assignment(mid_pending))
                 m_has_updateable_delayed = true;
         }
-        return visit_mvar_app_args(e);
+        /* Unresolved MVar head: visit structurally, preserving app prefix sharing. */
+        return visit_nonmvar_app(e);
     }
 
     expr visit_mvar(expr const & e) {
@@ -525,29 +514,6 @@ class instantiate_delayed_fn {
         }
     }
 
-    expr visit_app_default(expr const & e) {
-        buffer<expr> args;
-        expr const * curr = &e;
-        while (is_app(*curr)) {
-            args.push_back(visit(app_arg(*curr)));
-            curr = &app_fn(*curr);
-        }
-        lean_assert(!is_mvar(*curr));
-        expr f = visit(*curr);
-        return mk_rev_app(f, args.size(), args.data());
-    }
-
-    expr visit_mvar_app_args(expr const & e) {
-        buffer<expr> args;
-        expr const * curr = &e;
-        while (is_app(*curr)) {
-            args.push_back(visit(app_arg(*curr)));
-            curr = &app_fn(*curr);
-        }
-        lean_assert(is_mvar(*curr));
-        return mk_rev_app(*curr, args.size(), args.data());
-    }
-
     expr visit_delayed(array_ref<expr> const & fvars, name const & mid_pending,
                        expr const & e) {
         buffer<expr> args;
@@ -603,10 +569,19 @@ class instantiate_delayed_fn {
         return apply_beta(val_new, extra_count, args.data(), preserve_data, zeta);
     }
 
+    /* Visit an application whose head is not an MVar, preserving sharing of
+       application prefixes. */
+    expr visit_nonmvar_app(expr const & e) {
+        expr new_a = visit(app_arg(e));
+        expr const & fn = app_fn(e);
+        expr new_f = is_app(fn) ? visit_nonmvar_app(fn) : visit(fn);
+        return update_app(e, new_f, new_a);
+    }
+
     expr visit_app(expr const & e) {
         expr const & f = get_app_fn(e);
         if (!is_mvar(f)) {
-            return visit_app_default(e);
+            return visit_nonmvar_app(e);
         }
         name const & mid = mvar_name(f);
         /* Direct MVar assignments were resolved by pass 1. */
@@ -614,12 +589,12 @@ class instantiate_delayed_fn {
         /* Check for delayed-assigned MVar. */
         option_ref<delayed_assignment> d = get_delayed_mvar_assignment(m_mctx, mid);
         if (!d) {
-            return visit_mvar_app_args(e);
+            return visit_nonmvar_app(e);
         }
         array_ref<expr> fvars = delayed_assignment_fvars(d.get_val());
         name mid_pending = delayed_assignment_mvar_id_pending(d.get_val());
         if (fvars.size() > get_app_num_args(e)) {
-            return visit_mvar_app_args(e);
+            return visit_nonmvar_app(e);
         }
         if (is_resolvable_pending(mid_pending)) {
             /* Updateable delayed-assigned MVar: cross the cut into inner mode. */
@@ -632,7 +607,7 @@ class instantiate_delayed_fn {
             /* Normalize the pending MVar's value for mctx write-back
                (see write-back comment above). */
             (void)get_assignment(mid_pending);
-            return visit_mvar_app_args(e);
+            return visit_nonmvar_app(e);
         }
     }
 
