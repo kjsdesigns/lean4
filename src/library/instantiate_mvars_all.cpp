@@ -12,7 +12,7 @@ Authors: Joachim Breitner
 #include "runtime/array_ref.h"
 #include "kernel/instantiate.h"
 #include "kernel/expr.h"
-#include "kernel/scope_cache.h"
+#include "library/scope_cache.h"
 
 /*
 This module provides an implementation of `instantiateMVars` with linear

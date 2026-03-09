@@ -19,5 +19,4 @@ add_library(
   inductive.cpp
   trace.cpp
   instantiate_mvars.cpp
-  instantiate_mvars_all.cpp
 )
