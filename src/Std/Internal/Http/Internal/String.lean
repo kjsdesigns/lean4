@@ -51,7 +51,7 @@ as `quoted-pair`.
 Requires a proof that every character passes `quotedStringChar`.
 -/
 @[expose]
-def quoteHttpString (s : String) (h : s.toList.attach.all (quotedStringChar ·.val)) : String :=
+def quoteHttpString (s : String) (h : s.toList.all quotedStringChar) : String :=
   let sl := s.toList.attach
 
   if sl.all (tchar ·.val) ∧ ¬sl.isEmpty then
@@ -59,7 +59,7 @@ def quoteHttpString (s : String) (h : s.toList.attach.all (quotedStringChar ·.v
   else
     (.append
       (sl.foldl (fun acc x =>
-        .append acc (quoteCore x.val (List.all_eq_true.mp h x (List.mem_attach s.toList x)))) "\"")
+        .append acc (quoteCore x.val (List.all_eq_true.mp h x.val x.2))) "\"")
       "\"")
 
 /--
@@ -70,7 +70,7 @@ when any character cannot be represented by the grammar.
 -/
 def quoteHttpString? (s : String) : Option String :=
   if h : s.toList.all quotedStringChar then
-    some <| quoteHttpString s (List.all_eq_true.mpr fun x _ => List.all_eq_true.mp h x.val x.2)
+    some <| quoteHttpString s h
   else
     none
 

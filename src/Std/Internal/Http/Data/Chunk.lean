@@ -93,7 +93,7 @@ A proposition asserting that `s` is a valid extension value, meaning every chara
 Reference: https://httpwg.org/specs/rfc9112.html#chunked.extension
 -/
 abbrev IsValidExtensionValue (s : String) : Prop :=
-  s.toList.attach.all (Char.quotedStringChar ·.val)
+  s.toList.all Char.quotedStringChar
 
 /--
 A validated chunk extension value that ensures all characters conform to HTTP standards per RFC 9112 §7.1.1.
