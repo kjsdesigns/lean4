@@ -287,7 +287,8 @@ instance instLawfulDeterministicIteratorFlatten
           ext step
           simp only [IterM.IsPlausibleStep, Iterator.IsPlausibleStep]
           constructor
-          · intro h; cases h with
+          · intro h
+            cases h with
             | outerDone h => rfl
             | outerYield h => rw [houter] at h; cases h
             | outerSkip h => rw [houter] at h; cases h
@@ -299,7 +300,8 @@ instance instLawfulDeterministicIteratorFlatten
           ext step
           simp only [IterM.IsPlausibleStep, Iterator.IsPlausibleStep]
           constructor
-          · intro h; cases h with
+          · intro h
+            cases h with
             | outerSkip h => rw [houter] at h; cases h; rfl
             | outerDone h => rw [houter] at h; cases h
             | outerYield h => rw [houter] at h; cases h
@@ -323,7 +325,8 @@ instance instLawfulDeterministicIteratorFlatten
       cases innerStep with
       | done =>
         exact ⟨.skip ⟨⟨it₁, none⟩⟩, by
-          ext step; simp only [IterM.IsPlausibleStep, Iterator.IsPlausibleStep]
+          ext step
+          simp only [IterM.IsPlausibleStep, Iterator.IsPlausibleStep]
           constructor
           · intro h
             cases h with
@@ -338,7 +341,8 @@ instance instLawfulDeterministicIteratorFlatten
           ext step
           simp only [IterM.IsPlausibleStep, Iterator.IsPlausibleStep]
           constructor
-          · intro h; cases h with
+          · intro h
+            cases h with
             | innerSkip h => rw [hinner] at h; cases h; rfl
             | innerDone h => rw [hinner] at h; cases h
             | innerYield h => rw [hinner] at h; cases h
@@ -350,7 +354,8 @@ instance instLawfulDeterministicIteratorFlatten
           ext step
           simp only [IterM.IsPlausibleStep, Iterator.IsPlausibleStep]
           constructor
-          · intro h; cases h with
+          · intro h
+            cases h with
             | innerYield h => rw [hinner] at h; cases h; rfl
             | innerDone h => rw [hinner] at h; cases h
             | innerSkip h => rw [hinner] at h; cases h

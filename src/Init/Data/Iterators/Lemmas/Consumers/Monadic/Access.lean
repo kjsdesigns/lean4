@@ -115,20 +115,18 @@ public theorem nextAtIdxSlow?_eq_match_nextAtIdxSlow? [Monad m] [LawfulMonad m] 
   apply bind_congr; intro step
   cases step.inflate using PlausibleIterStep.casesOn
   · simp
-  · simp
-    simp at ih₁ ih₂
+  · simp only [bind_pure_comp, bind_map_left] at ih₁ ih₂ ⊢
     rw [ih₂]
-    · simp
+    · simp only [map_bind]
       apply bind_congr; intro step'
       split
       · simp
-      · simp
-        split
+      · split
         · simp
         · exact not_isPlausibleNthOutputStep_skip.elim ‹_›
         · simp
     · assumption
-  · simp
+  · simp only [bind_pure_comp, pure_bind]
     split <;> simp
 
 public theorem nextAtIdxSlow?_add_one [Monad m] [LawfulMonad m] [Iterator α m β] [Productive α m]
