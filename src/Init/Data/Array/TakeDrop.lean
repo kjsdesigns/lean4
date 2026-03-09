@@ -195,8 +195,6 @@ theorem drop_append {xs ys : Array α} {i : Nat} :
     (xs ++ ys).drop (xs.size + i) = ys.drop i := by
   apply ext'; simp [List.drop_length_add_append, ← length_toList]
 
--- TODO: Do we want `drop_left`/`take_left`, even though they duplicate `*_size_add_append`?
-
 theorem take_setIfInBounds {xs : Array α} {i j : Nat} {a : α} :
     (xs.setIfInBounds j a).take i = (xs.take i).setIfInBounds j a := by
   apply ext'; simp [List.take_set]
