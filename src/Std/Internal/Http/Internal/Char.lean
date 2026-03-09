@@ -98,18 +98,10 @@ quoted-string body character class:
 def quotedStringChar (c : Char) : Bool :=
   qdtext c || quotedPairChar c
 
-private theorem val_le_of_le { a b : Char } (x : a ≤ b) : a.val ≤ b.val := by
-  rw [Char.instLE] at x
-  simpa [Char.lt]
-
-private theorem lt_of_val_lt { a b : Char } (x : a.val < b.val) : a < b := by
-  rw [Char.instLT]
-  simpa [Char.lt]
-
 theorem quotedStringChar_lt_0x80 : quotedStringChar c → c < '\x80' := by
   simp [quotedStringChar, qdtext, quotedPairChar]
   split <;> (subst_vars; simp)
-  grind [→ val_le_of_le, lt_of_val_lt, vchar]
+  grind [→ Char.le_def.mp, Char.lt_def.mpr, vchar]
 
 private theorem not_quotedStringChar_ofNat_aux :
     ∀ c : Nat, c < 128 → ¬(qdtext (Char.ofNat c)) ∧ ¬((Char.ofNat c = '\"') ∨ (Char.ofNat c = '\\')) →
