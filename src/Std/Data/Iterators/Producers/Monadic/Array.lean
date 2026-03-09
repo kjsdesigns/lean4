@@ -127,19 +127,19 @@ instance : IteratorAccess (ArrayIterator α) Id where
       else
         .done
     haveI : IterM.IsPlausibleNthOutputStep n it step := by
-      simp only [step]; clear step
+      simp only [step]
       induction n generalizing it
       · split
         · refine .zero_yield ?_
-          simpa [IterM.IsPlausibleStep, Iterator.IsPlausibleStep, ArrayIterator.instIterator, *] -- TODO
+          simpa [IterM.IsPlausibleStep, Iterator.IsPlausibleStep, ArrayIterator.instIterator, *] -- TODO: remove `inst...` argument as soon as possible
         · refine .done ?_
-          simp_all [IterM.IsPlausibleStep, Iterator.IsPlausibleStep, ArrayIterator.instIterator] -- TODO
+          simp_all [IterM.IsPlausibleStep, Iterator.IsPlausibleStep, ArrayIterator.instIterator] -- TODO: remove `inst...` argument as soon as possible
       · rename_i n ih
         by_cases h : it.internalState.pos < it.internalState.array.size
         · refine .yield (it' := ?it') (out := ?_) ?_ ?_
           · exact ⟨⟨it.internalState.array, it.internalState.pos + 1⟩⟩
           · exact it.internalState.array[it.internalState.pos]
-          · simpa [IterM.IsPlausibleStep, Iterator.IsPlausibleStep, ArrayIterator.instIterator] -- TODO
+          · simpa [IterM.IsPlausibleStep, Iterator.IsPlausibleStep, ArrayIterator.instIterator] -- TODO: remove `inst...` argument as soon as possible
           · specialize ih ?it'
             simp only [Nat.add_comm 1, Nat.add_assoc] at ih ⊢
             split

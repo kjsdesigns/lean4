@@ -41,7 +41,7 @@ private theorem val_nextAtIdxSlow?Go [Monad m] [LawfulMonad m] [Iterator α m β
   apply bind_congr; intro step
   rename_i it' n' ih₁ ih₂
   cases step.inflate using PlausibleIterStep.casesOn
-  · simp
+  · simp only [bind_pure_comp]
     cases n'
     · simp
     · simp only at ih₁

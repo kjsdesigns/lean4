@@ -29,9 +29,8 @@ public theorem nextAtIdxSlow?_eq_match [Iterator α Id β] [Productive α Id]
         let s := it'.nextAtIdxSlow? n
         ⟨s.val, .skip hp s.property⟩
       | .done hp => .done (.done hp)) := by
-  simp [Iter.nextAtIdxSlow?]
   apply Subtype.ext
-  simp only
+  simp only [nextAtIdxSlow?]
   rw [IterM.nextAtIdxSlow?_eq_match]
   simp only [bind_pure_comp, Id.run_bind, step]
   split
