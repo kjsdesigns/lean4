@@ -654,11 +654,10 @@ public:
             r = visit_fvar(e);
             goto done; /* skip caching for fvars */
         case expr_kind::Sort:
-            r = update_sort(e, visit_level(sort_level(e)));
-            break;
         case expr_kind::Const:
-            r = update_const(e, visit_levels(const_levels(e)));
-            break;
+            /* Sorts and Consts have no fvars and no expr MVars (level MVars
+               were resolved by pass 1), so the early exit above catches them. */
+            lean_unreachable();
         case expr_kind::MVar:
             /* Bare MVars in pass 2 are unassigned direct MVars: direct MVar
                assignments were resolved by pass 1, and resolvable pending MVar
@@ -702,17 +701,6 @@ public:
     done:
         m_result_scope = std::max(saved_result_scope, m_result_scope);
         return r;
-    }
-
-    level visit_level(level const & l) {
-        /* Pass 2 does not handle level MVars — pass 1 already resolved them.
-           But we still need this for the visit_levels call in update_sort/update_const.
-           Since levels have no fvars, we can just return them as-is. */
-        return l;
-    }
-
-    levels visit_levels(levels const & ls) {
-        return ls;
     }
 
     expr operator()(expr const & e) { return visit(e); }
