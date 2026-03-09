@@ -7,6 +7,7 @@ module
 
 prelude
 public import Init.Data.Array.Subarray
+public import Init.Data.Array.Subarray.Split
 public import Lean.Data.PersistentHashMap
 import Init.Data.Iterators.Consumers
 import Init.Omega
@@ -21,11 +22,11 @@ This module provides an iterator for `Lean.PersistentHashMap` that is accessible
 `Lean.PersistentHashMap.iter`.
 -/
 
+public section
+
 namespace Lean.PersistentHashMap
 
 open Std Std.Iterators
-
-public section
 
 /--
 A zipper for traversing a `PersistentHashMap`. This is an inductive structure
@@ -45,6 +46,7 @@ def Zipper.prependNode (node : Node α β) (z : Zipper α β) : Zipper α β :=
   | .entries es => .consEntries es.toSubarray z
   | .collision keys vals hsz => .consCollision keys[*...*] vals[*...*] (by simpa) z
 
+@[inline]
 def Zipper.step (it : IterM (α := Zipper α β) Id (α × β)) : IterStep (IterM (α := Zipper α β) Id (α × β)) (α × β) :=
   match it.internalState with
   | .done => .done
@@ -217,7 +219,5 @@ The iteration order is unspecified.
 def iter [BEq α] [Hashable α] (map : PersistentHashMap α β) :
     Iter (α := Zipper α β) (α × β) :=
   ⟨Zipper.prependNode map.root .done⟩
-
-end -- public section
 
 end Lean.PersistentHashMap
