@@ -180,7 +180,7 @@ namespace Tests
   assert! Spec.lookup s == some (100, 0)
   let s := Spec.pop s
   assert! Spec.lookup s == some (100, 0)
-  IO.println "Spec tests passed"
+  return ()
 
 -- Basic Imp tests
 #eval do
@@ -195,7 +195,7 @@ namespace Tests
   assert! Imp.lookup s == some (100, 0)
   let s := Imp.pop s
   assert! Imp.lookup s == some (100, 0)
-  IO.println "Imp tests passed"
+  return ()
 
 -- Re-entry test
 #eval do
@@ -206,7 +206,7 @@ namespace Tests
   let s := Imp.pop s
   let s := Imp.push s  -- re-enter scope 1
   assert! Imp.lookup s == none  -- stale!
-  IO.println "Re-entry test passed"
+  return ()
 
 -- Degradation test
 #eval do
@@ -220,7 +220,7 @@ namespace Tests
   assert! Imp.lookup s == some (100, 1)
   let s := Imp.pop s  -- scope 1
   assert! Imp.lookup s == some (100, 1)
-  IO.println "Degradation test passed"
+  return ()
 
 -- WalkDown test: all scopes re-entered, walkDown must iterate to scope 0
 #eval do
@@ -239,7 +239,7 @@ namespace Tests
   let (s, v) := Imp.insert s 200 0
   assert! v == 100  -- sharing: rewind found entry at level 0
   assert! Imp.lookup s == some (100, 0)
-  IO.println "WalkDown test passed"
+  return ()
 
 /-! ### Exhaustive verification
 
@@ -279,7 +279,7 @@ where
 
 #eval do
   verifySpecImp 4 3
-  IO.println "Exhaustive Spec-Imp verification (depth 4, scope 3) passed"
+  return ()
 
 end Tests
 
