@@ -192,10 +192,7 @@ class instantiate_direct_fn {
     }
 
     levels visit_levels(levels const & ls) {
-        buffer<level> lsNew;
-        for (auto const & l : ls)
-            lsNew.push_back(visit_level(l));
-        return levels(lsNew);
+        return map_reuse(ls, [&](level const & l) { return visit_level(l); });
     }
 
     inline expr cache(expr const & e, expr r, bool shared) {
