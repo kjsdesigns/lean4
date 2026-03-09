@@ -38,8 +38,7 @@ def quoteCore (c : Char) (h₀ : quotedStringChar c) : String :=
   else if h₁ : c = '\"' || c = '\\' then
     .append "\\" (.singleton c)
   else
-    let h₁ := not_quotedStringChar_of_not_qdtext_not_dquote_backslash _ (quotedStringChar_lt_0x80 h₀) ⟨h, h₁⟩
-    absurd h₀ (h₁)
+    absurd h₀ (not_quotedStringChar_of_not_qdtext_not_dquote_backslash _ (quotedStringChar_lt_0x80 h₀) ⟨h, h₁⟩)
 
 /--
 Quotes `s` as an HTTP `quoted-string`: `DQUOTE *( qdtext / quoted-pair ) DQUOTE`.
