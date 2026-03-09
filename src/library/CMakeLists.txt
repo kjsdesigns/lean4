@@ -20,5 +20,5 @@ add_library(
   init_attribute.cpp
   llvm.cpp
   ir_interpreter.cpp
-  instantiate_mvars_all.cpp
+  instantiate_mvars.cpp
 )
