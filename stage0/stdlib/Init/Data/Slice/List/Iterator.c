@@ -17,9 +17,6 @@ lean_object* lean_nat_add(lean_object*, lean_object*);
 LEAN_EXPORT lean_object* l_ListSlice_instToIterator___lam__0(lean_object*);
 static const lean_closure_object l_ListSlice_instToIterator___closed__0_value = {.m_header = {.m_rc = 0, .m_cs_sz = sizeof(lean_closure_object) + sizeof(void*)*0, .m_other = 0, .m_tag = 245}, .m_fun = (void*)l_ListSlice_instToIterator___lam__0, .m_arity = 1, .m_num_fixed = 0, .m_objs = {} };
 static const lean_object* l_ListSlice_instToIterator___closed__0 = (const lean_object*)&l_ListSlice_instToIterator___closed__0_value;
-lean_object* l_Std_ToIterator_of___redArg___lam__0(lean_object*, lean_object*);
-static const lean_closure_object l_ListSlice_instToIterator___closed__1_value = {.m_header = {.m_rc = 0, .m_cs_sz = sizeof(lean_closure_object) + sizeof(void*)*1, .m_other = 0, .m_tag = 245}, .m_fun = (void*)l_Std_ToIterator_of___redArg___lam__0, .m_arity = 2, .m_num_fixed = 1, .m_objs = {((lean_object*)&l_ListSlice_instToIterator___closed__0_value)} };
-static const lean_object* l_ListSlice_instToIterator___closed__1 = (const lean_object*)&l_ListSlice_instToIterator___closed__1_value;
 LEAN_EXPORT lean_object* l_ListSlice_instToIterator(lean_object*);
 uint8_t lean_nat_dec_eq(lean_object*, lean_object*);
 lean_object* lean_nat_sub(lean_object*, lean_object*);
@@ -41,8 +38,8 @@ LEAN_EXPORT lean_object* l_instForInListSliceOfMonad(lean_object*, lean_object*,
 lean_object* lean_array_push(lean_object*, lean_object*);
 LEAN_EXPORT lean_object* l_List_instAppendListSlice___lam__0(lean_object*, lean_object*, lean_object*);
 lean_object* lean_mk_empty_array_with_capacity(lean_object*);
-static lean_once_cell_t l_List_instAppendListSlice___lam__2___closed__0_once = LEAN_ONCE_CELL_INITIALIZER;
-static lean_object* l_List_instAppendListSlice___lam__2___closed__0;
+static const lean_array_object l_List_instAppendListSlice___lam__2___closed__0_value = {.m_header = {.m_rc = 0, .m_cs_sz = sizeof(lean_array_object) + sizeof(void*)*0, .m_other = 0, .m_tag = 246}, .m_size = 0, .m_capacity = 0, .m_data = {}};
+static const lean_object* l_List_instAppendListSlice___lam__2___closed__0 = (const lean_object*)&l_List_instAppendListSlice___lam__2___closed__0_value;
 lean_object* l___private_Init_WFExtrinsicFix_0__WellFounded_opaqueFix_u2082___redArg(lean_object*, lean_object*, lean_object*);
 lean_object* lean_array_to_list(lean_object*);
 lean_object* l_List_appendTR___redArg(lean_object*, lean_object*);
@@ -186,7 +183,7 @@ LEAN_EXPORT lean_object* l_ListSlice_instToIterator(lean_object* x_1) {
 _start:
 {
 lean_object* x_2; 
-x_2 = ((lean_object*)(l_ListSlice_instToIterator___closed__1));
+x_2 = ((lean_object*)(l_ListSlice_instToIterator___closed__0));
 return x_2;
 }
 }
@@ -772,15 +769,6 @@ return x_2;
 }
 }
 }
-static lean_object* _init_l_List_instAppendListSlice___lam__2___closed__0(void) {
-_start:
-{
-lean_object* x_1; lean_object* x_2; 
-x_1 = lean_unsigned_to_nat(0u);
-x_2 = lean_mk_empty_array_with_capacity(x_1);
-return x_2;
-}
-}
 LEAN_EXPORT lean_object* l_List_instAppendListSlice___lam__2(lean_object* x_1, lean_object* x_2, lean_object* x_3, lean_object* x_4) {
 _start:
 {
@@ -893,9 +881,9 @@ goto block_35;
 block_14:
 {
 lean_object* x_9; lean_object* x_10; lean_object* x_11; lean_object* x_12; lean_object* x_13; 
-x_9 = l___private_Init_WFExtrinsicFix_0__WellFounded_opaqueFix_u2082___redArg(x_1, x_8, x_6);
+x_9 = l___private_Init_WFExtrinsicFix_0__WellFounded_opaqueFix_u2082___redArg(x_1, x_8, x_7);
 x_10 = lean_array_to_list(x_9);
-x_11 = l_List_appendTR___redArg(x_7, x_10);
+x_11 = l_List_appendTR___redArg(x_6, x_10);
 x_12 = l_List_lengthTR___redArg(x_11);
 x_13 = l_List_toSlice___redArg(x_11, x_5, x_12);
 lean_dec(x_12);
@@ -927,7 +915,7 @@ block_33:
 {
 lean_object* x_20; lean_object* x_21; lean_object* x_22; lean_object* x_23; 
 x_20 = lean_unsigned_to_nat(0u);
-x_21 = lean_obj_once(&l_List_instAppendListSlice___lam__2___closed__0, &l_List_instAppendListSlice___lam__2___closed__0_once, _init_l_List_instAppendListSlice___lam__2___closed__0);
+x_21 = ((lean_object*)(l_List_instAppendListSlice___lam__2___closed__0));
 x_22 = l___private_Init_WFExtrinsicFix_0__WellFounded_opaqueFix_u2082___redArg(x_2, x_15, x_21);
 x_23 = lean_array_to_list(x_22);
 if (lean_obj_tag(x_17) == 0)
@@ -952,8 +940,8 @@ goto block_25;
 block_25:
 {
 x_5 = x_20;
-x_6 = x_21;
-x_7 = x_23;
+x_6 = x_23;
+x_7 = x_21;
 x_8 = x_24;
 goto block_14;
 }
@@ -986,8 +974,8 @@ goto block_31;
 block_31:
 {
 x_5 = x_20;
-x_6 = x_21;
-x_7 = x_23;
+x_6 = x_23;
+x_7 = x_21;
 x_8 = x_30;
 goto block_14;
 }
@@ -1069,7 +1057,7 @@ goto block_21;
 block_21:
 {
 lean_object* x_9; lean_object* x_10; lean_object* x_11; lean_object* x_12; lean_object* x_13; lean_object* x_14; 
-x_9 = lean_obj_once(&l_List_instAppendListSlice___lam__2___closed__0, &l_List_instAppendListSlice___lam__2___closed__0_once, _init_l_List_instAppendListSlice___lam__2___closed__0);
+x_9 = ((lean_object*)(l_List_instAppendListSlice___lam__2___closed__0));
 x_10 = l___private_Init_WFExtrinsicFix_0__WellFounded_opaqueFix_u2082___redArg(x_7, x_8, x_9);
 x_11 = lean_array_to_list(x_10);
 lean_inc(x_11);
@@ -1264,7 +1252,7 @@ goto block_11;
 block_11:
 {
 lean_object* x_5; lean_object* x_6; lean_object* x_7; lean_object* x_8; lean_object* x_9; lean_object* x_10; 
-x_5 = lean_obj_once(&l_List_instAppendListSlice___lam__2___closed__0, &l_List_instAppendListSlice___lam__2___closed__0_once, _init_l_List_instAppendListSlice___lam__2___closed__0);
+x_5 = ((lean_object*)(l_List_instAppendListSlice___lam__2___closed__0));
 x_6 = l___private_Init_WFExtrinsicFix_0__WellFounded_opaqueFix_u2082___redArg(x_1, x_4, x_5);
 x_7 = ((lean_object*)(l_List_instToStringListSlice___redArg___lam__1___closed__0));
 x_8 = lean_array_to_list(x_6);

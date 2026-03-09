@@ -217,8 +217,8 @@ LEAN_EXPORT lean_object* l___private_Lean_Server_Completion_SyntheticCompletion_
 LEAN_EXPORT uint8_t l___private_Lean_Server_Completion_SyntheticCompletion_0__Lean_Server_Completion_isSyntheticTacticCompletion(lean_object*, lean_object*, lean_object*);
 LEAN_EXPORT lean_object* l___private_Lean_Server_Completion_SyntheticCompletion_0__Lean_Server_Completion_isSyntheticTacticCompletion___boxed(lean_object*, lean_object*, lean_object*);
 lean_object* lean_mk_empty_array_with_capacity(lean_object*);
-static lean_once_cell_t l___private_Lean_Server_Completion_SyntheticCompletion_0__Lean_Server_Completion_findOutermostContextInfo_x3f_go___closed__0_once = LEAN_ONCE_CELL_INITIALIZER;
-static lean_object* l___private_Lean_Server_Completion_SyntheticCompletion_0__Lean_Server_Completion_findOutermostContextInfo_x3f_go___closed__0;
+static const lean_array_object l___private_Lean_Server_Completion_SyntheticCompletion_0__Lean_Server_Completion_findOutermostContextInfo_x3f_go___closed__0_value = {.m_header = {.m_rc = 0, .m_cs_sz = sizeof(lean_array_object) + sizeof(void*)*0, .m_other = 0, .m_tag = 246}, .m_size = 0, .m_capacity = 0, .m_data = {}};
+static const lean_object* l___private_Lean_Server_Completion_SyntheticCompletion_0__Lean_Server_Completion_findOutermostContextInfo_x3f_go___closed__0 = (const lean_object*)&l___private_Lean_Server_Completion_SyntheticCompletion_0__Lean_Server_Completion_findOutermostContextInfo_x3f_go___closed__0_value;
 static const lean_ctor_object l_Lean_PersistentArray_findSomeM_x3f___at___00__private_Lean_Server_Completion_SyntheticCompletion_0__Lean_Server_Completion_findOutermostContextInfo_x3f_go_spec__0___closed__0_value = {.m_header = {.m_rc = 0, .m_cs_sz = sizeof(lean_ctor_object) + sizeof(void*)*2 + 0, .m_other = 2, .m_tag = 0}, .m_objs = {((lean_object*)(((size_t)(0) << 1) | 1)),((lean_object*)(((size_t)(0) << 1) | 1))}};
 static const lean_object* l_Lean_PersistentArray_findSomeM_x3f___at___00__private_Lean_Server_Completion_SyntheticCompletion_0__Lean_Server_Completion_findOutermostContextInfo_x3f_go_spec__0___closed__0 = (const lean_object*)&l_Lean_PersistentArray_findSomeM_x3f___at___00__private_Lean_Server_Completion_SyntheticCompletion_0__Lean_Server_Completion_findOutermostContextInfo_x3f_go_spec__0___closed__0_value;
 LEAN_EXPORT lean_object* l_Lean_PersistentArray_findSomeMAux___at___00Lean_PersistentArray_findSomeM_x3f___at___00__private_Lean_Server_Completion_SyntheticCompletion_0__Lean_Server_Completion_findOutermostContextInfo_x3f_go_spec__0_spec__0(lean_object*);
@@ -266,7 +266,6 @@ static const lean_ctor_object l___private_Lean_Server_Completion_SyntheticComple
 static const lean_ctor_object l___private_Lean_Server_Completion_SyntheticCompletion_0__Lean_Server_Completion_isSyntheticStructFieldCompletion___lam__0___closed__1_value = {.m_header = {.m_rc = 0, .m_cs_sz = sizeof(lean_ctor_object) + sizeof(void*)*2 + 8, .m_other = 2, .m_tag = 1}, .m_objs = {((lean_object*)&l___private_Lean_Server_Completion_SyntheticCompletion_0__Lean_Server_Completion_isSyntheticStructFieldCompletion___lam__0___closed__1_value_aux_2),((lean_object*)&l___private_Lean_Server_Completion_SyntheticCompletion_0__Lean_Server_Completion_isSyntheticStructFieldCompletion___lam__0___closed__0_value),LEAN_SCALAR_PTR_LITERAL(0, 82, 141, 43, 62, 171, 163, 69)}};
 static const lean_object* l___private_Lean_Server_Completion_SyntheticCompletion_0__Lean_Server_Completion_isSyntheticStructFieldCompletion___lam__0___closed__1 = (const lean_object*)&l___private_Lean_Server_Completion_SyntheticCompletion_0__Lean_Server_Completion_isSyntheticStructFieldCompletion___lam__0___closed__1_value;
 lean_object* l_Array_zipIdx___redArg(lean_object*, lean_object*);
-uint8_t l_Array_isEmpty___redArg(lean_object*);
 lean_object* l_Lean_Syntax_getTrailingTailPos_x3f(lean_object*, uint8_t);
 LEAN_EXPORT uint8_t l___private_Lean_Server_Completion_SyntheticCompletion_0__Lean_Server_Completion_isSyntheticStructFieldCompletion___lam__0(uint8_t, uint8_t, lean_object*, lean_object*, lean_object*, lean_object*, lean_object*);
 LEAN_EXPORT lean_object* l___private_Lean_Server_Completion_SyntheticCompletion_0__Lean_Server_Completion_isSyntheticStructFieldCompletion___lam__0___boxed(lean_object*, lean_object*, lean_object*, lean_object*, lean_object*, lean_object*, lean_object*);
@@ -276,10 +275,8 @@ lean_object* l_Lean_Expr_getAppFn(lean_object*);
 uint8_t l_Lean_isStructure(lean_object*, lean_object*);
 extern lean_object* l_Lean_LocalContext_empty;
 LEAN_EXPORT lean_object* l___private_Lean_Server_Completion_SyntheticCompletion_0__Lean_Server_Completion_findSyntheticFieldCompletion_x3f(lean_object*, lean_object*, lean_object*, lean_object*);
-static lean_once_cell_t l_Lean_Server_Completion_findSyntheticCompletions___closed__0_once = LEAN_ONCE_CELL_INITIALIZER;
-static lean_object* l_Lean_Server_Completion_findSyntheticCompletions___closed__0;
-static lean_once_cell_t l_Lean_Server_Completion_findSyntheticCompletions___closed__1_once = LEAN_ONCE_CELL_INITIALIZER;
-static lean_object* l_Lean_Server_Completion_findSyntheticCompletions___closed__1;
+static const lean_array_object l_Lean_Server_Completion_findSyntheticCompletions___closed__0_value = {.m_header = {.m_rc = 0, .m_cs_sz = sizeof(lean_array_object) + sizeof(void*)*0, .m_other = 0, .m_tag = 246}, .m_size = 0, .m_capacity = 0, .m_data = {}};
+static const lean_object* l_Lean_Server_Completion_findSyntheticCompletions___closed__0 = (const lean_object*)&l_Lean_Server_Completion_findSyntheticCompletions___closed__0_value;
 lean_object* lean_array_push(lean_object*, lean_object*);
 LEAN_EXPORT lean_object* l_Lean_Server_Completion_findSyntheticCompletions(lean_object*, lean_object*, lean_object*, lean_object*);
 LEAN_EXPORT uint8_t l___private_Lean_Server_Completion_SyntheticCompletion_0__Lean_Server_Completion_findBest_x3f_isBetter___redArg(lean_object* x_1, lean_object* x_2, lean_object* x_3) {
@@ -2476,15 +2473,6 @@ x_5 = lean_box(x_4);
 return x_5;
 }
 }
-static lean_object* _init_l___private_Lean_Server_Completion_SyntheticCompletion_0__Lean_Server_Completion_findOutermostContextInfo_x3f_go___closed__0(void) {
-_start:
-{
-lean_object* x_1; lean_object* x_2; 
-x_1 = lean_unsigned_to_nat(0u);
-x_2 = lean_mk_empty_array_with_capacity(x_1);
-return x_2;
-}
-}
 LEAN_EXPORT lean_object* l___private_Init_Data_Array_Basic_0__Array_forIn_x27Unsafe_loop___at___00Lean_PersistentArray_findSomeMAux___at___00Lean_PersistentArray_findSomeM_x3f___at___00__private_Lean_Server_Completion_SyntheticCompletion_0__Lean_Server_Completion_findOutermostContextInfo_x3f_go_spec__0_spec__0_spec__1(lean_object* x_1, size_t x_2, size_t x_3, lean_object* x_4) {
 _start:
 {
@@ -2690,7 +2678,7 @@ block_12:
 {
 lean_object* x_6; lean_object* x_7; lean_object* x_8; lean_object* x_9; 
 x_6 = lean_box(0);
-x_7 = lean_obj_once(&l___private_Lean_Server_Completion_SyntheticCompletion_0__Lean_Server_Completion_findOutermostContextInfo_x3f_go___closed__0, &l___private_Lean_Server_Completion_SyntheticCompletion_0__Lean_Server_Completion_findOutermostContextInfo_x3f_go___closed__0_once, _init_l___private_Lean_Server_Completion_SyntheticCompletion_0__Lean_Server_Completion_findOutermostContextInfo_x3f_go___closed__0);
+x_7 = ((lean_object*)(l___private_Lean_Server_Completion_SyntheticCompletion_0__Lean_Server_Completion_findOutermostContextInfo_x3f_go___closed__0));
 x_8 = lean_alloc_ctor(0, 3, 0);
 lean_ctor_set(x_8, 0, x_3);
 lean_ctor_set(x_8, 1, x_6);
@@ -3543,7 +3531,7 @@ lean_object* x_20;
 x_20 = l_Lean_Syntax_getTailPos_x3f(x_16, x_19);
 if (lean_obj_tag(x_20) == 1)
 {
-lean_object* x_21; lean_object* x_22; lean_object* x_23; lean_object* x_24; uint8_t x_25; lean_object* x_33; lean_object* x_39; 
+lean_object* x_21; lean_object* x_22; lean_object* x_23; lean_object* x_24; uint8_t x_25; lean_object* x_33; lean_object* x_40; 
 x_21 = lean_ctor_get(x_20, 0);
 lean_inc(x_21);
 lean_dec_ref(x_20);
@@ -3551,18 +3539,18 @@ x_22 = lean_unsigned_to_nat(0u);
 x_23 = l_Lean_Syntax_getArg(x_7, x_22);
 x_24 = l_Lean_Syntax_getArgs(x_23);
 lean_dec(x_23);
-x_39 = l_Lean_Syntax_getTrailingTailPos_x3f(x_7, x_19);
-if (lean_obj_tag(x_39) == 0)
+x_40 = l_Lean_Syntax_getTrailingTailPos_x3f(x_7, x_19);
+if (lean_obj_tag(x_40) == 0)
 {
-lean_object* x_40; 
-x_40 = l_Lean_Syntax_getTrailingTailPos_x3f(x_16, x_19);
-x_33 = x_40;
-goto block_38;
+lean_object* x_41; 
+x_41 = l_Lean_Syntax_getTrailingTailPos_x3f(x_16, x_19);
+x_33 = x_41;
+goto block_39;
 }
 else
 {
-x_33 = x_39;
-goto block_38;
+x_33 = x_40;
+goto block_39;
 }
 block_32:
 {
@@ -3616,31 +3604,32 @@ lean_dec_ref(x_3);
 return x_19;
 }
 }
-block_38:
+block_39:
 {
 if (lean_obj_tag(x_33) == 1)
 {
-lean_object* x_34; uint8_t x_35; 
+lean_object* x_34; lean_object* x_35; uint8_t x_36; 
 x_34 = lean_ctor_get(x_33, 0);
 lean_inc(x_34);
 lean_dec_ref(x_33);
-x_35 = l_Array_isEmpty___redArg(x_24);
-if (x_35 == 0)
+x_35 = lean_array_get_size(x_24);
+x_36 = lean_nat_dec_eq(x_35, x_22);
+if (x_36 == 0)
 {
 lean_dec(x_34);
 lean_dec(x_21);
-x_25 = x_35;
+x_25 = x_36;
 goto block_32;
 }
 else
 {
-lean_object* x_36; uint8_t x_37; 
-x_36 = lean_alloc_ctor(0, 2, 0);
-lean_ctor_set(x_36, 0, x_21);
-lean_ctor_set(x_36, 1, x_34);
-x_37 = l_Lean_Syntax_Range_contains(x_36, x_5, x_35);
-lean_dec_ref(x_36);
-x_25 = x_37;
+lean_object* x_37; uint8_t x_38; 
+x_37 = lean_alloc_ctor(0, 2, 0);
+lean_ctor_set(x_37, 0, x_21);
+lean_ctor_set(x_37, 1, x_34);
+x_38 = l_Lean_Syntax_Range_contains(x_37, x_5, x_36);
+lean_dec_ref(x_37);
+x_25 = x_38;
 goto block_32;
 }
 }
@@ -3895,51 +3884,33 @@ return x_29;
 }
 }
 }
-static lean_object* _init_l_Lean_Server_Completion_findSyntheticCompletions___closed__0(void) {
-_start:
-{
-lean_object* x_1; lean_object* x_2; 
-x_1 = lean_unsigned_to_nat(0u);
-x_2 = lean_mk_empty_array_with_capacity(x_1);
-return x_2;
-}
-}
-static lean_object* _init_l_Lean_Server_Completion_findSyntheticCompletions___closed__1(void) {
-_start:
-{
-lean_object* x_1; lean_object* x_2; 
-x_1 = lean_unsigned_to_nat(1u);
-x_2 = lean_mk_empty_array_with_capacity(x_1);
-return x_2;
-}
-}
 LEAN_EXPORT lean_object* l_Lean_Server_Completion_findSyntheticCompletions(lean_object* x_1, lean_object* x_2, lean_object* x_3, lean_object* x_4) {
 _start:
 {
-lean_object* x_5; lean_object* x_11; 
+lean_object* x_5; lean_object* x_12; 
 lean_inc_ref(x_4);
 lean_inc(x_3);
 lean_inc_ref(x_1);
-x_11 = l___private_Lean_Server_Completion_SyntheticCompletion_0__Lean_Server_Completion_findSyntheticTacticCompletion_x3f(x_1, x_2, x_3, x_4);
-if (lean_obj_tag(x_11) == 0)
-{
-lean_object* x_12; 
-lean_inc_ref(x_4);
-lean_inc(x_2);
-x_12 = l___private_Lean_Server_Completion_SyntheticCompletion_0__Lean_Server_Completion_findSyntheticFieldCompletion_x3f(x_1, x_2, x_3, x_4);
+x_12 = l___private_Lean_Server_Completion_SyntheticCompletion_0__Lean_Server_Completion_findSyntheticTacticCompletion_x3f(x_1, x_2, x_3, x_4);
 if (lean_obj_tag(x_12) == 0)
 {
 lean_object* x_13; 
-x_13 = l___private_Lean_Server_Completion_SyntheticCompletion_0__Lean_Server_Completion_findSyntheticIdentifierCompletion_x3f(x_2, x_4);
-x_5 = x_13;
-goto block_10;
+lean_inc_ref(x_4);
+lean_inc(x_2);
+x_13 = l___private_Lean_Server_Completion_SyntheticCompletion_0__Lean_Server_Completion_findSyntheticFieldCompletion_x3f(x_1, x_2, x_3, x_4);
+if (lean_obj_tag(x_13) == 0)
+{
+lean_object* x_14; 
+x_14 = l___private_Lean_Server_Completion_SyntheticCompletion_0__Lean_Server_Completion_findSyntheticIdentifierCompletion_x3f(x_2, x_4);
+x_5 = x_14;
+goto block_11;
 }
 else
 {
 lean_dec_ref(x_4);
 lean_dec(x_2);
-x_5 = x_12;
-goto block_10;
+x_5 = x_13;
+goto block_11;
 }
 }
 else
@@ -3948,26 +3919,27 @@ lean_dec_ref(x_4);
 lean_dec(x_3);
 lean_dec(x_2);
 lean_dec_ref(x_1);
-x_5 = x_11;
-goto block_10;
+x_5 = x_12;
+goto block_11;
 }
-block_10:
+block_11:
 {
 if (lean_obj_tag(x_5) == 0)
 {
 lean_object* x_6; 
-x_6 = lean_obj_once(&l_Lean_Server_Completion_findSyntheticCompletions___closed__0, &l_Lean_Server_Completion_findSyntheticCompletions___closed__0_once, _init_l_Lean_Server_Completion_findSyntheticCompletions___closed__0);
+x_6 = ((lean_object*)(l_Lean_Server_Completion_findSyntheticCompletions___closed__0));
 return x_6;
 }
 else
 {
-lean_object* x_7; lean_object* x_8; lean_object* x_9; 
+lean_object* x_7; lean_object* x_8; lean_object* x_9; lean_object* x_10; 
 x_7 = lean_ctor_get(x_5, 0);
 lean_inc(x_7);
 lean_dec_ref(x_5);
-x_8 = lean_obj_once(&l_Lean_Server_Completion_findSyntheticCompletions___closed__1, &l_Lean_Server_Completion_findSyntheticCompletions___closed__1_once, _init_l_Lean_Server_Completion_findSyntheticCompletions___closed__1);
-x_9 = lean_array_push(x_8, x_7);
-return x_9;
+x_8 = lean_unsigned_to_nat(1u);
+x_9 = lean_mk_empty_array_with_capacity(x_8);
+x_10 = lean_array_push(x_9, x_7);
+return x_10;
 }
 }
 }

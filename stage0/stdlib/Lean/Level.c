@@ -234,8 +234,9 @@ LEAN_EXPORT lean_object* l_Lean_mkLevelParam(lean_object*);
 LEAN_EXPORT lean_object* l_Lean_mkLevelSucc(lean_object*);
 LEAN_EXPORT lean_object* l_Lean_mkLevelMax(lean_object*, lean_object*);
 LEAN_EXPORT lean_object* l_Lean_mkLevelIMax(lean_object*, lean_object*);
-static lean_once_cell_t l_Lean_levelOne___closed__0_once = LEAN_ONCE_CELL_INITIALIZER;
-static lean_object* l_Lean_levelOne___closed__0;
+static lean_once_cell_t l_Lean_Level_one___closed__0_once = LEAN_ONCE_CELL_INITIALIZER;
+static lean_object* l_Lean_Level_one___closed__0;
+LEAN_EXPORT lean_object* l_Lean_Level_one;
 LEAN_EXPORT lean_object* l_Lean_levelOne;
 LEAN_EXPORT lean_object* lean_level_mk_zero(lean_object*);
 LEAN_EXPORT lean_object* lean_level_mk_succ(lean_object*);
@@ -333,8 +334,8 @@ lean_object* l_Array_qpartition___redArg(lean_object*, lean_object*, lean_object
 LEAN_EXPORT lean_object* l___private_Init_Data_Array_QSort_Basic_0__Array_qsort_sort___at___00Lean_Level_normalize_spec__1___redArg(lean_object*, lean_object*, lean_object*);
 LEAN_EXPORT lean_object* l___private_Init_Data_Array_QSort_Basic_0__Array_qsort_sort___at___00Lean_Level_normalize_spec__1___redArg___boxed(lean_object*, lean_object*, lean_object*);
 lean_object* lean_mk_empty_array_with_capacity(lean_object*);
-static lean_once_cell_t l_Lean_Level_normalize___closed__0_once = LEAN_ONCE_CELL_INITIALIZER;
-static lean_object* l_Lean_Level_normalize___closed__0;
+static const lean_array_object l_Lean_Level_normalize___closed__0_value = {.m_header = {.m_rc = 0, .m_cs_sz = sizeof(lean_array_object) + sizeof(void*)*0, .m_other = 0, .m_tag = 246}, .m_size = 0, .m_capacity = 0, .m_data = {}};
+static const lean_object* l_Lean_Level_normalize___closed__0 = (const lean_object*)&l_Lean_Level_normalize___closed__0_value;
 static const lean_string_object l_Lean_Level_normalize___closed__2_value = {.m_header = {.m_rc = 0, .m_cs_sz = 0, .m_other = 0, .m_tag = 249}, .m_size = 34, .m_capacity = 34, .m_length = 33, .m_data = "unreachable code has been reached"};
 static const lean_object* l_Lean_Level_normalize___closed__2 = (const lean_object*)&l_Lean_Level_normalize___closed__2_value;
 static const lean_string_object l_Lean_Level_normalize___closed__1_value = {.m_header = {.m_rc = 0, .m_cs_sz = 0, .m_other = 0, .m_tag = 249}, .m_size = 21, .m_capacity = 21, .m_length = 20, .m_data = "Lean.Level.normalize"};
@@ -2295,7 +2296,7 @@ x_3 = l_Lean_Level_imax___override(x_1, x_2);
 return x_3;
 }
 }
-static lean_object* _init_l_Lean_levelOne___closed__0(void) {
+static lean_object* _init_l_Lean_Level_one___closed__0(void) {
 _start:
 {
 lean_object* x_1; lean_object* x_2; 
@@ -2304,11 +2305,19 @@ x_2 = l_Lean_Level_succ___override(x_1);
 return x_2;
 }
 }
+static lean_object* _init_l_Lean_Level_one(void) {
+_start:
+{
+lean_object* x_1; 
+x_1 = lean_obj_once(&l_Lean_Level_one___closed__0, &l_Lean_Level_one___closed__0_once, _init_l_Lean_Level_one___closed__0);
+return x_1;
+}
+}
 static lean_object* _init_l_Lean_levelOne(void) {
 _start:
 {
 lean_object* x_1; 
-x_1 = lean_obj_once(&l_Lean_levelOne___closed__0, &l_Lean_levelOne___closed__0_once, _init_l_Lean_levelOne___closed__0);
+x_1 = lean_obj_once(&l_Lean_Level_one___closed__0, &l_Lean_Level_one___closed__0_once, _init_l_Lean_Level_one___closed__0);
 return x_1;
 }
 }
@@ -2572,7 +2581,7 @@ _start:
 lean_object* x_1; lean_object* x_2; lean_object* x_3; lean_object* x_4; lean_object* x_5; lean_object* x_6; 
 x_1 = ((lean_object*)(l_Lean_Level_mvarId_x21___closed__2));
 x_2 = lean_unsigned_to_nat(19u);
-x_3 = lean_unsigned_to_nat(192u);
+x_3 = lean_unsigned_to_nat(195u);
 x_4 = ((lean_object*)(l_Lean_Level_mvarId_x21___closed__1));
 x_5 = ((lean_object*)(l_Lean_Level_mvarId_x21___closed__0));
 x_6 = l_mkPanicMessageWithDecl(x_5, x_4, x_3, x_2, x_1);
@@ -4348,22 +4357,13 @@ lean_dec(x_3);
 return x_4;
 }
 }
-static lean_object* _init_l_Lean_Level_normalize___closed__0(void) {
-_start:
-{
-lean_object* x_1; lean_object* x_2; 
-x_1 = lean_unsigned_to_nat(0u);
-x_2 = lean_mk_empty_array_with_capacity(x_1);
-return x_2;
-}
-}
 static lean_object* _init_l_Lean_Level_normalize___closed__3(void) {
 _start:
 {
 lean_object* x_1; lean_object* x_2; lean_object* x_3; lean_object* x_4; lean_object* x_5; lean_object* x_6; 
 x_1 = ((lean_object*)(l_Lean_Level_normalize___closed__2));
 x_2 = lean_unsigned_to_nat(11u);
-x_3 = lean_unsigned_to_nat(398u);
+x_3 = lean_unsigned_to_nat(401u);
 x_4 = ((lean_object*)(l_Lean_Level_normalize___closed__1));
 x_5 = ((lean_object*)(l_Lean_Level_mvarId_x21___closed__0));
 x_6 = l_mkPanicMessageWithDecl(x_5, x_4, x_3, x_2, x_1);
@@ -4390,7 +4390,7 @@ x_6 = lean_ctor_get(x_4, 1);
 lean_inc(x_6);
 lean_dec_ref(x_4);
 x_7 = lean_unsigned_to_nat(0u);
-x_8 = lean_obj_once(&l_Lean_Level_normalize___closed__0, &l_Lean_Level_normalize___closed__0_once, _init_l_Lean_Level_normalize___closed__0);
+x_8 = ((lean_object*)(l_Lean_Level_normalize___closed__0));
 x_9 = l___private_Lean_Level_0__Lean_Level_getMaxArgsAux___at___00Lean_Level_normalize_spec__0(x_5, x_2, x_8);
 x_10 = l___private_Lean_Level_0__Lean_Level_getMaxArgsAux___at___00Lean_Level_normalize_spec__0(x_6, x_2, x_9);
 x_11 = lean_unsigned_to_nat(1u);
@@ -6468,7 +6468,7 @@ _start:
 lean_object* x_1; lean_object* x_2; lean_object* x_3; lean_object* x_4; lean_object* x_5; lean_object* x_6; 
 x_1 = ((lean_object*)(l___private_Lean_Level_0__Lean_Level_updateSucc_x21Impl___closed__1));
 x_2 = lean_unsigned_to_nat(14u);
-x_3 = lean_unsigned_to_nat(552u);
+x_3 = lean_unsigned_to_nat(555u);
 x_4 = ((lean_object*)(l___private_Lean_Level_0__Lean_Level_updateSucc_x21Impl___closed__0));
 x_5 = ((lean_object*)(l_Lean_Level_mvarId_x21___closed__0));
 x_6 = l_mkPanicMessageWithDecl(x_5, x_4, x_3, x_2, x_1);
@@ -6524,7 +6524,7 @@ _start:
 lean_object* x_1; lean_object* x_2; lean_object* x_3; lean_object* x_4; lean_object* x_5; lean_object* x_6; 
 x_1 = ((lean_object*)(l___private_Lean_Level_0__Lean_Level_updateMax_x21Impl___closed__1));
 x_2 = lean_unsigned_to_nat(19u);
-x_3 = lean_unsigned_to_nat(563u);
+x_3 = lean_unsigned_to_nat(566u);
 x_4 = ((lean_object*)(l___private_Lean_Level_0__Lean_Level_updateMax_x21Impl___closed__0));
 x_5 = ((lean_object*)(l_Lean_Level_mvarId_x21___closed__0));
 x_6 = l_mkPanicMessageWithDecl(x_5, x_4, x_3, x_2, x_1);
@@ -6602,7 +6602,7 @@ _start:
 lean_object* x_1; lean_object* x_2; lean_object* x_3; lean_object* x_4; lean_object* x_5; lean_object* x_6; 
 x_1 = ((lean_object*)(l___private_Lean_Level_0__Lean_Level_updateIMax_x21Impl___closed__1));
 x_2 = lean_unsigned_to_nat(20u);
-x_3 = lean_unsigned_to_nat(574u);
+x_3 = lean_unsigned_to_nat(577u);
 x_4 = ((lean_object*)(l___private_Lean_Level_0__Lean_Level_updateIMax_x21Impl___closed__0));
 x_5 = ((lean_object*)(l_Lean_Level_mvarId_x21___closed__0));
 x_6 = l_mkPanicMessageWithDecl(x_5, x_4, x_3, x_2, x_1);
@@ -9170,6 +9170,8 @@ l_Lean_instInhabitedLevel = _init_l_Lean_instInhabitedLevel();
 lean_mark_persistent(l_Lean_instInhabitedLevel);
 l_Lean_levelZero = _init_l_Lean_levelZero();
 lean_mark_persistent(l_Lean_levelZero);
+l_Lean_Level_one = _init_l_Lean_Level_one();
+lean_mark_persistent(l_Lean_Level_one);
 l_Lean_levelOne = _init_l_Lean_levelOne();
 lean_mark_persistent(l_Lean_levelOne);
 return lean_io_result_mk_ok(lean_box(0));
