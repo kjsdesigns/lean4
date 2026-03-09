@@ -11,8 +11,6 @@ public import Lean.Util.NumApps
 public import Lean.Meta.Eqns
 public import Lean.Elab.RecAppSyntax
 public import Lean.Elab.DefView
-import Lean.Meta.InstMVarsAll
-
 public section
 
 namespace Lean.Elab
@@ -49,7 +47,7 @@ Applies `Lean.instantiateMVars` to the types of values of each predefinition.
 -/
 def instantiateMVarsAtPreDecls (preDefs : Array PreDefinition) : TermElabM (Array PreDefinition) :=
   preDefs.mapM fun preDef => do
-    pure { preDef with type := (← instantiateAllMVars preDef.type), value := (← instantiateAllMVars preDef.value) }
+    pure { preDef with type := (← instantiateMVars preDef.type), value := (← instantiateMVars preDef.value) }
 
 /--
 Applies `Lean.Elab.Term.levelMVarToParam` to the types of each predefinition.

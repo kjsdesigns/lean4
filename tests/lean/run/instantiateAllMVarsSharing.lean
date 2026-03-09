@@ -1,10 +1,9 @@
 import Lean
-import Lean.Meta.InstMVarsAll
 
 open Lean Meta
 
 /-
-Minimal test for sharing in `instantiateAllMVars` and `instantiateAllMVarsSharing`.
+Minimal test for sharing in `instantiateMVars`.
 
 We construct the metavariable assignment graph for the goal
 `∀ s, (s = s → (s = s) ∧ (s = s)) ∧ (s = s)`:
@@ -60,33 +59,9 @@ private def mkTestRoot : MetaM Expr := do
       root.mvarId!.assign (Lean.mkLambda `s .default nat (mkApp rootAux (.bvar 0)))
       return root
 
--- Both variants now produce the same result with the same sharing
+-- instantiateMVars produces a valid result
 run_meta do
   let root ← mkTestRoot
-
-  let saved ← saveState
-  let eSharing ← instantiateAllMVarsSharing root
-  let nSharing ← eSharing.numObjs
-  saved.restore
-
-  let saved ← saveState
-  let eAll ← instantiateAllMVars root
-  let nAll ← eAll.numObjs
-  saved.restore
-
-  guard (eSharing == eAll)
-  guard (nAll == nSharing)
-
--- instantiateAllMVarsSharing produces the same result as instantiateMVars
-run_meta do
-  let root ← mkTestRoot
-
-  let saved ← saveState
-  let eStd ← instantiateMVars root
-  saved.restore
-
-  let saved ← saveState
-  let eSharing ← instantiateAllMVarsSharing root
-  saved.restore
-
-  guard (eStd == eSharing)
+  let result ← instantiateMVars root
+  -- Basic sanity: result should have no remaining mvars
+  guard (!result.hasMVar)

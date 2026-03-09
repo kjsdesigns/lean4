@@ -1,5 +1,4 @@
 import Lean
-import Lean.Meta.InstMVarsAll
 
 open Lean Meta
 
@@ -75,19 +74,11 @@ private def check (label : String) (result : Expr) : MetaM Unit := do
   unless result == expected do
     throwError "{label}: expected {expected}, got {result}"
 
--- Both implementations must produce the expected result
+-- Shadow test
 run_meta do
   let root ← mkShadowTest
-
-  let saved ← saveState
-  let eOrig ← instantiateMVarsOriginal root
-  saved.restore
-  check "instantiateMVarsOriginal (shadow)" eOrig
-
-  let saved ← saveState
-  let eNew ← instantiateAllMVars root
-  saved.restore
-  check "instantiateAllMVars (shadow)" eNew
+  let result ← instantiateMVars root
+  check "instantiateMVars (shadow)" result
 
 /-
 Test: an fvar first seen unsubstituted, then substituted at a higher scope.
@@ -162,15 +153,8 @@ private def checkLateBind (label : String) (result : Expr) (y_fvar : Expr) : Met
   unless result == expected do
     throwError "{label}: expected {expected}, got {result}"
 
+-- Late-bind test
 run_meta do
   let (root, y_fvar) ← mkLateBindTest
-
-  let saved ← saveState
-  let eOrig ← instantiateMVarsOriginal root
-  saved.restore
-  checkLateBind "instantiateMVarsOriginal (late-bind)" eOrig y_fvar
-
-  let saved ← saveState
-  let eNew ← instantiateAllMVars root
-  saved.restore
-  checkLateBind "instantiateAllMVars (late-bind)" eNew y_fvar
+  let result ← instantiateMVars root
+  checkLateBind "instantiateMVars (late-bind)" result y_fvar

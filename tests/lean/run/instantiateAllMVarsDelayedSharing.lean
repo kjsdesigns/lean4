@@ -1,7 +1,6 @@
 module
 
 import Lean
-import Lean.Meta.InstMVarsAll
 
 open Lean Meta
 
@@ -41,17 +40,10 @@ private def extractComponents (e : Expr) : Expr × Expr :=
   let fst := body.appFn!.appArg!
   (fst, snd)
 
-unsafe def checkSharing (label : String) (f : Expr → MetaM Expr) : MetaM Bool := do
-  let root ← mkTest
-  let saved ← saveState
-  let result ← f root
-  saved.restore
-  let (fst, snd) := extractComponents result
-  let shared := ptrEq fst snd
-  IO.println s!"{label}: shared delayed mvar ptr sharing = {shared}"
-  return shared
-
 run_meta do
-  let _ ← unsafe checkSharing "instantiateMVarsOriginal" instantiateMVarsOriginal
-  let shared ← unsafe checkSharing "instantiateMVars" instantiateMVars
+  let root ← mkTest
+  let result ← instantiateMVars root
+  let (fst, snd) := extractComponents result
+  let shared := unsafe ptrEq fst snd
+  IO.println s!"instantiateMVars: shared delayed mvar ptr sharing = {shared}"
   guard shared

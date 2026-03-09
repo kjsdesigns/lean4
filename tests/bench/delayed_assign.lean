@@ -1,5 +1,4 @@
 import Lean
-import Lean.Meta.InstMVarsAll
 
 set_option maxHeartbeats 4000000
 
@@ -47,17 +46,8 @@ def runImpl (n : Nat) (f : Expr → MetaM Expr) : MetaM (Expr × Float) := do
   return (r, ms)
 
 partial def bench1 (n : Nat) : MetaM Unit := do
-  let (rDefault, msDefault) ← runImpl n instantiateMVars
-  let (rOriginal, msOriginal) ← runImpl n instantiateMVarsOriginal
-  let (rAll, msAll) ← runImpl n instantiateAllMVars
-
-  -- Verify correctness
-  unless Expr.eqv rDefault rOriginal do
-    IO.println s!"ERROR: instantiateMVars vs Original differ for n={n}"
-  unless Expr.eqv rDefault rAll do
-    IO.println s!"ERROR: instantiateMVars vs AllMVars differ for n={n}"
-
-  IO.println s!"bench1_{n}: Default {msDefault} ms, Original {msOriginal} ms, AllMVars {msAll} ms"
+  let (_, msDefault) ← runImpl n instantiateMVars
+  IO.println s!"bench1_{n}: Default {msDefault} ms"
 
 run_meta do
   IO.println "Example (n = 5):"

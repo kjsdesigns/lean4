@@ -1,5 +1,4 @@
 import Lean
-import Lean.Meta.InstMVarsAll
 
 open Lean Meta
 
@@ -77,23 +76,13 @@ private def extractComponents (e : Expr) : Expr × Expr :=
   let fst := body.appFn!.appArg!
   (fst, snd)
 
-unsafe def checkImpl (label : String) (f : Expr → MetaM Expr) : MetaM Bool := do
+run_meta do
   let root ← mkCrossScopeTest
   let expected := mkExpected
-  let saved ← saveState
-  let result ← f root
-  saved.restore
+  let result ← instantiateMVars root
   unless result == expected do
-    throwError "{label}: wrong result, got {result}"
+    throwError "instantiateMVars: wrong result, got {result}"
   let (fst, snd) := extractComponents result
-  let shared := ptrEq fst snd
-  IO.println s!"{label}: cross-scope sharing = {shared}"
-  return shared
-
-run_meta do
-  let _ ← unsafe checkImpl "instantiateMVarsOriginal" instantiateMVarsOriginal
-  let sharingShared ← unsafe checkImpl "instantiateAllMVarsSharing" instantiateAllMVarsSharing
-  let defaultShared ← unsafe checkImpl "instantiateMVars" instantiateMVars
-  -- instantiateAllMVarsSharing (= instantiateMVars) should have cross-scope sharing
-  guard sharingShared
-  guard defaultShared
+  let shared := unsafe ptrEq fst snd
+  IO.println s!"instantiateMVars: cross-scope sharing = {shared}"
+  guard shared
