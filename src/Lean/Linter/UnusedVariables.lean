@@ -468,6 +468,32 @@ where
     else
       stx
 
+/-- Like `Syntax.findStack?` but finds stacks for all ranges in `targets` in a single traversal.
+This avoids the O(n·m) cost of calling `findStack?` n times on a syntax tree with m leaves
+(e.g. many unused implicit parameters in a single binder group). -/
+private partial def findStacks (root : Syntax) (targets : Std.HashSet Lean.Syntax.Range) :
+    Std.HashMap Lean.Syntax.Range Syntax.Stack :=
+  go [] root {}
+where
+  go (stack : Syntax.Stack) (stx : Syntax)
+      (result : Std.HashMap Lean.Syntax.Range Syntax.Stack) :
+      Std.HashMap Lean.Syntax.Range Syntax.Stack :=
+    if !stx.hasArgs then
+      -- Leaf node: check if its range matches one of the targets
+      match stx.getRange? with
+      | some range =>
+        -- Find any target that this leaf's range includes
+        -- (typically the leaf's range equals the target range for identifiers)
+        if targets.contains range then result.insert range ((stx, 0) :: stack) else result
+      | none => result
+    else
+      -- Inner node: recurse into all children
+      Id.run do
+        let mut result := result
+        for i in *...stx.getNumArgs do
+          result := go ((stx, i) :: stack) stx[i] result
+        return result
+
 private def hasSorry (stx : Syntax) : Bool :=
   stx.find? (fun
     -- `@[unused_variables_ignore_fn]` can be used to extend this list
@@ -518,6 +544,29 @@ def unusedVariables : Linter where
     -- Collect ignore functions
     let ignoreFns ← getUnusedVariablesIgnoreFns
 
+    -- Collect the set of ranges that might need syntax stack lookups
+    -- (those not already known to be used or global declarations).
+    -- This lets us batch all findStack? calls into a single syntax tree traversal.
+    let fvarUses₀ ← fvarUsesRef.get
+    let potentiallyUnusedRanges : Std.HashSet Lean.Syntax.Range :=
+      s.fvarDefs.fold (init := {}) fun acc range { aliases, .. } =>
+        if aliases.any fun id => fvarUses₀.contains (getCanonVar id) then acc
+        else if s.constDecls.contains range then acc
+        else acc.insert range
+
+    -- Batch-find syntax stacks for all potentially-unused ranges in one traversal,
+    -- avoiding the O(n·m) cost of per-variable findStack? calls.
+    let syntaxStacks := findStacks cmdStx potentiallyUnusedRanges
+
+    -- Pre-check: determine if any info tree contains macro expansion info.
+    -- If not, we can skip the per-variable collectMacroExpansions? calls entirely,
+    -- since they would all return `some []` and the subsequent check would be false.
+    let hasMacroExpansions := Id.run do
+      for tree in infoTrees do
+        if tree.foldInfo (fun _ info found => found || info matches .ofMacroExpansionInfo ..) false then
+          return true
+      return false
+
     let mut initializedMVars := false
     let mut unused := #[]
     -- For each variable definition, check to see if it is used
@@ -529,8 +578,8 @@ def unusedVariables : Linter where
       -- If this is a global declaration then it is (potentially) used after the command
       if s.constDecls.contains range then continue
 
-      -- Get the syntax stack for this variable declaration
-      let some ((id', _) :: stack) := cmdStx.findStack? (·.getRange?.any (·.includes range))
+      -- Look up the pre-computed syntax stack for this variable declaration
+      let some ((id', _) :: stack) := syntaxStacks[range]?
         | continue
 
       -- If it is blacklisted by an `ignoreFn` then skip it
@@ -538,21 +587,22 @@ def unusedVariables : Linter where
       if id'.isIdent && ignoreFns.any (· declStx stack linterOpts) then continue
 
       -- Evaluate ignore functions again on macro expansion outputs
-      if ← infoTrees.anyM fun tree => do
-        let some macroExpansions ← collectMacroExpansions? range tree | return false
-        return macroExpansions.any fun expansion =>
-          -- in a macro expansion, there may be multiple leafs whose (synthetic) range
-          -- includes `range`, so accept strict matches only
-          if let some (_ :: stack) :=
-            expansion.output.findStack?
-              (·.getRange?.any (·.includes range))
-              (fun stx => stx.isIdent && stx.getRange?.any (· == range))
-          then
-            ignoreFns.any (· declStx stack linterOpts)
-          else
-            false
-      then
-        continue
+      if hasMacroExpansions then
+        if ← infoTrees.anyM fun tree => do
+          let some macroExpansions ← collectMacroExpansions? range tree | return false
+          return macroExpansions.any fun expansion =>
+            -- in a macro expansion, there may be multiple leafs whose (synthetic) range
+            -- includes `range`, so accept strict matches only
+            if let some (_ :: stack) :=
+              expansion.output.findStack?
+                (·.getRange?.any (·.includes range))
+                (fun stx => stx.isIdent && stx.getRange?.any (· == range))
+            then
+              ignoreFns.any (· declStx stack linterOpts)
+            else
+              false
+        then
+          continue
 
       -- Visiting the metavariable assignments is expensive so we delay initialization
       if !initializedMVars then
