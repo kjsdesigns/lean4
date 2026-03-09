@@ -1490,7 +1490,7 @@ theorem insert_simInv (h : SimInv spec imp) (hrs : rs ≤ spec.scopeN) :
           Option.getD_some] at heq
         simp only [List.getElem?_eq_getElem hi, List.getElem?_eq_getElem hj]
         exact congrArg some heq
-      have hij := List.getElem?_inj hi h.gensNodup heqi
+      have hij := (List.getElem?_inj hi h.gensNodup).mp heqi
       subst hij; rfl
 
 /-! ### Reachable states and main theorems -/
