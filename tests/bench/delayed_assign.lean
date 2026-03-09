@@ -1,7 +1,5 @@
 import Lean
 
-set_option maxHeartbeats 4000000
-
 open Lean Meta
 
 def mkLE (i : Nat) : Expr :=
@@ -21,6 +19,18 @@ partial def solve (mvarId : MVarId) : MetaM Unit := do
   else
     let [] ← mvarId.applyConst ``True.intro | failure
 
+partial def runBench (name : String) (n : Nat) (mk : Nat → MetaM MVarId) : MetaM Unit := do
+  let mvarId ← mk n
+  let startTime ← IO.monoNanosNow
+  solve mvarId
+  let endTime ← IO.monoNanosNow
+  let ms := (endTime - startTime).toFloat / 1000000.0
+  let startTime ← IO.monoNanosNow
+  discard <| instantiateMVars (mkMVar mvarId)
+  let endTime ← IO.monoNanosNow
+  let instMs := (endTime - startTime).toFloat / 1000000.0
+  IO.println s!"{name}_{n}: {ms} ms, instantiateMVars: {instMs} ms"
+
 def mkBench1 (n : Nat) : MetaM MVarId := do
   let type := mkType n
   return (← mkFreshExprSyntheticOpaqueMVar type).mvarId!
@@ -35,24 +45,12 @@ where
     | 0 => mkResultType n
     | i+1 => .forallE `x Nat.mkType (mkAnd (mkType i) (mkLE (n - i - 1))) .default
 
-/-- Run a single implementation on a fresh copy of the benchmark, return (result, time_ms). -/
-def runImpl (n : Nat) (f : Expr → MetaM Expr) : MetaM (Expr × Float) := do
-  let mvarId ← mkBench1 n
-  solve mvarId
-  let t0 ← IO.monoNanosNow
-  let r ← f (mkMVar mvarId)
-  let t1 ← IO.monoNanosNow
-  let ms := (t1 - t0).toFloat / 1000000.0
-  return (r, ms)
-
 partial def bench1 (n : Nat) : MetaM Unit := do
-  let (_, msDefault) ← runImpl n instantiateMVars
-  IO.println s!"bench1_{n}: Default {msDefault} ms"
+  runBench "bench1" n mkBench1
 
 run_meta do
   IO.println "Example (n = 5):"
   let ex ← (← mkBench1 5).getType
   IO.println s!"{← ppExpr ex}"
-  IO.println ""
   for i in [10, 20, 40, 80, 100, 200, 300, 400, 500] do
     bench1 i
