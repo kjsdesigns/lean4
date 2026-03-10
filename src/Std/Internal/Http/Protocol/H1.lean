@@ -955,15 +955,19 @@ def canContinue (machine : Machine dir) (status : Status) : Machine dir :=
 /--
 Sends an error response with `Connection: close` and shuts down input.
 
-Sends `status` with a `Connection: close` header, marks the body as closed,
-signals EOF on the reader, and stops accepting further input. Used when the
-server must abort an ongoing request with a final error response.
+If the machine is waiting to send a message, sends `status` with a `Connection: close`
+header and signals that the body is done (letting the step function encode and flush the
+response), then stops accepting further input. Otherwise, closes the writer directly and
+stops accepting further input.
 -/
 def closeWithError (machine : Machine .receiving) (status : Status) : Machine .receiving :=
-  machine.send { status, headers := .empty |>.insert .connection (.mk "close") }
-    |>.userClosedBody
-    |>.closeReader
-    |>.noMoreInput
+  if machine.isWaitingMessage then
+    machine.send { status, headers := .empty |>.insert .connection (.mk "close") }
+      |>.userClosedBody
+      |>.closeReader
+      |>.noMoreInput
+  else
+    machine.closeWriter.closeReader.noMoreInput
 
 /--
 Enqueues body chunks into the writer buffer for encoding and sending.
