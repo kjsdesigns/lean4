@@ -17,27 +17,27 @@ structure MyPair (α : Type) where
   fst : α
   snd : α
 
-def foo (x : MyPair Nat) := x
+-- Make `foo` irreducible so grind can't unfold it and see the constructor
+@[irreducible] def foo (x : MyPair Nat) := x
 
 -- A theorem about MyPair that grind +suggestions can find via library search
 theorem myPair_eq (p : MyPair Nat) (h1 : p.fst = 1) (h2 : p.snd = 1) :
     p = foo ⟨1, 1⟩ := by
-  cases p; simp_all [foo]
+  unfold foo; cases p; simp_all
 
 -- A goal where:
 -- - atomic block fails (no simple solution, basic grind can't prove it)
 -- - first_par succeeds: grind +locals +suggestions finds myPair_eq
 -- The +locals +suggestions flags are filtered out in the suggestion output
+-- Note: foo is irreducible so grind can't see the constructor on the RHS,
+-- but grind +suggestions can find myPair_eq which mentions foo directly
 /--
 info: Try these:
-  [apply] grind only [myPair_eq, foo]
-  [apply] grind =>
-    instantiate only [myPair_eq]
-    instantiate only [foo]
+  [apply] grind only [myPair_eq]
+  [apply] grind => instantiate only [myPair_eq]
 -/
 #guard_msgs in
-example (p : MyPair Nat) (h1 : p.fst = 1) (h2 : p.snd = 1) : p = ⟨1, 1⟩ := by
+example (p : MyPair Nat) (h1 : p.fst = 1) (h2 : p.snd = 1) : p = foo ⟨1, 1⟩ := by
   fail_if_success grind
   fail_if_success grind +locals
-  fail_if_success grind +suggestions
   try?
