@@ -953,6 +953,19 @@ def canContinue (machine : Machine dir) (status : Status) : Machine dir :=
   | .receiving, _ => machine
 
 /--
+Sends an error response with `Connection: close` and shuts down input.
+
+Sends `status` with a `Connection: close` header, marks the body as closed,
+signals EOF on the reader, and stops accepting further input. Used when the
+server must abort an ongoing request with a final error response.
+-/
+def closeWithError (machine : Machine .receiving) (status : Status) : Machine .receiving :=
+  machine.send { status, headers := .empty |>.insert .connection (.mk "close") }
+    |>.userClosedBody
+    |>.closeReader
+    |>.noMoreInput
+
+/--
 Enqueues body chunks into the writer buffer for encoding and sending.
 -/
 @[inline]
