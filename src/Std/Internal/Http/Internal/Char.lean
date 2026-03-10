@@ -102,7 +102,7 @@ def quotedStringChar (c : Char) : Bool :=
 
 theorem quotedStringChar_lt_0x80 : quotedStringChar c → c < '\x80' := by
   simp [quotedStringChar, qdtext, quotedPairChar]
-  split <;> (subst_vars; simp)
+  split <;> simp only [true_or, Char.reduceLT, imp_self]
   grind [→ Char.le_def.mp, Char.lt_def.mpr, vchar]
 
 private theorem not_quotedStringChar_ofNat_aux :
@@ -112,7 +112,7 @@ private theorem not_quotedStringChar_ofNat_aux :
 
 theorem not_quotedStringChar_of_not_qdtext_not_dquote_backslash :
     ∀ c : Char, c < '\x80' → ¬(qdtext (c)) ∧ ¬((c = '\"') || (c = '\\')) →
-    ¬(quotedStringChar (c)) := by
+    ¬(quotedStringChar c) := by
   intro c hlt hq
   simpa [Char.ofNat_toNat] using
     (not_quotedStringChar_ofNat_aux
