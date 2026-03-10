@@ -65,27 +65,14 @@ info: Try this to display the actual theorem instances:
 #grind_lint skip Array.foldr_empty
 #grind_lint skip Array.getElem_zero_filter
 #grind_lint skip Array.getElem_zero_filterMap
+#grind_lint skip Array.count_empty
 
-/--
-info: instantiating `Array.count_empty` triggers 23 additional `grind` theorem instantiations
----
-info: Try this:
-  [apply] #grind_lint check  (min := 20) in Array
-  #grind_lint inspect Array.count_empty
--/
 #guard_msgs in
 #grind_lint check (min := 20) in Array
 
 #guard_msgs in
 #grind_lint inspect Array.filterMap_some
 
-/--
-info: instantiating `Array.count_empty` triggers 23 additional `grind` theorem instantiations
----
-info: Try this:
-  [apply] #grind_lint check  (min := 20) in module Init.Data.Array
-  #grind_lint inspect Array.count_empty
--/
 #guard_msgs in
 #grind_lint check (min := 20) in module Init.Data.Array
 
@@ -117,8 +104,6 @@ info: instantiating `Array.back?_empty` triggers 17 additional `grind` theorem i
 ---
 info: instantiating `Array.back_append` triggers 16 additional `grind` theorem instantiations
 ---
-info: instantiating `Array.count_empty` triggers 23 additional `grind` theorem instantiations
----
 info: instantiating `Array.findIdx_empty` triggers 20 additional `grind` theorem instantiations
 ---
 info: instantiating `Array.findIdx_singleton` triggers 16 additional `grind` theorem instantiations
@@ -145,7 +130,6 @@ info: Try this:
   [apply] #grind_lint check  (min := 15) in Array
   #grind_lint inspect Array.back?_empty
   #grind_lint inspect Array.back_append
-  #grind_lint inspect Array.count_empty
   #grind_lint inspect Array.findIdx_empty
   #grind_lint inspect Array.findIdx_singleton
   #grind_lint inspect Array.getElem_eraseIdx

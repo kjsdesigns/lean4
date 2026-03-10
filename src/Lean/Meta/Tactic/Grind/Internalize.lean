@@ -345,30 +345,31 @@ these facts.
 -/
 
 -- Eta-expand a non-constructor structure term `a` by asserting `a = ⟨a.1, a.2, ...⟩`.
-private def doEtaExpandStruct (a : Expr) (generation : Nat) : GoalM Unit := do
-  let aType ← whnf (← inferType a)
-  matchConstNonRecStructure aType.getAppFn (fun _ => return ()) fun inductVal us ctorVal => do
-    let params := aType.getAppArgs[*...inductVal.numParams]
-    let mut ctorApp := mkAppN (mkConst ctorVal.name us) params
-    for j in *...ctorVal.numFields do
-      let mut proj ← mkProjFn ctorVal us params j a
-      if (← isProof proj) then
-        proj ← markProof proj
-      ctorApp := mkApp ctorApp proj
-    ctorApp ← preprocessLight ctorApp
-    internalize ctorApp generation
-    let u ← getLevel aType
-    let expectedProp := mkApp3 (mkConst ``Eq [u]) aType a ctorApp
-    pushEq a ctorApp <| mkExpectedPropHint (mkApp2 (mkConst ``Eq.refl [u]) aType a) expectedProp
+-- `aType` must be the whnf of `a`'s type, and must have already been matched as a non-recursive structure
+-- with the given `inductVal`, `us`, and `ctorVal`.
+private def doEtaExpandStruct (a : Expr) (aType : Expr) (inductVal : InductiveVal)
+    (us : List Level) (ctorVal : ConstructorVal) (generation : Nat) : GoalM Unit := do
+  let params := aType.getAppArgs[*...inductVal.numParams]
+  let mut ctorApp := mkAppN (mkConst ctorVal.name us) params
+  for j in *...ctorVal.numFields do
+    let mut proj ← mkProjFn ctorVal us params j a
+    if (← isProof proj) then
+      proj ← markProof proj
+    ctorApp := mkApp ctorApp proj
+  ctorApp ← preprocessLight ctorApp
+  internalize ctorApp generation
+  let u ← getLevel aType
+  let expectedProp := mkApp3 (mkConst ``Eq [u]) aType a ctorApp
+  pushEq a ctorApp <| mkExpectedPropHint (mkApp2 (mkConst ``Eq.refl [u]) aType a) expectedProp
 
 private def propagateEtaStruct (a : Expr) (generation : Nat) : GoalM Unit := do
   unless (← getConfig).etaStruct do return ()
   let aType ← whnf (← inferType a)
-  matchConstNonRecStructure aType.getAppFn (fun _ => return ()) fun inductVal _us ctorVal => do
+  matchConstNonRecStructure aType.getAppFn (fun _ => return ()) fun inductVal us ctorVal => do
     unless a.isAppOf ctorVal.name do
       -- TODO: remove ctorVal.numFields after update stage0
       if (← isExtTheorem inductVal.name) || ctorVal.numFields == 0 then
-        doEtaExpandStruct a generation
+        doEtaExpandStruct a aType inductVal us ctorVal generation
 
 -- When internalizing `Eq α a b` where one side is a structure constructor and the other isn't,
 -- eta-expand the non-constructor side. This allows grind to close goals like `r = ⟨0, some 0⟩`
@@ -377,14 +378,14 @@ private def propagateEtaStructForEq (e : Expr) (generation : Nat) : GoalM Unit :
   unless (← getConfig).etaStruct do return ()
   let_expr Eq α a b := e | return ()
   let αWhnf ← whnf α
-  matchConstNonRecStructure αWhnf.getAppFn (fun _ => return ()) fun inductVal _us ctorVal => do
+  matchConstNonRecStructure αWhnf.getAppFn (fun _ => return ()) fun inductVal us ctorVal => do
     unless (← isExtTheorem inductVal.name) do -- already handled by propagateEtaStruct
       let aIsCtor := a.isAppOf ctorVal.name
       let bIsCtor := b.isAppOf ctorVal.name
       if aIsCtor && !bIsCtor then
-        doEtaExpandStruct b generation
+        doEtaExpandStruct b αWhnf inductVal us ctorVal generation
       else if bIsCtor && !aIsCtor then
-        doEtaExpandStruct a generation
+        doEtaExpandStruct a αWhnf inductVal us ctorVal generation
 
 /-- Returns `true` if we can ignore `ext` for functions occurring as arguments of a `declName`-application. -/
 private def extParentsToIgnore (declName : Name) : Bool :=
