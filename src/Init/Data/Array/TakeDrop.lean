@@ -21,6 +21,22 @@ public section
 
 namespace Array
 
+@[simp, grind =] theorem take_empty {i : Nat} :
+    (#[] : Array α).take i = #[] := by cases i <;> rfl
+
+@[simp, grind =] theorem take_zero {xs : Array α} :
+    xs.take 0 = #[] := by
+  simp [Array.take_eq_extract]
+
+@[simp, grind =] theorem drop_empty : (#[] : Array α).drop i = #[] := by
+  simp [Array.drop_eq_extract]
+
+@[simp, grind =] theorem drop_zero {xs : Array α} : xs.drop 0 = xs := by
+  simp [Array.drop_eq_extract]
+
+theorem drop_eq_empty_of_le {xs : Array α} {i : Nat} (h : xs.size ≤ i) : xs.drop i = #[] := by
+  simp [Array.drop_eq_extract, Array.extract_empty_of_size_le_start h]
+
 @[simp, grind =] theorem size_take {xs : Array α} {i : Nat} : (xs.take i).size = min i xs.size := by
   simp [take_eq_extract]
 
