@@ -6,7 +6,9 @@ Authors: Sofia Rodrigues
 module
 
 prelude
-public import Init.Data
+public import Init.Data.Char
+public import Init.Data.String
+public import Init.Data.Int
 public import Init.Grind
 
 @[expose]
