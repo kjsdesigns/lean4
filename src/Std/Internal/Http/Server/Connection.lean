@@ -140,19 +140,6 @@ private def pollNextEvent
     pure .close
 
 /--
-Sends an error response when the connection or request encounters a failure.
-If the machine is waiting for a message and a response is pending, sends the error status
-and closes the connection. Otherwise, closes the writer and discards any pending response.
--/
-private def handleError
-    (machine : H1.Machine .receiving) (status : Status) (waitingResponse : Bool)
-    : H1.Machine .receiving × Bool :=
-  if machine.isWaitingMessage ∧ waitingResponse then
-    (machine.closeWithError status, false)
-  else
-    (machine.closeWriter.noMoreInput, waitingResponse)
-
-/--
 Handles the `Expect: 100-continue` protocol for a pending request head.
 Races between the handler's decision (`Handler.onContinue`), the connection being
 cancelled, and a lingering timeout. Returns the updated machine and whether
@@ -229,7 +216,7 @@ private structure ConnectionState (β : Type) where
   respStream : Option β
   requiresData : Bool
   expectData : Option Nat
-  waitingResponse : Bool
+  handlerDispatched : Bool
   pendingHead : Option Request.Head
 
 /--
@@ -293,7 +280,7 @@ private def processH1Events
         keepAliveTimeout := some config.keepAliveTimeout.val
         currentTimeout := config.keepAliveTimeout.val
         headerTimeout := none
-        waitingResponse := false
+        handlerDispatched := false
       }
 
     | .failed err =>
@@ -316,7 +303,7 @@ private def processH1Events
 /--
 Dispatches a pending request head to the handler if one is waiting.
 Spawns the handler as an async task and routes its result back through `state.response`.
-Returns the updated state with `pendingHead` cleared and `waitingResponse` set.
+Returns the updated state with `pendingHead` cleared and `handlerDispatched` set.
 -/
 private def dispatchPendingRequest
     {σ : Type} [Handler σ]
@@ -329,7 +316,7 @@ private def dispatchPendingRequest
       |>.asTask
 
     BaseIO.chainTask task (discard ∘ state.response.send)
-    return { state with pendingHead := none, waitingResponse := true }
+    return { state with pendingHead := none, handlerDispatched := true }
   else
     return state
 
@@ -388,26 +375,22 @@ private def handleRecvEvent
 
   | .timeout =>
     Handler.onFailure handler "request header timeout"
-    let newMachine := state.machine.closeReader
-    let (finalMachine, newWaiting) := handleError newMachine .requestTimeout state.waitingResponse
-    return ({ state with machine := finalMachine, waitingResponse := newWaiting }, false)
+    return ({ state with machine := state.machine.closeWithError .requestTimeout, handlerDispatched := false }, false)
 
   | .shutdown =>
-    let (newMachine, newWaiting) := handleError state.machine .serviceUnavailable state.waitingResponse
-    return ({ state with machine := newMachine, waitingResponse := newWaiting }, false)
+    return ({ state with machine := state.machine.closeWithError .serviceUnavailable, handlerDispatched := false }, false)
 
   | .response (.error err) =>
     Handler.onFailure handler err
-    let (newMachine, newWaiting) := handleError state.machine .internalServerError state.waitingResponse
-    return ({ state with machine := newMachine, waitingResponse := newWaiting }, false)
+    return ({ state with machine := state.machine.closeWithError .internalServerError, handlerDispatched := false }, false)
 
   | .response (.ok res) =>
     if state.machine.failed then
       if ¬(← Body.Reader.isClosed res.body) then Body.Reader.close res.body
-      return ({ state with waitingResponse := false }, false)
+      return ({ state with handlerDispatched := false }, false)
     else
       let (newMachine, newRespStream) ← applyResponse config state.machine res
-      return ({ state with machine := newMachine, waitingResponse := false, respStream := newRespStream }, false)
+      return ({ state with machine := newMachine, handlerDispatched := false, respStream := newRespStream }, false)
 
 /--
 Computes the active `PollSources` for the current connection state.
@@ -431,13 +414,13 @@ private def buildPollSources
 
   -- Include the socket only when there is more to do than waiting for the handler alone.
   let pollSocket :=
-    state.requiresData ∨ !state.waitingResponse ∨ state.respStream.isSome ∨
+    state.requiresData ∨ !state.handlerDispatched ∨ state.respStream.isSome ∨
     state.machine.writer.sentMessage ∨ (state.machine.canPullBody ∧ requestBodyInterested)
 
   return {
     socket := if pollSocket then some socket else none
     expect := state.expectData
-    response := if state.waitingResponse then some state.response else none
+    response := if state.handlerDispatched then some state.response else none
     responseBody := state.respStream
     requestBody := requestBody
     timeout := state.currentTimeout
@@ -475,7 +458,7 @@ private def handle
     respStream := none
     requiresData := false
     expectData := none
-    waitingResponse := false
+    handlerDispatched := false
     pendingHead := none
   }
 
@@ -498,7 +481,7 @@ private def handle
     state ← dispatchPendingRequest handler connection.extensions connectionContext state
 
     -- Phase 4: wait for the next IO event when any source needs attention.
-    if state.requiresData ∨ state.waitingResponse ∨ state.respStream.isSome ∨ state.machine.canPullBody then
+    if state.requiresData ∨ state.handlerDispatched ∨ state.respStream.isSome ∨ state.machine.canPullBody then
       state := { state with requiresData := false }
       let sources ← buildPollSources socket connectionContext state
       let event ← pollNextEvent config handler sources
