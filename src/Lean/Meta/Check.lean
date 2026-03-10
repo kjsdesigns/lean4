@@ -269,7 +269,7 @@ def throwAppTypeMismatch (f a : Expr) : MetaM α := do
     pure m!"Application type mismatch: The {argDescStr}is not of the expected type in the application{indentExpr e}"
   throwError msg
 
-private def throwDefEqParamMismatch (f a v : Expr) (bi : BinderInfo) : MetaM α := do
+def throwDefEqParamMismatch (f a v : Expr) (bi : BinderInfo) : MetaM α := do
   throwError MessageData.ofLazyM (es := #[f, a, v]) do
     let mut e := Expr.app f a
     unless bi.isExplicit do
