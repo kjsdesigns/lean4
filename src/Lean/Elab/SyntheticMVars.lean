@@ -569,7 +569,9 @@ mutual
           return false
   /--
     Try to synthesize the current list of pending synthetic metavariables.
-    Return `true` if at least one of them was synthesized. -/
+    Return `true` if at least one of them was synthesized.
+    Uses `MetavarContext.synthInstCache` to cache the instantiated type of stuck TC mvars,
+    skipping retries when the type hasn't changed. -/
   private partial def synthesizeSyntheticMVarsStep (postponeOnError : Bool) (runTactics : Bool) : TermElabM Bool := do
     let ctx ← read
     traceAtCmdPos `Elab.resume fun _ =>
@@ -584,8 +586,24 @@ mutual
     let remainingPendingMVars ← pendingMVars.filterRevM fun mvarId => do
        -- We use `traceM` because we want to make sure the metavar local context is used to trace the message
        traceM `Elab.postpone (mvarId.withContext do addMessageContext m!"resuming {mkMVar mvarId}")
+       -- Skip TC mvars whose instantiated type is unchanged since last failed synthesis
+       if let some lastType := (← getMCtx).synthInstCache.find? mvarId then
+         unless (← mvarId.isAssignedOrDelayedAssigned) do
+           let type ← instantiateMVars (← mvarId.getDecl).type
+           if type == lastType then
+             trace[Elab.postpone] "skipping: TC type unchanged"
+             return true  -- keep pending, don't retry
+         modifyMCtx fun mctx => { mctx with synthInstCache := mctx.synthInstCache.erase mvarId }
        let succeeded ← synthesizeSyntheticMVar mvarId postponeOnError runTactics
        if succeeded then markAsResolved mvarId
+       else
+         -- Record instantiated type for stuck TC mvars to skip redundant retries
+         if let some decl ← getSyntheticMVarDecl? mvarId then
+           match decl.kind with
+           | .typeClass _ =>
+             let type ← instantiateMVars (← mvarId.getDecl).type
+             modifyMCtx fun mctx => { mctx with synthInstCache := mctx.synthInstCache.insert mvarId type }
+           | _ => pure ()
        trace[Elab.postpone] if succeeded then format "succeeded" else format "not ready yet"
        pure !succeeded
     -- Merge new synthetic metavariables with `remainingPendingMVars`, i.e., metavariables that still couldn't be synthesized
@@ -633,6 +651,9 @@ mutual
             if ← withoutPostponing <| synthesizeSyntheticMVarsStep (postponeOnError := true) (runTactics := false) then
               loop ()
             else if ← synthesizeUsingDefault then
+              -- Clear stale dependency info after default instance application, since
+              -- defaults may assign mvars that indirectly affect TC synthesis.
+              modifyMCtx fun mctx => { mctx with synthInstCache := {} }
               loop ()
             else if ← withoutPostponing <| synthesizeSyntheticMVarsStep (postponeOnError := false) (runTactics := false) then
               loop ()

@@ -354,6 +354,10 @@ structure MetavarContext where
   /-- Assignment table for delayed abstraction metavariables.
   For more information about delayed abstraction, see the docstring for `DelayedMetavarAssignment`. -/
   dAssignment    : PersistentHashMap MVarId DelayedMetavarAssignment := {}
+  /-- Tracks the instantiated type of pending TC mvars whose synthesis last returned `.undef`.
+  If the type hasn't changed since the last attempt, the mvar is skipped to avoid redundant retries
+  in `synthesizeSyntheticMVarsStep`. -/
+  synthInstCache  : PersistentHashMap MVarId Expr := {}
 
 instance : Inhabited MetavarContext := ⟨{}⟩
 
