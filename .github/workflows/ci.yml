@@ -192,10 +192,6 @@ jobs:
             fi
             if echo "$labels" | grep -q "lake-ci"; then
               lake_ci=true
-              # lake-ci implies release-ci
-              if [[ $check_level -lt 3 ]]; then
-                check_level=3
-              fi
             fi
             if echo "$labels" | grep -q "fast-ci"; then
               fast=true
