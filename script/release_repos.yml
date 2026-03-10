@@ -102,12 +102,19 @@ repositories:
       - import-graph
       - plausible
 
+  - name: leansqlite
+    url: https://github.com/david-christiansen/leansqlite
+    toolchain-tag: false
+    stable-branch: false
+    branch: main
+    dependencies: []
+
   - name: doc-gen4
     url: https://github.com/leanprover/doc-gen4
     toolchain-tag: true
     stable-branch: false
     branch: main
-    dependencies: [lean4-cli, BibtexQuery, mathlib4]
+    dependencies: [lean4-cli, BibtexQuery, leansqlite, mathlib4]
 
   - name: cslib
     url: https://github.com/leanprover/cslib
