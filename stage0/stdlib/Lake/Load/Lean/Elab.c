@@ -8401,8 +8401,8 @@ goto block_15;
 block_200:
 {
 lean_object* x_190; 
-x_190 = l_Lake_importConfigFile___lam__0(x_186, x_45, x_187);
-lean_dec(x_187);
+x_190 = l_Lake_importConfigFile___lam__0(x_186, x_45, x_188);
+lean_dec(x_188);
 lean_dec_ref(x_186);
 if (lean_obj_tag(x_190) == 0)
 {
@@ -8410,18 +8410,18 @@ lean_object* x_191; lean_object* x_192;
 x_191 = lean_ctor_get(x_190, 0);
 lean_inc(x_191);
 lean_dec_ref(x_190);
-x_192 = lean_ctor_get(x_189, 4);
+x_192 = lean_ctor_get(x_187, 4);
 lean_inc(x_192);
-lean_dec_ref(x_189);
+lean_dec_ref(x_187);
 x_46 = x_191;
 x_47 = x_192;
-x_48 = x_188;
+x_48 = x_189;
 goto block_182;
 }
 else
 {
 lean_object* x_193; lean_object* x_194; uint8_t x_195; lean_object* x_196; lean_object* x_197; lean_object* x_198; lean_object* x_199; 
-lean_dec_ref(x_189);
+lean_dec_ref(x_187);
 lean_dec_ref(x_45);
 lean_dec_ref(x_42);
 lean_dec(x_39);
@@ -8439,8 +8439,8 @@ x_195 = 3;
 x_196 = lean_alloc_ctor(0, 1, 1);
 lean_ctor_set(x_196, 0, x_194);
 lean_ctor_set_uint8(x_196, sizeof(void*)*1, x_195);
-x_197 = lean_array_get_size(x_188);
-x_198 = lean_array_push(x_188, x_196);
+x_197 = lean_array_get_size(x_189);
+x_198 = lean_array_push(x_189, x_196);
 x_199 = lean_alloc_ctor(1, 2, 0);
 lean_ctor_set(x_199, 0, x_197);
 lean_ctor_set(x_199, 1, x_198);
@@ -8655,9 +8655,9 @@ lean_dec_ref(x_213);
 x_231 = l_System_FilePath_pathExists(x_42);
 if (x_231 == 0)
 {
-x_187 = x_201;
-x_188 = x_202;
-x_189 = x_230;
+x_187 = x_230;
+x_188 = x_201;
+x_189 = x_202;
 goto block_200;
 }
 else
@@ -8671,9 +8671,9 @@ x_236 = lean_ctor_get_uint64(x_230, sizeof(void*)*5);
 x_237 = lean_nat_dec_eq(x_232, x_17);
 if (x_237 == 0)
 {
-x_187 = x_201;
-x_188 = x_202;
-x_189 = x_230;
+x_187 = x_230;
+x_188 = x_201;
+x_189 = x_202;
 goto block_200;
 }
 else
@@ -8682,9 +8682,9 @@ uint8_t x_238;
 x_238 = lean_name_eq(x_233, x_18);
 if (x_238 == 0)
 {
-x_187 = x_201;
-x_188 = x_202;
-x_189 = x_230;
+x_187 = x_230;
+x_188 = x_201;
+x_189 = x_202;
 goto block_200;
 }
 else
@@ -8694,9 +8694,9 @@ x_239 = lean_unbox_uint64(x_39);
 x_240 = lean_uint64_dec_eq(x_236, x_239);
 if (x_240 == 0)
 {
-x_187 = x_201;
-x_188 = x_202;
-x_189 = x_230;
+x_187 = x_230;
+x_188 = x_201;
+x_189 = x_202;
 goto block_200;
 }
 else
@@ -8706,9 +8706,9 @@ x_241 = l_System_Platform_target;
 x_242 = lean_string_dec_eq(x_234, x_241);
 if (x_242 == 0)
 {
-x_187 = x_201;
-x_188 = x_202;
-x_189 = x_230;
+x_187 = x_230;
+x_188 = x_201;
+x_189 = x_202;
 goto block_200;
 }
 else
@@ -8719,9 +8719,9 @@ x_244 = lean_string_dec_eq(x_235, x_243);
 lean_dec_ref(x_243);
 if (x_244 == 0)
 {
-x_187 = x_201;
-x_188 = x_202;
-x_189 = x_230;
+x_187 = x_230;
+x_188 = x_201;
+x_189 = x_202;
 goto block_200;
 }
 else

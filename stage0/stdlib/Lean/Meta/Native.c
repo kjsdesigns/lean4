@@ -1398,7 +1398,7 @@ block_52:
 if (x_43 == 0)
 {
 lean_object* x_44; lean_object* x_45; lean_object* x_46; lean_object* x_47; lean_object* x_48; lean_object* x_49; lean_object* x_50; lean_object* x_51; 
-lean_dec_ref(x_41);
+lean_dec_ref(x_42);
 x_44 = lean_obj_once(&l_Lean_Meta_nativeEqTrue___lam__0___closed__1, &l_Lean_Meta_nativeEqTrue___lam__0___closed__1_once, _init_l_Lean_Meta_nativeEqTrue___lam__0___closed__1);
 lean_inc(x_3);
 x_45 = l_Lean_MessageData_ofName(x_3);
@@ -1409,7 +1409,7 @@ x_47 = lean_obj_once(&l_Lean_Meta_nativeEqTrue___lam__0___closed__5, &l_Lean_Met
 x_48 = lean_alloc_ctor(7, 2, 0);
 lean_ctor_set(x_48, 0, x_46);
 lean_ctor_set(x_48, 1, x_47);
-x_49 = l_Lean_Exception_toMessageData(x_42);
+x_49 = l_Lean_Exception_toMessageData(x_41);
 x_50 = lean_alloc_ctor(7, 2, 0);
 lean_ctor_set(x_50, 0, x_48);
 lean_ctor_set(x_50, 1, x_49);
@@ -1419,8 +1419,8 @@ goto block_40;
 }
 else
 {
-lean_dec_ref(x_42);
-x_27 = x_41;
+lean_dec_ref(x_41);
+x_27 = x_42;
 goto block_40;
 }
 }
@@ -1519,15 +1519,15 @@ if (x_101 == 0)
 uint8_t x_102; 
 lean_inc(x_100);
 x_102 = l_Lean_Exception_isRuntime(x_100);
-x_41 = x_99;
-x_42 = x_100;
+x_41 = x_100;
+x_42 = x_99;
 x_43 = x_102;
 goto block_52;
 }
 else
 {
-x_41 = x_99;
-x_42 = x_100;
+x_41 = x_100;
+x_42 = x_99;
 x_43 = x_101;
 goto block_52;
 }
@@ -2552,8 +2552,8 @@ block_16:
 {
 lean_object* x_11; lean_object* x_12; lean_object* x_13; lean_object* x_14; lean_object* x_15; 
 x_11 = lean_box(0);
-x_12 = l_List_mapTR_loop___at___00Lean_Meta_nativeEqTrue_spec__6(x_9, x_11);
-x_13 = l_Lean_mkConst(x_10, x_12);
+x_12 = l_List_mapTR_loop___at___00Lean_Meta_nativeEqTrue_spec__6(x_10, x_11);
+x_13 = l_Lean_mkConst(x_9, x_12);
 x_14 = lean_alloc_ctor(0, 1, 0);
 lean_ctor_set(x_14, 0, x_13);
 x_15 = lean_alloc_ctor(0, 1, 0);
@@ -2764,8 +2764,8 @@ lean_dec_ref(x_19);
 if (lean_obj_tag(x_64) == 0)
 {
 lean_dec_ref(x_64);
-x_9 = x_31;
-x_10 = x_50;
+x_9 = x_50;
+x_10 = x_31;
 goto block_16;
 }
 else
@@ -2818,8 +2818,8 @@ lean_dec(x_22);
 lean_dec_ref(x_21);
 lean_dec(x_20);
 lean_dec_ref(x_19);
-x_9 = x_31;
-x_10 = x_50;
+x_9 = x_50;
+x_10 = x_31;
 goto block_16;
 }
 }
