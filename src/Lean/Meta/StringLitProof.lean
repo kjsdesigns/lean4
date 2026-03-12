@@ -20,9 +20,10 @@ The proof avoids both `String.decEq` (expensive UTF-8 byte array comparison) and
 proves the lists differ using one of two strategies depending on whether the strings
 share a common prefix of the shorter string's full length:
 
-- **Different characters at position `i`**: Uses `congrArg (List.get!Internal · i)` to extract
-  the differing `Char` values, then `of_decide_eq_true rfl` for a single character comparison.
-  Uses `get!Internal` (not `get?Internal`) to compare `Char` directly without the `Option` wrapper.
+- **Different characters at position `i`**: Uses
+  `congrArg (fun l => (List.get!Internal l i).toNat)` to project down to `Nat`, then
+  `Nat.ne_of_beq_eq_false rfl` for a single `Nat.beq` comparison. This avoids `Decidable`
+  instances entirely — the kernel only evaluates `Nat.beq` on two concrete natural numbers.
 
 - **One string is a prefix of the other**: Uses `congrArg (List.drop n ·)` where `n` is the
   shorter string's length, then `List.cons_ne_nil` to prove the non-empty tail differs from `[]`.
@@ -46,20 +47,26 @@ def mkStringLitNeProof (s₁ s₂ : String) : MetaM Expr := do
   let listEq := mkApp3 (mkConst ``Eq [.succ .zero]) listCharTy l₁Expr l₂Expr
   let listNeProof ←
     if diffIdx < minLen then
-      -- Both lists have a character at diffIdx: compare with get!Internal (Char, no Option)
+      -- Both lists have a character at diffIdx: project to Nat via get!Internal + toNat,
+      -- then use Nat.ne_of_beq_eq_false rfl (avoids Decidable instances entirely)
       let inhabCharExpr := mkConst ``Char.instInhabited
+      let natConst := mkConst ``Nat
       let iExpr := toExpr diffIdx
+      -- f = fun l => (List.get!Internal l i).toNat
       let projFn := mkLambda `l .default listCharTy
-        (mkApp4 (mkConst ``List.get!Internal [.zero]) charConst inhabCharExpr (mkBVar 0) iExpr)
-      let projL1 := mkApp4 (mkConst ``List.get!Internal [.zero]) charConst inhabCharExpr l₁Expr iExpr
-      let projL2 := mkApp4 (mkConst ``List.get!Internal [.zero]) charConst inhabCharExpr l₂Expr iExpr
-      let projEq := mkApp3 (mkConst ``Eq [.succ .zero]) charConst projL1 projL2
+        (mkApp (mkConst ``Char.toNat)
+          (mkApp4 (mkConst ``List.get!Internal [.zero]) charConst inhabCharExpr (mkBVar 0) iExpr))
+      let mkGetToNat (lExpr : Expr) : Expr :=
+        mkApp (mkConst ``Char.toNat)
+          (mkApp4 (mkConst ``List.get!Internal [.zero]) charConst inhabCharExpr lExpr iExpr)
+      let projL1 := mkGetToNat l₁Expr
+      let projL2 := mkGetToNat l₂Expr
+      let projEq := mkApp3 (mkConst ``Eq [.succ .zero]) natConst projL1 projL2
       let congrArgFn := mkApp5 (mkConst ``congrArg [.succ .zero, .succ .zero])
-        listCharTy charConst l₁Expr l₂Expr projFn
-      let projNe := mkApp (mkConst ``Not) projEq
-      let d ← mkDecide projNe
-      let projNeProof := mkApp3 (mkConst ``of_decide_eq_true) projNe d.appArg!
-        (← mkEqRefl (mkConst ``true))
+        listCharTy natConst l₁Expr l₂Expr projFn
+      -- Nat.ne_of_beq_eq_false rfl : n₁ ≠ n₂  (kernel evaluates Nat.beq on two literals)
+      let projNeProof := mkApp3 (mkConst ``Nat.ne_of_beq_eq_false)
+        projL1 projL2 (← mkEqRefl (mkConst ``false))
       pure <| mkApp4 (mkConst ``mt) listEq projEq congrArgFn projNeProof
     else
       -- One list is a prefix of the other: use drop + cons_ne_nil
