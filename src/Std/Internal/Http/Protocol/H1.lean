@@ -409,7 +409,7 @@ private def checkSendingMessageHead (message : Message.Head .sending) : Except H
 /--
 Direction-dispatched message-head validation.
 -/
-private def checkMessageHead (message : Message.Head dir) : Except H1.Error BodyMode := do
+private def checkMessageHead (message : Message.Head dir) : Except H1.Error BodyMode :=
   match dir with
   | .receiving => checkReceivingMessageHead message
   | .sending => checkSendingMessageHead message
