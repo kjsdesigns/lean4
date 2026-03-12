@@ -16,47 +16,84 @@ namespace Lean.Meta
 Builds a proof of `String.ofList l₁ ≠ String.ofList l₂` for two distinct string literals.
 
 The proof avoids both `String.decEq` (expensive UTF-8 byte array comparison) and full
-`List Char` comparison. Instead, it finds the first differing character position `i` and proves
-inequality via `congrArg (List.get?Internal · i)`, reducing the kernel work to O(i) list
-indexing plus a single character comparison. The full proof term is:
+`List Char` comparison. It reduces to `List Char` via `String.ofList_injective`, then
+proves the lists differ using one of two strategies depending on whether the strings
+share a common prefix of the shorter string's full length:
 
-```
-mt String.ofList_injective (mt (congrArg (List.get?Internal · i)) (of_decide_eq_true rfl))
-```
+- **Different characters at position `i`**: Uses `congrArg (List.get!Internal · i)` to extract
+  the differing `Char` values, then `of_decide_eq_true rfl` for a single character comparison.
+  Uses `get!Internal` (not `get?Internal`) to compare `Char` directly without the `Option` wrapper.
 
-where `rfl` proves `decide (l₁[i]? ≠ l₂[i]?) = true` on just two `Option Char` values.
+- **One string is a prefix of the other**: Uses `congrArg (List.drop n ·)` where `n` is the
+  shorter string's length, then `List.cons_ne_nil` to prove the non-empty tail differs from `[]`.
+  This avoids `decide` entirely since `cons_ne_nil` is a definitional proof.
 -/
 def mkStringLitNeProof (s₁ s₂ : String) : MetaM Expr := do
   let l₁ := s₁.toList
   let l₂ := s₂.toList
   let l₁Expr := toExpr l₁
   let l₂Expr := toExpr l₂
+  let charConst := mkConst ``Char
+  let listCharTy := mkApp (mkConst ``List [.zero]) charConst
   -- Find the first differing character index
+  let minLen := min l₁.length l₂.length
   let diffIdx := Id.run do
-    let minLen := min l₁.length l₂.length
     for i in [:minLen] do
       if l₁[i]! ≠ l₂[i]! then return i
     return minLen
-  let charConst := mkConst ``Char
-  let listCharTy := mkApp (mkConst ``List [.zero]) charConst
-  let optCharTy := mkApp (mkConst ``Option [.zero]) charConst
-  let iExpr := toExpr diffIdx
-  -- Build f = fun l => List.get?Internal l diffIdx
-  let getFn := mkLambda `l .default listCharTy
-    (mkApp3 (mkConst ``List.get?Internal [.zero]) charConst (mkBVar 0) iExpr)
-  -- congrArg f (partially applied): l₁ = l₂ → l₁[i]? = l₂[i]?
-  let congrArgFn := mkApp5 (mkConst ``congrArg [.succ .zero, .succ .zero])
-    listCharTy optCharTy l₁Expr l₂Expr getFn
-  -- Prove l₁[i]? ≠ l₂[i]? via decide on Option Char (trivial: one character comparison)
-  let getL1 := mkApp3 (mkConst ``List.get?Internal [.zero]) charConst l₁Expr iExpr
-  let getL2 := mkApp3 (mkConst ``List.get?Internal [.zero]) charConst l₂Expr iExpr
-  let getEq := mkApp3 (mkConst ``Eq [.succ .zero]) optCharTy getL1 getL2
-  let getNe := mkApp (mkConst ``Not) getEq
-  let d ← mkDecide getNe
-  let getNeProof := mkApp3 (mkConst ``of_decide_eq_true) getNe d.appArg! (← mkEqRefl (mkConst ``true))
-  -- listNeProof : l₁ ≠ l₂   via   mt (congrArg f) getNeProof
+  -- Build the list inequality proof, dispatching on whether it's a character
+  -- difference or a prefix/length difference
   let listEq := mkApp3 (mkConst ``Eq [.succ .zero]) listCharTy l₁Expr l₂Expr
-  let listNeProof := mkApp4 (mkConst ``mt) listEq getEq congrArgFn getNeProof
+  let listNeProof ←
+    if diffIdx < minLen then
+      -- Both lists have a character at diffIdx: compare with get!Internal (Char, no Option)
+      let inhabCharExpr := mkConst ``Char.instInhabited
+      let iExpr := toExpr diffIdx
+      let projFn := mkLambda `l .default listCharTy
+        (mkApp4 (mkConst ``List.get!Internal [.zero]) charConst inhabCharExpr (mkBVar 0) iExpr)
+      let projL1 := mkApp4 (mkConst ``List.get!Internal [.zero]) charConst inhabCharExpr l₁Expr iExpr
+      let projL2 := mkApp4 (mkConst ``List.get!Internal [.zero]) charConst inhabCharExpr l₂Expr iExpr
+      let projEq := mkApp3 (mkConst ``Eq [.succ .zero]) charConst projL1 projL2
+      let congrArgFn := mkApp5 (mkConst ``congrArg [.succ .zero, .succ .zero])
+        listCharTy charConst l₁Expr l₂Expr projFn
+      let projNe := mkApp (mkConst ``Not) projEq
+      let d ← mkDecide projNe
+      let projNeProof := mkApp3 (mkConst ``of_decide_eq_true) projNe d.appArg!
+        (← mkEqRefl (mkConst ``true))
+      pure <| mkApp4 (mkConst ``mt) listEq projEq congrArgFn projNeProof
+    else
+      -- One list is a prefix of the other: use drop + cons_ne_nil
+      let nExpr := toExpr minLen
+      let dropFn := mkLambda `l .default listCharTy
+        (mkApp3 (mkConst ``List.drop [.zero]) charConst nExpr (mkBVar 0))
+      let dropL1 := mkApp3 (mkConst ``List.drop [.zero]) charConst nExpr l₁Expr
+      let dropL2 := mkApp3 (mkConst ``List.drop [.zero]) charConst nExpr l₂Expr
+      let dropEq := mkApp3 (mkConst ``Eq [.succ .zero]) listCharTy dropL1 dropL2
+      let congrArgFn := mkApp5 (mkConst ``congrArg [.succ .zero, .succ .zero])
+        listCharTy listCharTy l₁Expr l₂Expr dropFn
+      -- The longer list's drop has a head element; the shorter list's drop is []
+      let (hdChar, tlList) :=
+        if l₁.length ≤ l₂.length then
+          let dropped := l₂.drop minLen
+          (dropped.head!, dropped.tail!)
+        else
+          let dropped := l₁.drop minLen
+          (dropped.head!, dropped.tail!)
+      let hdExpr := toExpr hdChar
+      let tlExpr := toExpr tlList
+      -- cons_ne_nil hd tl : hd :: tl ≠ []
+      let consNeNil := mkApp3 (mkConst ``List.cons_ne_nil [.zero]) charConst hdExpr tlExpr
+      let dropNeProof :=
+        if l₁.length ≤ l₂.length then
+          -- l₁ is shorter: drop l₁ = [], drop l₂ = hd :: tl, need [] ≠ hd :: tl
+          mkApp4 (mkConst ``Ne.symm [.succ .zero]) listCharTy
+            (mkApp3 (mkConst ``List.cons [.zero]) charConst hdExpr tlExpr)
+            (mkApp (mkConst ``List.nil [.zero]) charConst)
+            consNeNil
+        else
+          -- l₂ is shorter: drop l₁ = hd :: tl, drop l₂ = [], need hd :: tl ≠ []
+          consNeNil
+      pure <| mkApp4 (mkConst ``mt) listEq dropEq congrArgFn dropNeProof
   -- strNeProof : String.ofList l₁ ≠ String.ofList l₂   via   mt ofList_injective listNeProof
   let strType := mkConst ``String
   let strEq := mkApp3 (mkConst ``Eq [.succ .zero]) strType
