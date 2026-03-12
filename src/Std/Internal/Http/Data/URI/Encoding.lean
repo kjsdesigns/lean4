@@ -140,7 +140,7 @@ private theorem isEncodedQueryChar_isAscii (c : UInt8) (h : isEncodedQueryChar r
 private theorem hexDigit_isHexDigit (h₀ : x < 16) : isHexDigitByte (hexDigit x) := by
   unfold hexDigit isHexDigitByte
   have h₁ : x.toNat < 16 := h₀
-  split <;> simp [Char.toUInt8]
+  split <;> simp
 
   next p =>
     have h₂ : x.toNat < 10 := p
@@ -165,7 +165,7 @@ private theorem hexDigit_isHexDigit (h₀ : x < 16) : isHexDigitByte (hexDigit x
         UInt8.ofNat_le_iff_le h₄ (by decide : 70 < 256) |>.mpr h₅
 
 private theorem isHexDigit_isAscii {c : UInt8} (h : isHexDigitByte c) : isAsciiByte c := by
-  simp [isHexDigitByte, isAsciiByte, Char.toUInt8] at *
+  simp [isHexDigitByte, isAsciiByte] at *
   rcases h with ⟨h1, h2⟩ | ⟨h1, h2⟩
   · exact UInt8.lt_of_le_of_lt h2 (by decide)
   next h => exact UInt8.lt_of_le_of_lt h.right (by decide)

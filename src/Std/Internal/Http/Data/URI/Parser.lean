@@ -168,7 +168,7 @@ private def parseAuthority (config : URI.Config) : Parser URI.Authority := do
 
   let host ← parseHost config
 
-  let port : URI.AuthorityPort ←
+  let port : URI.Port ←
     if ← peekIs (· == ':'.toUInt8) then
       skipByte ':'.toUInt8
       if (← peekWhen? isDigitByte).isSome then
@@ -406,7 +406,7 @@ Parses an HTTP `Host` header value.
 public def parseHostHeader (config : URI.Config := {}) : Parser (URI.Host × URI.Port) := do
   let host ← parseHost config
 
-  let port : URI.AuthorityPort ←
+  let port : URI.Port ←
     if ← peekIs (· == ':'.toUInt8) then
       skipByte ':'.toUInt8
       if (← peekWhen? isDigitByte).isSome then
