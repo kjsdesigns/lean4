@@ -893,14 +893,6 @@ def authority? : RequestTarget → Option URI.Authority
   | _ => none
 
 /--
-Extracts the fragment component from a request target, if available.
--/
-def fragment? : RequestTarget → Option String
-  | .originForm _ _ => none
-  | .absoluteForm u _ => u.fragment
-  | _ => none
-
-/--
 Extracts the full URI if the request target is in absolute form.
 -/
 def uri? : RequestTarget → Option URI
