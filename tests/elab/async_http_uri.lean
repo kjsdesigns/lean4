@@ -303,14 +303,6 @@ info: Std.Http.RequestTarget.asteriskForm
   IO.println (repr result)
 
 /--
-info: none
--/
-#guard_msgs in
-#eval show IO _ from do
-  let result ← runParser parseRequestTarget "https://ata/b?ata=be"
-  IO.println (repr (result.fragment?))
-
-/--
 info: #[("q", some "hello%20world"), ("category", some "tech%2Bgames")]
 -/
 #guard_msgs in
@@ -793,14 +785,6 @@ info: key=new
     |>.insert "key" "old"
     |>.set "key" "new"
   IO.println query.toRawString
-
-/--
-info: none
--/
-#guard_msgs in
-#eval show IO _ from do
-  let result ← runParser parseRequestTarget "/path"
-  IO.println (repr result.fragment?)
 
 -- ============================================================================
 -- URI Builder Tests
