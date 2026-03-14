@@ -251,7 +251,7 @@ info: some " "
 
 #guard
   match (parseRequestTarget <* Std.Internal.Parsec.eof).run "http:80".toUTF8 with
-  | .ok (.absoluteForm _ _) => true
+  | .ok (.authorityForm _) => true
   | _ => false
 
 -- Parse failure tests
@@ -282,7 +282,8 @@ info: some " "
 -- ============================================================================
 
 /--
-info: Std.Http.RequestTarget.originForm { segments := #["path", "with", "encoded%20space"], absolute := true } none
+info: Std.Http.RequestTarget.originForm
+  { path := { segments := #["path", "with", "encoded%20space"], absolute := true }, query := none }
 -/
 #guard_msgs in
 #eval show IO _ from do
@@ -290,7 +291,8 @@ info: Std.Http.RequestTarget.originForm { segments := #["path", "with", "encoded
   IO.println (repr result)
 
 /--
-info: Std.Http.RequestTarget.originForm { segments := #["", "", "path", "with", "encoded%20space"], absolute := true } none
+info: Std.Http.RequestTarget.originForm
+  { path := { segments := #["", "", "path", "with", "encoded%20space"], absolute := true }, query := none }
 -/
 #guard_msgs in
 #eval show IO _ from do
@@ -314,7 +316,7 @@ info: #[("q", some "hello%20world"), ("category", some "tech%2Bgames")]
   IO.println (repr result.query)
 
 /--
-info: Std.Http.RequestTarget.originForm { segments := #[], absolute := true } none
+info: Std.Http.RequestTarget.originForm { path := { segments := #[], absolute := true }, query := none }
 -/
 #guard_msgs in
 #eval show IO _ from do
@@ -355,9 +357,7 @@ info: Std.Http.RequestTarget.absoluteForm
                    host := Std.Http.URI.Host.name "example.com",
                    port := Std.Http.URI.Port.value 8080 },
     path := { segments := #["ata"], absolute := true },
-    query := #[],
-    fragment := none }
-  _
+    query := #[] }
 -/
 #guard_msgs in
 #eval show IO _ from do
@@ -371,9 +371,7 @@ info: Std.Http.RequestTarget.absoluteForm
                    host := Std.Http.URI.Host.ipv6 2001:db8::1,
                    port := Std.Http.URI.Port.value 8080 },
     path := { segments := #["path"], absolute := true },
-    query := #[],
-    fragment := none }
-  _
+    query := #[] }
 -/
 #guard_msgs in
 #eval show IO _ from do
@@ -387,9 +385,7 @@ info: Std.Http.RequestTarget.absoluteForm
                    host := Std.Http.URI.Host.name "secure.example.com",
                    port := Std.Http.URI.Port.omitted },
     path := { segments := #["private"], absolute := true },
-    query := #[],
-    fragment := none }
-  _
+    query := #[] }
 -/
 #guard_msgs in
 #eval show IO _ from do
@@ -848,7 +844,8 @@ info: https://user:pass@secure.example.com/private
 -- ============================================================================
 
 /--
-info: Std.Http.RequestTarget.originForm { segments := #["path%2Fwith%2Fslashes"], absolute := true } none
+info: Std.Http.RequestTarget.originForm
+  { path := { segments := #["path%2Fwith%2Fslashes"], absolute := true }, query := none }
 -/
 #guard_msgs in
 #eval show IO _ from do
@@ -856,7 +853,7 @@ info: Std.Http.RequestTarget.originForm { segments := #["path%2Fwith%2Fslashes"]
   IO.println (repr result)
 
 /--
-info: Std.Http.RequestTarget.originForm { segments := #["file%20name.txt"], absolute := true } none
+info: Std.Http.RequestTarget.originForm { path := { segments := #["file%20name.txt"], absolute := true }, query := none }
 -/
 #guard_msgs in
 #eval show IO _ from do
@@ -864,7 +861,7 @@ info: Std.Http.RequestTarget.originForm { segments := #["file%20name.txt"], abso
   IO.println (repr result)
 
 /--
-info: Std.Http.RequestTarget.originForm { segments := #["caf%C3%A9"], absolute := true } none
+info: Std.Http.RequestTarget.originForm { path := { segments := #["caf%C3%A9"], absolute := true }, query := none }
 -/
 #guard_msgs in
 #eval show IO _ from do
@@ -909,9 +906,7 @@ info: Std.Http.RequestTarget.absoluteForm
                    host := Std.Http.URI.Host.name "1example.com",
                    port := Std.Http.URI.Port.omitted },
     path := { segments := #["path"], absolute := true },
-    query := #[],
-    fragment := none }
-  _
+    query := #[] }
 -/
 #guard_msgs in
 #eval show IO _ from do
@@ -925,9 +920,7 @@ info: Std.Http.RequestTarget.absoluteForm
                    host := Std.Http.URI.Host.name "123abc.example.com",
                    port := Std.Http.URI.Port.omitted },
     path := { segments := #["page"], absolute := true },
-    query := #[],
-    fragment := none }
-  _
+    query := #[] }
 -/
 #guard_msgs in
 #eval show IO _ from do

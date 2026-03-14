@@ -361,7 +361,7 @@ where
       let path ← parsePath config true true
       let query ← optional (skipByte '?'.toUInt8 *> parseQuery config)
 
-      return .originForm path query
+      return .originForm { path, query }
     else
       fail "not origin"
 
@@ -371,20 +371,24 @@ where
     let query ← optional (skipByteChar '?' *> parseQuery config)
     let query := query.getD URI.Query.empty
 
-    return .absoluteForm { path, scheme, authority := auth, query, fragment := none } (by simp)
+    return .absoluteForm { path, scheme, authority := auth, query }
 
   -- Prefer absolute-form for explicit HTTP(S) scheme targets.
   -- This avoids misclassifying full URIs like `http://host/path` as authority-form.
   absoluteHttp : Parser RequestTarget := attempt do
+    let scheme ← parseScheme config
+    skipByte ':'.toUInt8
+
+    let (authority, path) ← parseHierPart config
+
+    let query ← optional (skipByteChar '?' *> parseQuery config)
+    let query := query.getD .empty
+
     let uri ← parseURI config
     let schemeStr : String := uri.scheme
-    if h : (schemeStr = "http" || schemeStr = "https") && uri.fragment.isNone then
-      have hEqNone : uri.fragment = none := by
-        simp at h
-        exact h.right
-      have hNoFrag : uri.fragment.isNone = true := by
-        simp [hEqNone]
-      return .absoluteForm uri hNoFrag
+    if schemeStr = "http" || schemeStr = "https" then
+      -- Strip any fragment: HTTP request targets do not carry fragments.
+      return .absoluteForm { scheme, path, authority, query }
     else
       fail "not http absolute uri"
 
