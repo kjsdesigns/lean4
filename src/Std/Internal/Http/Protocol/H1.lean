@@ -323,7 +323,7 @@ private def hasSingleAcceptedHostHeader (message : Message.Head .receiving) : Bo
       match message.uri with
       | .asteriskForm =>
         hostValue.value.isEmpty ∨ parsed.isSome
-      | .absoluteForm { scheme, authority := some authority, .. } _ =>
+      | .absoluteForm { scheme, authority := some authority, .. } =>
         match parsed with
         | some hostHeader => hostAuthorityMatches (some scheme) authority hostHeader
         | none => false
