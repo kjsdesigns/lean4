@@ -187,7 +187,7 @@ def queryParam (rb : Client.RequestBuilder) (key : String) (value : String) : Cl
     | .originForm o =>
         .originForm { o with query := some ((o.query.getD URI.Query.empty).insert key value) }
     | .absoluteForm af =>
-        .absoluteForm { af with uri := { af.uri with query := af.uri.query.insert key value } }
+        .absoluteForm { af with query := af.query.insert key value }
     | other => other
   { rb with builder := { rb.builder with line := { rb.builder.line with uri := newTarget } } }
 
@@ -241,7 +241,7 @@ private def mkRequest
     (method : Request.Builder → Request.Builder)
     (client : Client) (url : URI.AuthorityForm) : Client.RequestBuilder :=
   let target : RequestTarget :=
-    .originForm (RequestTarget.OriginForm.mk url.path (if url.query.isEmpty then none else some url.query))
+    .originForm (RequestTarget.PathAndQuery.mk url.path (if url.query.isEmpty then none else some url.query))
   { client, host := url.host, port := url.port,
     builder := method (Request.new |>.uri target) }
 

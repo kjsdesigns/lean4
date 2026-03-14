@@ -136,7 +136,7 @@ def injectCookies (cookieJar : Cookie.Jar) (host : URI.Host)
     (request : Request Body.AnyBody) : Async (Request Body.AnyBody) := do
   let path := match request.line.uri with
     | .originForm o   => toString o.path
-    | .absoluteForm af => toString af.uri.path
+    | .absoluteForm af => toString af.path
     | _ => "/"
   let cookies ← cookieJar.cookiesFor host path
   match Cookie.Jar.toCookieHeader cookies with
@@ -376,7 +376,7 @@ private def withCookies [Transport α] (rb : Agent.RequestBuilder α) : Async (A
     return rb
   let path := match rb.builder.line.uri with
     | .originForm o   => toString o.path
-    | .absoluteForm af => toString af.uri.path
+    | .absoluteForm af => toString af.path
     | _ => "/"
   let cookies ← rb.agent.cookieJar.cookiesFor rb.agent.host path
   match Cookie.Jar.toCookieHeader cookies with
@@ -428,7 +428,7 @@ def queryParam [Transport α] (rb : Agent.RequestBuilder α) (key : String) (val
     | .originForm o =>
         .originForm { o with query := some ((o.query.getD URI.Query.empty).insert key value) }
     | .absoluteForm af =>
-        .absoluteForm { af with uri := { af.uri with query := af.uri.query.insert key value } }
+        .absoluteForm { af with query := af.query.insert key value }
     | other => other
   { rb with builder := { rb.builder with line := { rb.builder.line with uri := newTarget } } }
 
