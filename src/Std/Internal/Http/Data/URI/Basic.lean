@@ -81,6 +81,18 @@ def ofString! (s : String) : Scheme :=
   | some scheme => scheme
   | none => panic! s!"invalid URI scheme: {s.quote}"
 
+/--
+Returns the default port number for this URI scheme: 443 for `https`, 80 for everything else.
+-/
+def defaultPort (scheme : URI.Scheme) : UInt16 :=
+  if scheme.val == "https" then 443 else 80
+
+/--
+Returns the URI scheme for a given port: `"https"` for 443, `"http"` otherwise.
+-/
+def ofPort (port : UInt16) : URI.Scheme :=
+  if port == 443 then ⟨"https", by decide⟩ else ⟨"http", by decide⟩
+
 end Scheme
 
 /--
@@ -104,7 +116,7 @@ structure UserInfo where
   The optional encoded password.
   -/
   password : Option EncodedUserInfo
-deriving Inhabited, Repr
+deriving Inhabited, Repr, BEq
 
 namespace UserInfo
 
@@ -203,7 +215,7 @@ inductive Host
   An IPv6 address.
   -/
   | ipv6 (ipv6 : Net.IPv6Addr)
-deriving Inhabited
+deriving Inhabited, BEq
 
 instance : Repr Host where
   reprPrec x prec :=
@@ -268,7 +280,7 @@ structure Authority where
   explicitly empty (`example.com:`), or numeric (`example.com:443`).
   -/
   port : Port := .omitted
-deriving Inhabited, Repr
+deriving Inhabited, Repr, BEq
 
 instance : ToString Authority where
   toString auth :=
@@ -299,7 +311,7 @@ structure Path where
   Whether the path is absolute (begins with '/') or relative.
   -/
   absolute : Bool
-deriving Inhabited, Repr
+deriving Inhabited, Repr, BEq
 
 instance : ToString Path where
   toString path :=
@@ -380,7 +392,7 @@ Reference: https://www.rfc-editor.org/rfc/rfc3986.html#section-3.4
 -/
 @[expose]
 def Query := Array (EncodedQueryParam × Option EncodedQueryParam)
-deriving Repr, Inhabited
+deriving Repr, Inhabited, BEq
 
 namespace Query
 
@@ -584,7 +596,7 @@ structure URI where
   Optional fragment identifier (the part after '#'), percent-encoded.
   -/
   fragment : Option String
-deriving Repr, Inhabited
+deriving Repr, Inhabited, BEq
 
 instance : ToString URI where
   toString uri :=
@@ -833,6 +845,104 @@ def normalize (uri : URI) : URI :=
 
 end URI
 
+namespace URI
+
+/--
+A parsed URL with a required authority component (scheme + host + port + path + query).
+Port defaults are resolved: omitted port uses 80 for `http` and 443 for `https`.
+Suitable for use with `Http.Client`.
+-/
+structure AuthorityForm where
+  /--
+  The URI scheme (e.g., `"http"` or `"https"`).
+  -/
+  scheme : URI.Scheme
+
+  /--
+  The host component (domain name or IP address).
+  -/
+  host   : URI.Host
+
+  /--
+  The port, with the default for the scheme already applied if the URL omitted it.
+  -/
+  port   : UInt16
+
+  /--
+  The path component.
+  -/
+  path   : URI.Path
+
+  /--
+  The query string.
+  -/
+  query  : URI.Query
+deriving Inhabited, Repr, BEq
+
+instance : ToString URI.AuthorityForm where
+  toString af :=
+    let portPart := if af.port == af.scheme.defaultPort then "" else s!":{af.port}"
+    s!"{af.scheme}://{af.host}{portPart}{af.path}{af.query}"
+
+end URI
+
+namespace RequestTarget
+
+/--
+Data for an origin-form request target: an absolute path and optional query string.
+Example: `"/path/to/resource?key=value"` parsed into `path` and `query`.
+-/
+structure PathAndQuery where
+  /--
+  The absolute path.
+  -/
+  path  : URI.Path
+
+  /--
+  The optional query string. `none` means no `?` separator was present.
+  -/
+  query : Option URI.Query
+deriving Inhabited, Repr, BEq
+
+/--
+Data for an absolute-form request target: a complete URI.
+Used when making requests through a proxy.
+Example: `"http://example.com:8080/path?key=value"`.
+-/
+structure Absolute where
+  /--
+  The URI scheme (e.g., "http", "https", "ftp").
+  -/
+  scheme : URI.Scheme
+
+  /--
+  Optional authority component (user info, host, and port).
+  -/
+  authority : Option URI.Authority
+
+  /--
+  The hierarchical path component.
+  -/
+  path : URI.Path
+
+  /--
+  Optional query string as key-value pairs.
+  -/
+  query : URI.Query
+deriving Repr, Inhabited, BEq
+
+instance : ToString Absolute where
+  toString uri :=
+    let schemePart := uri.scheme
+    let authorityPart := match uri.authority with
+      | none => ""
+      | some auth => s!"//{toString auth}"
+    let pathPart := toString uri.path
+    let queryPart := toString uri.query
+    s!"{schemePart}:{authorityPart}{pathPart}{queryPart}"
+
+end RequestTarget
+
 /--
 HTTP request target forms as defined in RFC 9112 Section 3.3.
 
@@ -843,13 +953,13 @@ inductive RequestTarget where
   Origin-form request target (most common for HTTP requests). Consists of a path and an optional query string.
   Example: `/path/to/resource?key=value`
   -/
-  | originForm (path : URI.Path) (query : Option URI.Query)
+  | originForm (t : RequestTarget.PathAndQuery)
 
   /--
   Absolute-form request target containing a complete URI. Used when making requests through a proxy.
   Example: `http://example.com:8080/path?key=value`
   -/
-  | absoluteForm (uri : URI) (noFrag : uri.fragment.isNone)
+  | absoluteForm (t : RequestTarget.Absolute)
 
   /--
   Authority-form request target (used for CONNECT requests).
@@ -871,8 +981,8 @@ Extracts the path component from a request target, if available.
 Returns an empty relative path for targets without a path.
 -/
 def path : RequestTarget → URI.Path
-  | .originForm p _ => p
-  | .absoluteForm u _ => u.path
+  | .originForm o => o.path
+  | .absoluteForm af => af.path
   | _ => { segments := #[], absolute := false }
 
 /--
@@ -880,8 +990,8 @@ Extracts the query component from a request target, if available.
 Returns an empty array for targets without a query.
 -/
 def query : RequestTarget → URI.Query
-  | .originForm _ q => q.getD URI.Query.empty
-  | .absoluteForm u _ => u.query
+  | .originForm o => o.query.getD URI.Query.empty
+  | .absoluteForm af => af.query
   | _ => URI.Query.empty
 
 /--
@@ -889,23 +999,16 @@ Extracts the authority component from a request target, if available.
 -/
 def authority? : RequestTarget → Option URI.Authority
   | .authorityForm a => some a
-  | .absoluteForm u _ => u.authority
-  | _ => none
-
-/--
-Extracts the full URI if the request target is in absolute form.
--/
-def uri? : RequestTarget → Option URI
-  | .absoluteForm u _ => some u
+  | .absoluteForm af => af.authority
   | _ => none
 
 instance : ToString RequestTarget where
   toString
-    | .originForm path query =>
-        let pathStr := toString path
-        let queryStr := query.map toString |>.getD ""
+    | .originForm o =>
+        let pathStr := toString o.path
+        let queryStr := o.query.map toString |>.getD ""
         s!"{pathStr}{queryStr}"
-    | .absoluteForm uri _ => toString uri
+    | .absoluteForm af => toString af
     | .authorityForm auth => toString auth
     | .asteriskForm => "*"
 
