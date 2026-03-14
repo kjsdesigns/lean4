@@ -50,7 +50,7 @@ The path should start with '/' (e.g., "/api/users" or "/search?q=test").
 Panics if the string is not a valid origin-form request target.
 -/
 @[inline]
-def pathAndQuery! (path : String) : RequestTarget :=
+def originForm! (path : String) : RequestTarget :=
   match parse? path with
   | some (.originForm o) => .originForm o
   | _ => panic! s!"invalid origin-form request target: {path}"
