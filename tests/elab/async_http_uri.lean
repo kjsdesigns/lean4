@@ -586,9 +586,9 @@ info: /x/y
 -- ============================================================================
 
 #guard (URI.parse! "http://example.com").path.isEmpty = true
-#guard (URI.parse! "http://example.com/").path.absoluteForm = true
+#guard (URI.parse! "http://example.com/").path.absolute = true
 #guard (URI.parse! "http://example.com/a").path.isEmpty = false
-#guard (URI.parse! "http://example.com/a").path.absoluteForm = true
+#guard (URI.parse! "http://example.com/a").path.absolute = true
 
 -- ============================================================================
 -- URI Modification Helpers
