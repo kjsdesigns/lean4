@@ -248,7 +248,6 @@ instance : HasModel Int8 (BitVec 8) where
   le_iff_encode_le := by simp [LE.le, Int8.le]
   lt_iff_encode_lt := by simp [LT.lt, Int8.lt]
 
-set_option backward.whnf.reducibleClassField false in
 theorem instUpwardEnumerable_eq :
     instUpwardEnumerable = HasModel.instUpwardEnumerable := by
   apply UpwardEnumerable.ext
@@ -344,7 +343,6 @@ instance : HasModel Int16 (BitVec 16) where
   le_iff_encode_le := by simp [LE.le, Int16.le]
   lt_iff_encode_lt := by simp [LT.lt, Int16.lt]
 
-set_option backward.whnf.reducibleClassField false in
 theorem instUpwardEnumerable_eq :
     instUpwardEnumerable = HasModel.instUpwardEnumerable := by
   apply UpwardEnumerable.ext
@@ -440,7 +438,6 @@ instance : HasModel Int32 (BitVec 32) where
   le_iff_encode_le := by simp [LE.le, Int32.le]
   lt_iff_encode_lt := by simp [LT.lt, Int32.lt]
 
-set_option backward.whnf.reducibleClassField false in
 theorem instUpwardEnumerable_eq :
     instUpwardEnumerable = HasModel.instUpwardEnumerable := by
   apply UpwardEnumerable.ext
@@ -536,7 +533,6 @@ instance : HasModel Int64 (BitVec 64) where
   le_iff_encode_le := by simp [LE.le, Int64.le]
   lt_iff_encode_lt := by simp [LT.lt, Int64.lt]
 
-set_option backward.whnf.reducibleClassField false in
 theorem instUpwardEnumerable_eq :
     instUpwardEnumerable = HasModel.instUpwardEnumerable := by
   apply UpwardEnumerable.ext
@@ -637,7 +633,6 @@ instance : HasModel ISize (BitVec System.Platform.numBits) where
   le_iff_encode_le := by simp [LE.le, ISize.le]
   lt_iff_encode_lt := by simp [LT.lt, ISize.lt]
 
-set_option backward.whnf.reducibleClassField false in
 theorem instUpwardEnumerable_eq :
     instUpwardEnumerable = HasModel.instUpwardEnumerable := by
   apply UpwardEnumerable.ext

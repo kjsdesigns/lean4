@@ -374,7 +374,6 @@ theorem IterM.toList_map_eq_toList_filterMapM {α β γ : Type w} {m : Type w �
   simp [toList_map_eq_toList_mapM, toList_mapM_eq_toList_filterMapM]
   congr <;> simp
 
-set_option backward.whnf.reducibleClassField false in
 /--
 Variant of `toList_filterMapWithPostcondition_filterMapWithPostcondition` that is intended to be
 used with the `apply` tactic. Because neither the LHS nor the RHS determine all implicit parameters,
@@ -602,7 +601,6 @@ theorem IterM.toList_map_mapM {α β γ δ : Type w}
     toList_filterMapM_mapM]
   congr <;> simp
 
-set_option backward.isDefEq.respectTransparency false in
 @[simp]
 theorem IterM.toList_filterMapWithPostcondition {α β γ : Type w} {m : Type w → Type w'}
     [Monad m] [LawfulMonad m]
@@ -626,7 +624,6 @@ theorem IterM.toList_filterMapWithPostcondition {α β γ : Type w} {m : Type w 
   · simp [ihs ‹_›, heq]
   · simp [heq]
 
-set_option backward.isDefEq.respectTransparency false in
 @[simp]
 theorem IterM.toList_mapWithPostcondition {α β γ : Type w} {m : Type w → Type w'}
     [Monad m] [LawfulMonad m] [Iterator α Id β] [Finite α Id]
@@ -647,7 +644,6 @@ theorem IterM.toList_mapWithPostcondition {α β γ : Type w} {m : Type w → Ty
   · simp [ihs ‹_›, heq]
   · simp [heq]
 
-set_option backward.isDefEq.respectTransparency false in
 @[simp]
 theorem IterM.toList_filterMapM {α β γ : Type w} {m : Type w → Type w'}
     [Monad m] [MonadAttach m] [LawfulMonad m] [WeaklyLawfulMonadAttach m]
@@ -655,9 +651,13 @@ theorem IterM.toList_filterMapM {α β γ : Type w} {m : Type w → Type w'}
     {f : β → m (Option γ)} (it : IterM (α := α) Id β) :
     (it.filterMapM f).toList = it.toList.run.filterMapM f := by
   simp [toList_filterMapM_eq_toList_filterMapWithPostcondition, toList_filterMapWithPostcondition,
-    PostconditionT.attachLift, PostconditionT.run_eq_map, WeaklyLawfulMonadAttach.map_attach]
+    PostconditionT.run_eq_map]
+  -- underlying problem: We unfolded `PostconditionT.attachLift`, but the statement of the following lemma requires it.
+  -- So we need to defer unfolding.
+  simp [PostconditionT.attachLift, WeaklyLawfulMonadAttach.map_attach]
+  -- -- alternative solution:
+  -- simpa using it.toList_filterMapM_eq_toList_filterMapWithPostcondition (n := m)
 
-set_option backward.isDefEq.respectTransparency false in
 @[simp]
 theorem IterM.toList_mapM {α β γ : Type w} {m : Type w → Type w'}
     [Monad m] [MonadAttach m] [LawfulMonad m] [WeaklyLawfulMonadAttach m]
@@ -665,7 +665,8 @@ theorem IterM.toList_mapM {α β γ : Type w} {m : Type w → Type w'}
     {f : β → m γ} (it : IterM (α := α) Id β) :
     (it.mapM f).toList = it.toList.run.mapM f := by
   simp [toList_mapM_eq_toList_mapWithPostcondition, toList_mapWithPostcondition,
-    PostconditionT.attachLift, PostconditionT.run_eq_map, WeaklyLawfulMonadAttach.map_attach]
+    PostconditionT.run_eq_map]
+  simp [PostconditionT.attachLift, WeaklyLawfulMonadAttach.map_attach]
 
 @[simp]
 theorem IterM.toList_filterMap {α β γ : Type w} {m : Type w → Type w'}
@@ -1303,7 +1304,6 @@ theorem IterM.forIn_filterMap
   rw [filterMap, forIn_filterMapWithPostcondition]
   simp [PostconditionT.run_eq_map]
 
-set_option backward.isDefEq.respectTransparency false in
 theorem IterM.forIn_mapWithPostcondition
     [Monad m] [LawfulMonad m] [Monad n] [LawfulMonad n] [Monad o] [LawfulMonad o]
     [MonadLiftT m n] [LawfulMonadLiftT m n] [MonadLiftT n o] [LawfulMonadLiftT n o]
@@ -1314,9 +1314,9 @@ theorem IterM.forIn_mapWithPostcondition
     haveI : MonadLift n o := ⟨monadLift⟩
     forIn (it.mapWithPostcondition f) init g =
       forIn it init (fun out acc => do g (← (f out).run) acc) := by
-  rw [mapWithPostcondition, InternalCombinators.map, ← InternalCombinators.filterMap,
-    ← filterMapWithPostcondition, forIn_filterMapWithPostcondition]
-  simp [PostconditionT.run_eq_map]
+  unfold mapWithPostcondition InternalCombinators.map Map.instIterator Map.instIteratorLoop Map
+  rw [← InternalCombinators.filterMap, ← filterMapWithPostcondition, forIn_filterMapWithPostcondition]
+  simp
 
 theorem IterM.forIn_mapM
     [Monad m] [LawfulMonad m] [Monad n] [LawfulMonad n] [Monad o] [LawfulMonad o]
@@ -1480,7 +1480,7 @@ theorem IterM.foldM_filterM {α β δ : Type w}
   simp [filterM, foldM_filterMapWithPostcondition, PostconditionT.run_attachLift]
   congr 1; ext out acc
   apply bind_congr; intro fx
-  cases fx.down <;> simp [PostconditionT.run_eq_map]
+  cases fx.down <;> simp
 
 theorem IterM.foldM_filterMap {α β γ δ : Type w} {m : Type w → Type w'} {n : Type w → Type w''}
     [Iterator α m β] [Finite α m] [Monad m] [Monad n] [LawfulMonad m] [LawfulMonad n]

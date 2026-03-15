@@ -70,7 +70,6 @@ end ListSlice
 
 namespace List
 
-set_option backward.whnf.reducibleClassField false in
 @[simp, grind =]
 public theorem toList_mkSlice_rco {xs : List α} {lo hi : Nat} :
     xs[lo...hi].toList = (xs.take hi).drop lo := by
@@ -111,7 +110,6 @@ public theorem size_mkSlice_rcc {xs : List α} {lo hi : Nat} :
     xs[lo...=hi].size = min (hi + 1) xs.length - lo := by
   simp [← length_toList_eq_size]
 
-set_option backward.whnf.reducibleClassField false in
 @[simp, grind =]
 public theorem toList_mkSlice_rci {xs : List α} {lo : Nat} :
     xs[lo...*].toList = xs.drop lo := by
@@ -290,7 +288,6 @@ section ListSubslices
 
 namespace ListSlice
 
-set_option backward.whnf.reducibleClassField false in
 @[simp, grind =]
 public theorem toList_mkSlice_rco {xs : ListSlice α} {lo hi : Nat} :
     xs[lo...hi].toList = (xs.toList.take hi).drop lo := by
@@ -329,7 +326,6 @@ public theorem size_mkSlice_rcc {xs : ListSlice α} {lo hi : Nat} :
     xs[lo...=hi].size = min (hi + 1) xs.size - lo := by
   simp [← length_toList_eq_size]
 
-set_option backward.whnf.reducibleClassField false in
 @[simp, grind =]
 public theorem toList_mkSlice_rci {xs : ListSlice α} {lo : Nat} :
     xs[lo...*].toList = xs.toList.drop lo := by
