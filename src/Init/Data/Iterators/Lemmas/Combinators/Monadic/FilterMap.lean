@@ -650,13 +650,9 @@ theorem IterM.toList_filterMapM {α β γ : Type w} {m : Type w → Type w'}
     [Iterator α Id β] [Finite α Id]
     {f : β → m (Option γ)} (it : IterM (α := α) Id β) :
     (it.filterMapM f).toList = it.toList.run.filterMapM f := by
-  simp [toList_filterMapM_eq_toList_filterMapWithPostcondition, toList_filterMapWithPostcondition,
-    PostconditionT.run_eq_map]
-  -- underlying problem: We unfolded `PostconditionT.attachLift`, but the statement of the following lemma requires it.
-  -- So we need to defer unfolding.
+  simp only [toList_filterMapM_eq_toList_filterMapWithPostcondition,
+    toList_filterMapWithPostcondition, PostconditionT.run_eq_map]
   simp [PostconditionT.attachLift, WeaklyLawfulMonadAttach.map_attach]
-  -- -- alternative solution:
-  -- simpa using it.toList_filterMapM_eq_toList_filterMapWithPostcondition (n := m)
 
 @[simp]
 theorem IterM.toList_mapM {α β γ : Type w} {m : Type w → Type w'}
@@ -664,7 +660,7 @@ theorem IterM.toList_mapM {α β γ : Type w} {m : Type w → Type w'}
     [Iterator α Id β] [Finite α Id]
     {f : β → m γ} (it : IterM (α := α) Id β) :
     (it.mapM f).toList = it.toList.run.mapM f := by
-  simp [toList_mapM_eq_toList_mapWithPostcondition, toList_mapWithPostcondition,
+  simp only [toList_mapM_eq_toList_mapWithPostcondition, toList_mapWithPostcondition,
     PostconditionT.run_eq_map]
   simp [PostconditionT.attachLift, WeaklyLawfulMonadAttach.map_attach]
 
