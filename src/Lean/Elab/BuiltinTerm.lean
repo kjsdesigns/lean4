@@ -315,16 +315,16 @@ private def mkSilentAnnotationIfHole (e : Expr) : TermElabM Expr := do
   | _ => panic! "resolveId? returned an unexpected expression"
 
 @[builtin_term_elab Lean.Parser.Term.inferInstanceAs] def elabInferInstanceAs : TermElab := fun stx expectedType? => do
+  let expectedType ← tryPostponeIfHasMVars expectedType? "`inferInstanceAs` failed"
   -- The type argument is the last child (works for both `inferInstanceAs T` and `inferInstanceAs <| T`)
   let typeStx := stx[stx.getNumArgs - 1]!
   let type ← withSynthesize (postpone := .yes) <| elabType typeStx
   -- Unify with expected type to resolve metavariables (e.g., `_` placeholders)
-  if let some expectedType := expectedType? then
-    discard <| isDefEq type expectedType
+  discard <| isDefEq type expectedType
   let type ← instantiateMVars type
   let inst ← synthInstance type
   -- Normalize to instance normal form.
-  let inst ← withNewMCtxDepth <| normalizeInstance inst type
+  let inst ← normalizeInstance inst type
   ensureHasType expectedType? inst
 
 @[builtin_term_elab clear] def elabClear : TermElab := fun stx expectedType? => do
