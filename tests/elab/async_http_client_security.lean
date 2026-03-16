@@ -334,11 +334,15 @@ private def rawResp
     #[("Location", "https://example.com/page"),
       ("Content-Length", "0")] "")
 
-  -- For same-host https: the redirect IS attempted on the same session; serve 200.
-  let redirectReqOpt ← mockClient.recv?
-  if redirectReqOpt.isSome then
-    mockClient.send (rawResp "200 OK"
-      #[("Content-Length", "2"), ("Connection", "close")] "ok")
+  -- https://example.com/page resolves to port 443, which differs from port 80, so
+  -- this is a cross-origin redirect.  With connectTo = none the agent returns the 302
+  -- as-is without issuing a second request.  Run the optional mock service in the
+  -- background so the main fiber is not blocked when no second request arrives.
+  background do
+    let redirectReqOpt ← mockClient.recv?
+    if redirectReqOpt.isSome then
+      mockClient.send (rawResp "200 OK"
+        #[("Content-Length", "2"), ("Connection", "close")] "ok")
 
   match ← await resultPromise.result! with
   | Except.error e => throw (IO.userError s!"agent error: {e}")
@@ -375,12 +379,6 @@ private def rawResp
     cookieJar
   }
 
-  -- Build a PUT request with a streaming body.
-  let (bodyOut, bodyIn) ← Body.mkChannel
-  -- Write some payload and close the channel.
-  Body.Writer.send bodyOut { data := "payload".toUTF8 } false
-  Body.Writer.close bodyOut
-
   let request ← Request.new
     |>.method .put
     |>.uri! "/upload"
@@ -390,6 +388,7 @@ private def rawResp
         Body.Writer.close out)
 
   let resultPromise : IO.Promise (Except String (Response Body.Incoming)) ← IO.Promise.new
+
   background do
     let result ← try
         let resp ← Client.Agent.send agent request
@@ -397,9 +396,15 @@ private def rawResp
       catch e => pure (Except.error (toString e))
     discard <| resultPromise.resolve result
 
-  -- First request: drain it and reply with 307 (method-preserving redirect).
-  let some _firstBytes ← mockClient.recv?
-    | throw (IO.userError "Test failed: no first request received")
+  -- First request: drain it completely before replying with 307.
+  -- The body is Transfer-Encoding: chunked; loop until the terminating 0\r\n\r\n
+  -- chunk arrives so the second recv? captures only the redirect request.
+  let mut firstBytes := ByteArray.empty
+  repeat
+    let some chunk ← mockClient.recv?
+      | throw (IO.userError "Test failed: connection closed before first request")
+    firstBytes := firstBytes ++ chunk
+    if (String.fromUTF8! firstBytes).endsWith "0\r\n\r\n" then break
   mockClient.send (rawResp "307 Temporary Redirect"
     #[("Location", "/new-upload"),
       ("Content-Length", "0")] "")
@@ -427,5 +432,4 @@ private def rawResp
       s!"Test 'streaming body dropped on 307 redirect' FAILED: \
          streaming body payload present in redirect request\n{redirectText.quote}"
 
-  -- Discard the incoming body channel created during test setup.
-  Body.Reader.close bodyIn
+

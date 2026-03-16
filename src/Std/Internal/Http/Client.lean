@@ -10,9 +10,7 @@ public import Std.Internal.Http.Client.Pool
 
 public section
 
-namespace Std
-namespace Http
-namespace Client
+namespace Std.Http
 
 set_option linter.all true
 
@@ -39,15 +37,21 @@ let res ← client.get "https://api.example.com/data"
 /--
 A top-level HTTP client backed by a connection pool.
 -/
-abbrev Client := Agent.Pool
+abbrev Client := Client.Agent.Pool
 
 /--
 Builder for `Client`. Chain configuration setters then call `.build`.
 -/
 public structure Client.Builder where
-  /-- Configuration applied to all sessions created by this client. -/
+
+  /--
+  Configuration applied to all sessions created by this client.
+  -/
   config : Config := {}
-  /-- Maximum number of pooled connections per host. -/
+
+  /--
+  Maximum number of pooled connections per host.
+  -/
   maxPerHost : Nat := 4
 
 namespace Client.Builder
@@ -118,36 +122,40 @@ Builds the `Client`.
 def build (b : Client.Builder) : Async Client := do
   Agent.Pool.new b.config b.maxPerHost
 
-end Client.Builder
+end Builder
 
 /--
 A request builder bound to a `Client`. Build up headers, query parameters, and body,
 then dispatch with one of the `send*` methods.
 -/
-public structure Client.RequestBuilder where
+public structure RequestBuilder where
+
   /--
   The client that will dispatch this request.
   -/
   client : Client
+
   /--
   Resolved hostname for this request.
   -/
   host : URI.Host
+
   /--
   Target port.
   -/
   port : UInt16
+
   /--
   The underlying request builder.
   -/
   builder : Request.Builder
 
-namespace Client.RequestBuilder
+namespace RequestBuilder
 
 /--
 Injects a `Host` header if not already present.
 -/
-private def withHostHeader (rb : Client.RequestBuilder) : Client.RequestBuilder :=
+private def withHostHeader (rb : RequestBuilder) : RequestBuilder :=
   if rb.builder.line.headers.contains Header.Name.host then rb
   else
     -- Use the scheme derived from the port to pick the correct default.
@@ -161,32 +169,32 @@ private def withHostHeader (rb : Client.RequestBuilder) : Client.RequestBuilder 
 /--
 Adds a typed header to the request.
 -/
-def header (rb : Client.RequestBuilder) (key : Header.Name) (value : Header.Value) : Client.RequestBuilder :=
+def header (rb : RequestBuilder) (key : Header.Name) (value : Header.Value) : RequestBuilder :=
   { rb with builder := rb.builder.header key value }
 
 /--
 Adds a header to the request. Panics if the name or value is invalid.
 -/
-def header! (rb : Client.RequestBuilder) (key : String) (value : String) : Client.RequestBuilder :=
+def header! (rb : RequestBuilder) (key : String) (value : String) : RequestBuilder :=
   { rb with builder := rb.builder.header! key value }
 
 /--
 Adds a header to the request. Returns `none` if the name or value is invalid.
 -/
-def header? (rb : Client.RequestBuilder) (key : String) (value : String) : Option Client.RequestBuilder := do
+def header? (rb : RequestBuilder) (key : String) (value : String) : Option RequestBuilder := do
   let builder ← rb.builder.header? key value
   pure { rb with builder }
 
 /--
 Sets the request URI from a string. Panics if the string is not a valid request target.
 -/
-def uri! (rb : Client.RequestBuilder) (u : String) : Client.RequestBuilder :=
+def uri! (rb : RequestBuilder) (u : String) : RequestBuilder :=
   { rb with builder := rb.builder.uri! u }
 
 /--
 Adds a query parameter to the request URI.
 -/
-def queryParam (rb : Client.RequestBuilder) (key : String) (value : String) : Client.RequestBuilder :=
+def queryParam (rb : RequestBuilder) (key : String) (value : String) : RequestBuilder :=
   let newTarget := match rb.builder.line.uri with
     | .originForm o =>
         .originForm { o with query := some ((o.query.getD URI.Query.empty).insert key value) }
@@ -198,44 +206,44 @@ def queryParam (rb : Client.RequestBuilder) (key : String) (value : String) : Cl
 /--
 Sends the request with an empty body.
 -/
-def send (rb : Client.RequestBuilder) : Async (Response Body.Incoming) := do
+def send (rb : RequestBuilder) : Async (Response Body.Incoming) := do
   let rb := rb.withHostHeader
   rb.client.send rb.host rb.port (← rb.builder.blank)
 
 /--
 Sends the request with a plain-text body. Sets `Content-Type: text/plain; charset=utf-8`.
 -/
-def text (rb : Client.RequestBuilder) (content : String) : Async (Response Body.Incoming) := do
+def text (rb : RequestBuilder) (content : String) : Async (Response Body.Incoming) := do
   let rb := rb.withHostHeader
   rb.client.send rb.host rb.port (← rb.builder.text content)
 
 /--
 Sends the request with a JSON body. Sets `Content-Type: application/json`.
 -/
-def json (rb : Client.RequestBuilder) (content : String) : Async (Response Body.Incoming) := do
+def json (rb : RequestBuilder) (content : String) : Async (Response Body.Incoming) := do
   let rb := rb.withHostHeader
   rb.client.send rb.host rb.port (← rb.builder.json content)
 
 /--
 Sends the request with a raw binary body. Sets `Content-Type: application/octet-stream`.
 -/
-def bytes (rb : Client.RequestBuilder) (content : ByteArray) : Async (Response Body.Incoming) := do
+def bytes (rb : RequestBuilder) (content : ByteArray) : Async (Response Body.Incoming) := do
   let rb := rb.withHostHeader
   rb.client.send rb.host rb.port (← rb.builder.bytes content)
 
 /--
 Sends the request with a streaming body produced by `gen`.
 -/
-def sendStream (rb : Client.RequestBuilder) (gen : Body.Outgoing → Async Unit) : Async (Response Body.Incoming) := do
+def sendStream (rb : RequestBuilder) (gen : Body.Outgoing → Async Unit) : Async (Response Body.Incoming) := do
   let rb := rb.withHostHeader
   rb.client.send rb.host rb.port (← rb.builder.stream gen)
 
-end Client.RequestBuilder
+end RequestBuilder
 
 /--
 Returns a `Client.Builder` with default configuration.
 -/
-def builder : Client.Builder := {}
+def new : Client.Builder := {}
 
 /--
 Parses `url` into `(host, port, origin-form target)`.
