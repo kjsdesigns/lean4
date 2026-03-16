@@ -20,7 +20,7 @@ The implementation stores entries in a flat array for iteration and an index Has
 for fast key lookups. Each key always has at least one associated value.
 -/
 
-namespace Std
+namespace Std.Internal
 
 open Std Internal
 
@@ -278,5 +278,4 @@ instance [EquivBEq α] [LawfulHashable α] : Union (MultiMap α β) :=
 instance [Monad m] : ForIn m (MultiMap α β) (α × β) where
   forIn map b f := forIn map.entries b f
 
-end MultiMap
-end Std
+end Std.Internal.MultiMap
