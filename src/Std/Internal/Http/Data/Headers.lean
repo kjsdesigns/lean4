@@ -36,7 +36,7 @@ structure Headers where
   /--
   The underlying multimap that stores headers.
   -/
-  map : MultiMap Header.Name Header.Value
+  map : IndexMultiMap Header.Name Header.Value
 deriving Inhabited, Repr
 
 instance : Membership Header.Name Headers where
@@ -147,7 +147,7 @@ def empty : Headers :=
 Creates headers from a list of key-value pairs.
 -/
 def ofList (pairs : List (Header.Name × Header.Value)) : Headers :=
-  { map := MultiMap.ofList pairs }
+  { map := IndexMultiMap.ofList pairs }
 
 /--
 Checks if a header with the given name exists.
@@ -208,7 +208,7 @@ Maps a function over all header values, producing new headers.
 -/
 def mapValues (headers : Headers) (f : Header.Name → Header.Value → Header.Value) : Headers :=
   let pairs := headers.map.toArray.map (fun (k, v) => (k, f k v))
-  { map := pairs.foldl (fun acc (k, v) => acc.insert k v) MultiMap.empty }
+  { map := pairs.foldl (fun acc (k, v) => acc.insert k v) IndexMultiMap.empty }
 
 /--
 Filters and maps over header key-value pairs. Returns only the pairs for which the function returns `some`.
@@ -218,7 +218,7 @@ def filterMap (headers : Headers) (f : Header.Name → Header.Value → Option H
     match f k v with
     | some v' => some (k, v')
     | none => none)
-  { map := pairs.foldl (fun acc (k, v) => acc.insert k v) MultiMap.empty }
+  { map := pairs.foldl (fun acc (k, v) => acc.insert k v) IndexMultiMap.empty }
 
 /--
 Filters header key-value pairs, keeping only those that satisfy the predicate.
