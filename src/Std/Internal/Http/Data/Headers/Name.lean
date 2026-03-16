@@ -192,4 +192,9 @@ Standard Location header name
 -/
 def location : Header.Name := .mk "location"
 
+/--
+Standard Proxy-Authorization header name
+-/
+def proxyAuthorization : Header.Name := .mk "proxy-authorization"
+
 end Std.Http.Header.Name

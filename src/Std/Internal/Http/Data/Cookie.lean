@@ -8,6 +8,8 @@ module
 prelude
 public import Std.Sync.Mutex
 public import Std.Internal.Http.Data.URI
+public import Std.Internal.Http.Data.Cookie.Parser
+public import Std.Internal.Http.Data.Headers
 public import Init.Data.String
 public import Init.Data.Array.Basic
 public import Init.Data.List.Basic
@@ -206,8 +208,14 @@ structure Cookie where
   -/
   secure : Bool
 
+  /--
+  When `true` the cookie must not be exposed to non-HTTP APIs.
+  Stored for completeness; no client-side script enforcement applies here.
+  -/
+  httpOnly : Bool
+
 /--
-A thread-safe HTTP cookie jar.
+A HTTP cookie jar.
 
 Reference: https://www.rfc-editor.org/rfc/rfc6265#section-5
 -/
@@ -236,34 +244,24 @@ private def domainMatches (cookieDomain : URI.Host) (hostOnly : Bool) (host : UR
 
 /--
 Path matching per RFC 6265 §5.1.4.
--/
-private def pathMatches (cookiePath : URI.Path) (requestPath : String) : Bool :=
-  let s := toString cookiePath
-  requestPath == s ||
-  (requestPath.startsWith s &&
-   (s.endsWith "/" || requestPath.startsWith (s ++ "/")))
 
-/--
-Splits `s` at the first occurrence of `sep`, returning `(before, after)`.
-Returns `(s, "")` when `sep` does not appear in `s`.
--/
-private def splitFirst (s : String) (sep : String) : String × String :=
-  match s.splitOn sep with
-  | [] | [_] => (s, "")
-  | first :: rest => (first, String.intercalate sep rest)
+A request path matches a cookie path when they are identical, or when the cookie path is a
+strict segment-wise prefix of the request path. Segment boundaries correspond to `/`, so
+`/foo` never prefix-matches `/foobar` (different segments).
 
-/--
-Attempts to parse a host string into a `URI.Host`, trying IPv4, bracketed IPv6, and
-domain name forms in order.
+A trailing `/` in the cookie path is normalised away before the prefix test; this covers
+both RFC conditions:
+- cookie-path ends with `/` → its meaningful segments are a strict prefix of request-path.
+- first char after prefix is `/` → satisfied automatically at segment boundaries.
 -/
-private def parseHostStr (s : String) : Option URI.Host :=
-  if let some ip := Net.IPv4Addr.ofString s then
-    some (.ipv4 ip)
-  else if s.startsWith "[" && s.endsWith "]" && s.length > 2 then
-    let inner := s.dropEnd 1 |>.drop 1 |>.toString
-    (Net.IPv6Addr.ofString inner).map .ipv6
-  else
-    (URI.DomainName.ofString? s).map .name
+private def pathMatches (cookiePath : URI.Path) (requestPath : URI.Path) : Bool :=
+  requestPath == cookiePath ||
+  let cp :=
+    if cookiePath.hasTrailingSlash && !cookiePath.isEmpty
+    then cookiePath.segments.pop
+    else cookiePath.segments
+  requestPath.segments.size > cp.size &&
+  requestPath.startsWith { cookiePath with segments := cp }
 
 /--
 Parses a single `Set-Cookie` header value and stores the resulting cookie.
@@ -273,70 +271,79 @@ Parses a single `Set-Cookie` header value and stores the resulting cookie.
 Reference: https://www.rfc-editor.org/rfc/rfc6265#section-5.2
 -/
 def processSetCookie (jar : Jar) (host : URI.Host) (headerValue : String) : BaseIO Unit := do
-  let rawParts := (headerValue.splitOn ";").map String.trimAscii
-
-  let some rawNameValue := rawParts[0]?
+  let .ok parsed := Cookie.Parser.parseSetCookie.run headerValue.toUTF8
     | return ()
 
-  let (rawName, rawValue) := splitFirst rawNameValue.toString "="
+  let some cookieName  := Cookie.Name.ofString?  parsed.name
+    | return ()
 
-  let some cookieName := Cookie.Name.ofString? rawName | return ()
-  let some cookieValue := Cookie.Value.ofString? rawValue | return ()
+  let some cookieValue := Cookie.Value.ofString? parsed.value
+    | return ()
 
-  let mut cookieDomain : Option URI.Host := none
-  let mut cookiePath : URI.Path := URI.Path.parseOrRoot "/"
-  let mut secure := false
+  let cookiePath : URI.Path :=
+    if let some p := parsed.path then URI.Path.parseOrRoot p
+    else URI.Path.parseOrRoot "/"
 
-  for attr in rawParts.drop 1 do
-    let (attrName, attrVal) := splitFirst attr.toString "="
-    match attrName.trimAscii.toString.toLower with
-    | "domain" =>
-      let d := if attrVal.startsWith "." then attrVal.drop 1 else attrVal
-      let d := d.trimAscii.toString
-      if !d.isEmpty then
-        cookieDomain := (URI.DomainName.ofString? d).map URI.Host.name
-    | "path" =>
-      let p := attrVal.trimAscii.toString
-      if !p.isEmpty then cookiePath := URI.Path.parseOrRoot p
-    | "secure" => secure := true
-    | _ => pure ()
+  -- RFC 6265 §5.2.3: resolve domain; missing or invalid Domain → host-only
+  let (domain, hostOnly) :=
+    match parsed.domain with
+    | some d =>
+      match URI.DomainName.ofString? d with
+      | some name => (URI.Host.name name, false)
+      | none      => (host, true)
+    | none => (host, true)
 
-  let (domain, hostOnly) ← match cookieDomain with
-    | some d => pure (d, false)
-    | none => pure (host, true)
+  -- RFC 6265 §5.3 step 6: if domain attribute is set, the origin host must domain-match it.
+  -- This prevents a server at api.example.com from setting Domain=evil.com or Domain=com.
+  if !hostOnly && !domainMatches domain false host then
+    return ()
 
-  let cookie : Cookie := { name := cookieName, value := cookieValue, domain, hostOnly, path := cookiePath, secure }
+  -- RFC 6265 §5.2.2: Max-Age ≤ 0 signals deletion — remove any matching cookie and stop.
+  if let some maxAgeVal := parsed.maxAge then
+    if maxAgeVal ≤ 0 then
+      jar.cookies.atomically do
+        let cs ← get
+        set (cs.filter fun c => !(c.name == cookieName && c.domain == domain && c.path == cookiePath))
+      return ()
 
+  let cookie : Cookie := {
+    name := cookieName
+    value := cookieValue
+    domain
+    hostOnly
+    path := cookiePath
+    secure := parsed.secure
+    httpOnly := parsed.httpOnly
+  }
+
+  -- Limit the total cookie count to prevent unbounded memory growth.
+  -- RFC 6265 §6.1 recommends supporting at least 3000 cookies total.
+  let maxCookies := 3000
   jar.cookies.atomically do
     let cs ← get
-    let cs := cs.filter fun c =>
-      !(c.name == cookie.name && c.domain == cookie.domain && c.path == cookie.path)
-    set (cs.push cookie)
+    let cs := cs.filter fun c => !(c.name == cookie.name && c.domain == cookie.domain && c.path == cookie.path)
+    if cs.size < maxCookies then
+      set (cs.push cookie)
 
 /--
-Returns all cookies that should be sent for a request to `host` at `path`.
-Pass `secure := true` when the request channel is HTTPS.
+Returns the `Cookie` header value for all cookies that should be sent for a request to `host`
+at `path`. Pass `secure := true` when the request channel is HTTPS. Returns `none` when no
+cookies match.
 
 Reference: https://www.rfc-editor.org/rfc/rfc6265#section-5.4
 -/
 def cookiesFor
-    (jar : Jar) (host : URI.Host) (path : String)
-    (secure : Bool := false) : BaseIO (Array Cookie) :=
+    (jar : Jar) (host : URI.Host) (path : URI.Path)
+    (secure : Bool := false) : BaseIO (Option Header.Value) :=
   jar.cookies.atomically do
     let cs ← get
-    return cs.filter fun c =>
+    let matching := cs.filter fun c =>
       domainMatches c.domain c.hostOnly host &&
       pathMatches c.path path &&
       (!c.secure || secure)
-
-/--
-Formats an array of cookies into a `Cookie` header value string.
-Returns `none` when the array is empty.
--/
-def toCookieHeader (cookies : Array Cookie) : Option String :=
-  if cookies.isEmpty then
-    none
-  else
-    some (String.intercalate "; " (cookies.map (fun c => c.name.value ++ "=" ++ c.value.value)).toList)
+    if matching.isEmpty then
+      return none
+    else
+      return Header.Value.ofString? (String.intercalate "; " (matching.map (fun c => c.name.value ++ "=" ++ c.value.value)).toList)
 
 end Std.Http.Cookie.Jar

@@ -57,7 +57,8 @@ structure Config where
   keepAliveTimeout : { x : Time.Millisecond.Offset // 0 < x } := ⟨60000, by decide⟩
 
   /--
-  Timeout for the entire request lifecycle (connect + read + write).
+  Timeout for the request lifecycle (send + receive) per connection.
+  DNS resolution and TCP connect are not covered by this timeout.
   -/
   requestTimeout : { x : Time.Millisecond.Offset // 0 < x } := ⟨120000, by decide⟩
 
@@ -106,6 +107,14 @@ structure Config where
   proxy : Option (String × UInt16) := none
 
   /--
+  Maximum number of bytes allowed in a single response body.
+  When `some n`, reading more than `n` bytes from the body resolves the current
+  request with an error and closes the connection.
+  `none` (default) imposes no limit.
+  -/
+  maxResponseBodySize : Option Nat := none
+
+  /--
   Optional predicate that decides whether a response status is acceptable.
   When `none`, all status codes are accepted (no error is thrown).
   When `some f`, the final response status is passed to `f`; if `f` returns `false`
@@ -118,6 +127,16 @@ structure Config where
   ```
   -/
   validateStatus : Option (Status → Bool) := none
+
+  /--
+  Maximum number of bytes drained from an intermediate redirect response body before
+  -/
+  redirectBodyDrainLimit : Nat := 1024 * 1024
+
+  /--
+  Optional predicate called before following each redirect.
+  -/
+  redirectPolicy : Option (URI.Host → UInt16 → Bool) := none
 
 namespace Config
 

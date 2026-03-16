@@ -68,11 +68,6 @@ public structure Agent (α : Type) where
   port : UInt16
 
   /--
-  URIs visited in the current redirect chain, used to detect cycles.
-  -/
-  redirectHistory : Array URI
-
-  /--
   Cookie jar shared across all requests and redirects through this agent.
   -/
   cookieJar : Cookie.Jar
@@ -94,7 +89,26 @@ public structure Agent (α : Type) where
   -/
   connectTo : Option (URI.Host → UInt16 → Async (Session α)) := none
 
+  /--
+  Called when a connection error is confirmed (i.e., `session.send` threw and all retries
+  are committed to using a fresh session).  Receives the broken session together with the
+  host and port so the caller can:
+  * For pool agents: evict every session to that host so the next retry gets a fresh one.
+  * For standalone agents: close the session's request channel so the background loop exits.
+  The default closes the session channel; pool agents set this to an eviction function.
+  -/
+  onBrokenSession : Session α → URI.Host → UInt16 → Async Unit :=
+    fun s _ _ => discard <| s.close
+
 namespace Agent
+
+/--
+Returns `true` for HTTP methods that are safe to retry on connection failure.
+Non-idempotent methods (POST, PATCH) must not be retried automatically because
+the server may have already processed the request before the connection dropped.
+-/
+private def isIdempotentMethod (m : Method) : Bool :=
+  m == .get || m == .head || m == .put || m == .delete || m == .options || m == .trace
 
 /--
 Rewrites an origin-form request target to absolute-form for proxy forwarding.
@@ -106,13 +120,15 @@ def toAbsoluteFormRequest
     (scheme : URI.Scheme) (host : URI.Host) (port : UInt16) : Request Body.AnyBody :=
   match request.line.uri with
   | .originForm o =>
-    let pathStr := toString o.path
-    let queryStr := match o.query with | none => "" | some q => toString q
-    let portStr := if port == URI.Scheme.defaultPort scheme then "" else s!":{port}"
-    let urlStr := s!"{scheme}://{host}{portStr}{pathStr}{queryStr}"
-    match RequestTarget.parse? urlStr with
-    | some target => { request with line := { request.line with uri := target } }
-    | none => request
+    { request with
+        line := { request.line with uri := .absoluteForm {
+          scheme,
+          path := o.path,
+          query := o.query.getD .empty,
+          authority := some { host, port := .value port }
+        }
+      }
+    }
   | _ => request
 
 /--
@@ -124,26 +140,30 @@ def ofTransport [Transport α] (socket : α) (scheme : URI.Scheme)
     (host : URI.Host) (port : UInt16)
     (connectTo : Option (URI.Host → UInt16 → Async (Session α)) := none)
     (config : Config := {}) : Async (Agent α) := do
+
   let session ← Session.new socket config
   let cookieJar ← Cookie.Jar.new
-  pure { session, scheme, host, port, redirectHistory := #[], cookieJar, connectTo }
+  pure { session, scheme, host, port, cookieJar, connectTo }
 
 /--
 Injects matching cookies from `cookieJar` into the request headers for `host`.
 Does nothing if the jar contains no matching cookies.
 -/
-def injectCookies (cookieJar : Cookie.Jar) (host : URI.Host)
+def injectCookies (cookieJar : Cookie.Jar) (host : URI.Host) (scheme : URI.Scheme)
     (request : Request Body.AnyBody) : Async (Request Body.AnyBody) := do
+
+  -- Respect an explicit Cookie header set by the caller.
+  if request.line.headers.contains .cookie then return request
+
   let path := match request.line.uri with
-    | .originForm o   => toString o.path
-    | .absoluteForm af => toString af.path
-    | _ => "/"
-  let cookies ← cookieJar.cookiesFor host path
-  match Cookie.Jar.toCookieHeader cookies with
+    | .originForm o => o.path
+    | .absoluteForm af => af.path
+    | _ => URI.Path.parseOrRoot "/"
+
+  match ← cookieJar.cookiesFor host path (secure := scheme.val == "https") with
   | none => return request
   | some cookieValue =>
-    let newHeaders :=
-      request.line.headers.insert Header.Name.cookie (Header.Value.ofString! cookieValue)
+    let newHeaders := request.line.headers.insert .cookie cookieValue
     return { request with line := { request.line with headers := newHeaders } }
 
 /--
@@ -171,44 +191,50 @@ inductive RedirectDecision where
   Response is final, should validate status and return it.
   -/
   | done
-  /-- Follow a redirect to `(host, port, scheme)` with `request`, updating `history`. -/
-  | follow (host : URI.Host) (port : UInt16) (scheme : URI.Scheme)
-           (request : Request Body.AnyBody) (history : Array URI)
+
+  /--
+  Follow a redirect to `(host, port, scheme)` with `request`, updating `history`.
+  -/
+  | follow (host : URI.Host) (port : UInt16) (scheme : URI.Scheme) (request : Request Body.AnyBody)
 
 /--
 Inspects `response` and decides whether to follow a redirect.
 
 Returns `.done` when:
 - `remaining` is 0 or the response is not a redirection,
-- the `Location` header is absent,
-- a redirect cycle is detected, or
+- the `Location` header is absent, or
 - the `Location` value cannot be parsed.
 
 Returns `.follow` with the rewritten request (method, body, and headers adjusted per
 RFC 9110 §15.4, including `Authorization` stripped on cross-origin hops) when a valid
-redirect target is found. The response body is drained before returning `.follow`.
+redirect target is found. The response body is drained (up to `drainLimit` bytes) before
+returning `.follow`; if the body exceeds `drainLimit` the incoming channel is closed and
+the connection is left to recover or time out.
 -/
 def decideRedirect
-    (remaining : Nat) (history : Array URI)
+    (remaining : Nat)
     (currentHost : URI.Host) (currentPort : UInt16) (currentScheme : URI.Scheme)
     (request : Request Body.AnyBody) (response : Response Body.Incoming)
+    (drainLimit : Nat)
     : Async RedirectDecision := do
-  if remaining == 0 || !response.line.status.isRedirection then
+
+  if remaining == 0 ∨ !response.line.status.isRedirection then
     return .done
 
-  let some locationValue := response.line.headers.get? Header.Name.location
+  let some locationValue := response.line.headers.get? .location
     | return .done
 
   let locationStr := locationValue.value
-  let locationURI := URI.parse? locationStr
-
-  discard <| ContextAsync.run (response.body.readAll (α := ByteArray))
-
-  if let some uri := locationURI then
-    if history.contains uri then return .done
 
   let some target := RequestTarget.parse? locationStr
     | return .done
+
+  -- Drain
+  discard <| ContextAsync.run do
+    try
+      discard <| response.body.readAll (α := ByteArray) (maximumSize := some drainLimit.toUInt64)
+    catch _ =>
+      response.body.close
 
   let newMethod := match response.line.status with
     | .seeOther => .get
@@ -216,42 +242,54 @@ def decideRedirect
         if request.line.method == .post then .get else request.line.method
     | _ => request.line.method
 
+  let bodyIsStreaming := match request.body with | .outgoing _ => true | _ => false
+
   let newBody : Body.AnyBody :=
-    if newMethod == .get || newMethod == .head || newMethod != request.line.method then
-      .empty {}
-    else
-      request.body
+    if newMethod == .get || newMethod == .head || newMethod != request.line.method then .empty {}
+    else if bodyIsStreaming then .empty {}
+    else request.body
 
-  let newHistory := match locationURI with
-    | some uri => history.push uri
-    | none     => history
+  let (newHost, newPort, newScheme) := match target with
+    | .absoluteForm af =>
+      let h := af.authority.map URI.Authority.host |>.getD currentHost
+      let p : UInt16 :=
+        match af.authority with
+        | some auth => match auth.port with
+          | URI.Port.value v => v
+          | _ => URI.Scheme.defaultPort af.scheme
+        | none => URI.Scheme.defaultPort af.scheme
+      (h, p, af.scheme)
+    | _ => (currentHost, currentPort, currentScheme)
 
-  let (newHost, newPort, newScheme) := match locationURI with
-    | some uri =>
-      if let some auth := uri.authority then
-        let h := auth.host
-        let p : UInt16 := match auth.port with
-          | .value p => p
-          | _        => URI.Scheme.defaultPort uri.scheme
-        (h, p, uri.scheme)
-      else (currentHost, currentPort, currentScheme)
-    | none => (currentHost, currentPort, currentScheme)
+  -- Avoid SSRF.
+  if newScheme.val != "http" && newScheme.val != "https" then
+    return .done
 
-  -- Strip Authorization on cross-origin redirects to prevent credential leakage (RFC 9110 §15.4).
-  let crossOrigin := newHost != currentHost || newPort != currentPort
+  -- Strip Authorization
+  let isCrossOrigin := newHost != currentHost || newPort != currentPort || newScheme != currentScheme
+
   let newHeaders :=
-    if crossOrigin then request.line.headers.erase Header.Name.authorization
+    if isCrossOrigin then
+      request.line.headers
+        |>.erase Header.Name.authorization
+        |>.erase Header.Name.proxyAuthorization
+        |>.erase Header.Name.cookie
     else request.line.headers
 
   return .follow newHost newPort newScheme
     { line := { request.line with uri := target, method := newMethod, headers := newHeaders }
       body := newBody
       extensions := request.extensions }
-    newHistory
 
 private partial def sendWithRedirects [Transport α]
     (agent : Agent α) (request : Request Body.AnyBody)
-    (remaining : Nat) (retriesLeft : Nat) : Async (Response Body.Incoming) := do
+    (remaining : Nat) (retriesLeft : Nat)
+    (history : Array (URI.Host × UInt16 × String) := #[]) : Async (Response Body.Incoming) := do
+
+  -- Record the current URL in the history and detect redirect cycles.
+  let currentKey := (agent.host, agent.port, toString request.line.uri)
+  let history := history.push currentKey
+
   -- Rewrite to absolute-form when a proxy is configured.
   let request :=
     if agent.session.config.proxy.isSome then
@@ -259,51 +297,62 @@ private partial def sendWithRedirects [Transport α]
     else
       request
 
-  let request ← injectCookies agent.cookieJar agent.host request
+  let request ← injectCookies agent.cookieJar agent.host agent.scheme request
 
   let response ← try agent.session.send request
     catch err => do
-      -- Connection error: retry with a fresh session if budget and factory allow.
-      if retriesLeft > 0 then
+      agent.onBrokenSession agent.session agent.host agent.port
+
+      let bodyIsReplayable := match request.body with | .outgoing _ => false | _ => true
+
+      if retriesLeft > 0 && isIdempotentMethod request.line.method && bodyIsReplayable then
         if let some factory := agent.connectTo then
           sleep agent.session.config.retryDelay
           let newSession ← factory agent.host agent.port
-          return ← sendWithRedirects { agent with session := newSession } request remaining (retriesLeft - 1)
+          return ← sendWithRedirects { agent with session := newSession } request remaining (retriesLeft - 1) history
+
       throw err
 
   let response ← applyInterceptors agent.interceptors response
   processCookies agent.cookieJar agent.host response.line.headers
 
-  match ← decideRedirect remaining agent.redirectHistory agent.host agent.port agent.scheme request response with
+  match ← decideRedirect remaining agent.host agent.port agent.scheme request response
+      agent.session.config.redirectBodyDrainLimit with
   | .done =>
     if let some validate := agent.session.config.validateStatus then
       if !validate response.line.status then
         throw (.userError s!"unexpected HTTP status: {response.line.status.toCode}")
     return response
-  | .follow newHost newPort newScheme newRequest newHistory =>
+  | .follow newHost newPort newScheme newRequest =>
+    if let some policy := agent.session.config.redirectPolicy then
+      if !policy newHost newPort then
+        return response
+
+    let nextKey := (newHost, newPort, toString newRequest.line.uri)
+    if history.contains nextKey then
+      return response
+
     if newHost != agent.host || newPort != agent.port then
+
       -- For custom transports without a connectTo factory we cannot open a new
       -- connection to a different host; return the redirect response as-is.
-      let some factory := agent.connectTo | return response
-      let _ ← agent.session.close
+      let some factory := agent.connectTo
+        | return response
+
       let newSession ← factory newHost newPort
-      let response ← sendWithRedirects
-        { session        := newSession
-          scheme         := newScheme
-          host           := newHost
-          port           := newPort
-          redirectHistory := newHistory
-          cookieJar      := agent.cookieJar
-          interceptors   := agent.interceptors
-          connectTo      := some factory }
-        newRequest (remaining - 1) retriesLeft
-      -- Close the cross-host session: signals the background loop to shut down after
-      -- the response body is consumed (safe because the channel is only polled once
-      -- the current response is fully delivered and waitingForRequest becomes true).
-      let _ ← newSession.close
-      return response
+
+      sendWithRedirects
+        { session := newSession
+          scheme := newScheme
+          host := newHost
+          port := newPort
+          cookieJar := agent.cookieJar
+          interceptors := agent.interceptors
+          connectTo := some factory
+          onBrokenSession := agent.onBrokenSession }
+        newRequest (remaining - 1) retriesLeft history
     else
-      sendWithRedirects { agent with redirectHistory := newHistory } newRequest (remaining - 1) retriesLeft
+      sendWithRedirects agent newRequest (remaining - 1) retriesLeft history
 
 /--
 Send a request, automatically following redirects up to `config.maxRedirects` hops and
@@ -312,9 +361,9 @@ For cross-host redirects the agent reconnects using its `connectTo` factory (if 
 Cookies are automatically injected from the jar and `Set-Cookie` responses are stored.
 Response interceptors are applied after every response.
 -/
-def send {β : Type} [Coe β Body.AnyBody] [Transport α]
-    (agent : Agent α) (request : Request β) : Async (Response Body.Incoming) :=
-  sendWithRedirects agent
+def send {β : Type} [Coe β Body.AnyBody] [Transport α] (agent : Agent α) (request : Request β) : Async (Response Body.Incoming) :=
+  sendWithRedirects
+    agent
     { line := request.line, body := (request.body : Body.AnyBody), extensions := request.extensions }
     agent.session.config.maxRedirects
     agent.session.config.maxRetries
@@ -369,30 +418,12 @@ private def withHostHeader [Transport α] (rb : Agent.RequestBuilder α) : Agent
     { rb with builder := rb.builder.header! "Host" hostValue }
 
 /--
-Injects matching cookies from the agent's jar if no `Cookie` header is already present.
--/
-private def withCookies [Transport α] (rb : Agent.RequestBuilder α) : Async (Agent.RequestBuilder α) := do
-  if rb.builder.line.headers.contains Header.Name.cookie then
-    return rb
-  let path := match rb.builder.line.uri with
-    | .originForm o   => toString o.path
-    | .absoluteForm af => toString af.path
-    | _ => "/"
-  let cookies ← rb.agent.cookieJar.cookiesFor rb.agent.host path
-  match Cookie.Jar.toCookieHeader cookies with
-  | none => return rb
-  | some cookieValue =>
-    return { rb with builder := rb.builder.header! "Cookie" cookieValue }
-
-/--
-Prepares the builder by injecting Host and Cookie headers, then calls `f` to build
-and send the request.
+Prepares the builder by injecting the `Host` header, then calls `f` to build and send the
+request. Cookie injection is handled by `Agent.injectCookies` inside `sendWithRedirects`.
 -/
 private def prepare [Transport α] (rb : Agent.RequestBuilder α)
-    (f : Agent.RequestBuilder α → Async (Response Body.Incoming)) : Async (Response Body.Incoming) := do
-  let rb := rb.withHostHeader
-  let rb ← rb.withCookies
-  f rb
+    (f : Agent.RequestBuilder α → Async (Response Body.Incoming)) : Async (Response Body.Incoming) :=
+  f rb.withHostHeader
 
 /--
 Adds a typed header to the request.
@@ -471,36 +502,46 @@ end Agent.RequestBuilder
 
 namespace Agent
 
-/-- Creates a GET request builder for the given path or URL. -/
+/--
+Creates a GET request builder for the given path or URL
+-/
 def get [Transport α] (agent : Agent α) (path : String) : Agent.RequestBuilder α :=
   { agent, builder := Request.get (RequestTarget.parse! path) }
 
-/-- Creates a POST request builder for the given path or URL. -/
+/--
+Creates a POST request builder for the given path or URL
+-/
 def post [Transport α] (agent : Agent α) (path : String) : Agent.RequestBuilder α :=
   { agent, builder := Request.post (RequestTarget.parse! path) }
 
-/-- Creates a PUT request builder for the given path or URL. -/
+/--
+Creates a PUT request builder for the given path or URL
+-/
 def put [Transport α] (agent : Agent α) (path : String) : Agent.RequestBuilder α :=
   { agent, builder := Request.put (RequestTarget.parse! path) }
 
-/-- Creates a DELETE request builder for the given path or URL. -/
+/--
+Creates a DELETE request builder for the given path or URL
+-/
 def delete [Transport α] (agent : Agent α) (path : String) : Agent.RequestBuilder α :=
   { agent, builder := Request.delete (RequestTarget.parse! path) }
 
-/-- Creates a PATCH request builder for the given path or URL. -/
+/--
+Creates a PATCH request builder for the given path or URL
+-/
 def patch [Transport α] (agent : Agent α) (path : String) : Agent.RequestBuilder α :=
   { agent, builder := Request.patch (RequestTarget.parse! path) }
 
-/-- Creates a HEAD request builder for the given path or URL. -/
+/--
+Creates a HEAD request builder for the given path or URL
+-/
 def headReq [Transport α] (agent : Agent α) (path : String) : Agent.RequestBuilder α :=
   { agent, builder := Request.head (RequestTarget.parse! path) }
 
-/-- Creates an OPTIONS request builder for the given path or URL. -/
+/--
+Creates an OPTIONS request builder for the given path or URL.
+-/
 def options [Transport α] (agent : Agent α) (path : String) : Agent.RequestBuilder α :=
   { agent, builder := Request.options (RequestTarget.parse! path) }
 
-end Agent
-
-end Client
-end Http
-end Std
+end Std.Http.Client.Agent

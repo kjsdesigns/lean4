@@ -161,6 +161,7 @@ private structure ConnectionState where
   uploadBytes : UInt64 := 0
   downloadProgress : Option (Watch UInt64) := none
   downloadBytes : UInt64 := 0
+  downloadBodyBytes : UInt64 := 0
 
 @[inline]
 private def requestHasExpectContinue (request : Request Body.Operations) : Bool :=
@@ -230,6 +231,10 @@ private def processH1Events
     | .needMoreData expect =>
       st := { st with requiresData := true, expectData := expect }
 
+    -- `.needAnswer` is emitted by processWrite when the writer is in `waitingHeaders`
+    -- state in `.sending` mode, signalling that the client machine needs the next request.
+    -- The client loop tracks this through `waitingForRequest` instead, so this event
+    -- is intentionally a no-op here.
     | .needAnswer => pure ()
 
     | .endHeaders head =>
@@ -305,6 +310,7 @@ private def processH1Events
         uploadBytes := 0
         downloadProgress := none
         downloadBytes := 0
+        downloadBodyBytes := 0
       }
 
     | .failed err =>
@@ -395,7 +401,28 @@ private def handleRecvEvent
       let mut st := { state with machine := newMachine }
 
       if let some pulled := pulledChunk then
+        let newBodyBytes := st.downloadBodyBytes + pulled.chunk.data.size.toUInt64
+        st := { st with downloadBodyBytes := newBodyBytes }
+
+        -- Enforce the response body size limit before writing data to the caller.
+        if let some maxSize := config.maxResponseBodySize then
+          if newBodyBytes > maxSize.toUInt64 then
+            if let some packet := st.currentRequest then
+              packet.onError (.userError "response body exceeds maximum allowed size")
+            if let some body := st.responseOutgoing then
+              if ¬(← Body.Writer.isClosed body) then Body.Writer.close body
+            if let some w := st.downloadProgress then Watch.close w
+            return ({ st with
+              machine := st.machine.closeWriter.closeReader.noMoreInput
+              currentRequest := none
+              responseOutgoing := none
+              downloadProgress := none
+            }, false)
+
         if let some body := st.responseOutgoing then
+          -- If the caller has dropped/closed the incoming side, the write fails.
+          -- Silently swallowing the error is correct: the loop must continue pulling
+          -- wire bytes to keep the connection in a valid state for reuse.
           try Body.Writer.send body pulled.chunk pulled.incomplete
           catch _ => pure ()
 

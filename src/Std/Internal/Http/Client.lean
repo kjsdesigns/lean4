@@ -63,19 +63,23 @@ def proxy (b : Client.Builder) (host : String) (port : UInt16) : Client.Builder 
 /--
 Routes all connections through a proxy specified as a URL string.
 Returns `none` if the URL is invalid or has no authority component.
+Only HTTP proxies are supported. The scheme determines the default port
+when no explicit port is specified (`http` → 80, `https` → 443). TLS
+(HTTPS proxy CONNECT tunnels) is not supported.
 -/
 def proxy? (b : Client.Builder) (url : String) : Option Client.Builder := do
   let uri ← URI.parse? url
   let auth ← uri.authority
   let host := toString auth.host
-  let defaultPort : UInt16 := if uri.scheme.val == "https" then 443 else 80
   let port : UInt16 := match auth.port with
     | .value p => p
-    | _ => defaultPort
+    | _ => URI.Scheme.defaultPort uri.scheme
   pure { b with config := { b.config with proxy := some (host, port) } }
 
 /--
-Sets the total request timeout (connect + send + receive).
+Sets the request timeout (send + receive).
+DNS resolution and TCP connect are not covered by this timeout;
+use the OS-level socket timeout for those.
 -/
 def timeout (b : Client.Builder) (ms : Time.Millisecond.Offset) : Client.Builder :=
   if h : 0 < ms then

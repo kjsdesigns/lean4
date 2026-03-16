@@ -54,6 +54,7 @@ private def createTcpSession (host : URI.Host) (port : UInt16) (config : Config)
   -- Try each resolved address in order; return on first successful connect.
   -- This handles hosts that resolve to both IPv6 (::1) and IPv4 (127.0.0.1).
   let mut lastErr : IO.Error := IO.userError s!"could not connect to {connectHost.quote}:{connectPort}"
+
   for ipAddr in addrs do
     let socketAddr : Std.Net.SocketAddress := match ipAddr with
       | .v4 ip => .v4 ⟨ip, connectPort⟩
@@ -93,6 +94,11 @@ public structure Agent.Pool where
   cookieJar : Cookie.Jar
 
   /--
+  Monotonically increasing counter used to assign unique IDs to pooled sessions.
+  -/
+  nextId : Mutex UInt64
+
+  /--
   Response interceptors applied (in order) after every response from any session in the pool.
   -/
   interceptors : Array (Response Body.Incoming → Async (Response Body.Incoming)) := #[]
@@ -105,7 +111,8 @@ Creates a new, empty connection pool.
 def new (config : Config := {}) (maxPerHost : Nat := 4) : Async Agent.Pool := do
   let state ← Mutex.new (∅ : Std.HashMap (String × UInt16) (Array (Session Socket.Client) × Nat))
   let cookieJar ← Cookie.Jar.new
-  pure { state, maxPerHost, config, cookieJar }
+  let nextId ← Mutex.new (1 : UInt64)
+  pure { state, maxPerHost, config, cookieJar, nextId }
 
 /--
 Returns a session for `(host, port)`, reusing an existing one when available or
@@ -127,6 +134,11 @@ def getOrCreateSession (pool : Agent.Pool) (host : URI.Host) (port : UInt16) : A
 
   -- Slow path: create a new session and register it.
   let session ← createTcpSession host port pool.config
+  let newId ← pool.nextId.atomically do
+    let id ← MonadState.get
+    MonadState.set (id + 1)
+    return id
+  let session := { session with id := newId }
   pool.state.atomically do
     let st ← MonadState.get
     let (sessions, idx) := (st.get? (toString host, port)).getD (#[], 0)
@@ -138,48 +150,17 @@ def getOrCreateSession (pool : Agent.Pool) (host : URI.Host) (port : UInt16) : A
   return session
 
 /--
-Removes all sessions for `(host, port)` from the pool.
-Called when a connection error is detected so the next request gets a fresh connection.
+Removes a single broken session from the pool by its unique ID.
+Healthy sibling sessions to the same host are preserved.
 -/
-private def evictSessions (pool : Agent.Pool) (host : URI.Host) (port : UInt16) : Async Unit := do
+private def evictSession (pool : Agent.Pool) (host : URI.Host) (port : UInt16) (sessionId : UInt64) : Async Unit := do
   pool.state.atomically do
     let st ← MonadState.get
-    MonadState.set (st.erase (toString host, port))
-
-private partial def sendPoolWithRedirects
-    (pool : Agent.Pool) (host : URI.Host) (port : UInt16)
-    (request : Request Body.AnyBody)
-    (remaining : Nat)
-    (retriesLeft : Nat)
-    (redirectHistory : Array URI) : Async (Response Body.Incoming) := do
-  let request :=
-    if pool.config.proxy.isSome then
-      Agent.toAbsoluteFormRequest request (URI.Scheme.ofPort port) host port
-    else
-      request
-
-  let request ← Agent.injectCookies pool.cookieJar host request
-
-  let session ← pool.getOrCreateSession host port
-  let response ← try session.send request
-    catch err => do
-      evictSessions pool host port
-      if retriesLeft > 0 then
-        sleep pool.config.retryDelay
-        return ← sendPoolWithRedirects pool host port request remaining (retriesLeft - 1) redirectHistory
-      throw err
-
-  let response ← Agent.applyInterceptors pool.interceptors response
-  Agent.processCookies pool.cookieJar host response.line.headers
-
-  match ← Agent.decideRedirect remaining redirectHistory host port (URI.Scheme.ofPort port) request response with
-  | .done =>
-    if let some validate := pool.config.validateStatus then
-      if !validate response.line.status then
-        throw (.userError s!"unexpected HTTP status: {response.line.status.toCode}")
-    return response
-  | .follow newHost newPort _ newRequest newHistory =>
-    sendPoolWithRedirects pool newHost newPort newRequest (remaining - 1) retriesLeft newHistory
+    match st.get? (toString host, port) with
+    | none => pure ()
+    | some (sessions, idx) =>
+      let sessions' := sessions.filter (fun s => s.id != sessionId)
+      MonadState.set (st.insert (toString host, port) (sessions', idx))
 
 /--
 Sends a request through a pooled session for `(host, port)`, injecting cookies from the
@@ -189,12 +170,19 @@ failure (retrying up to `config.maxRetries` times).
 -/
 def send {β : Type} [Coe β Body.AnyBody]
     (pool : Agent.Pool) (host : URI.Host) (port : UInt16)
-    (request : Request β) : Async (Response Body.Incoming) :=
-  sendPoolWithRedirects pool host port
-    { line := request.line, body := (request.body : Body.AnyBody), extensions := request.extensions }
-    pool.config.maxRedirects
-    pool.config.maxRetries
-    #[]
+    (request : Request β) : Async (Response Body.Incoming) := do
+  let session ← pool.getOrCreateSession host port
+
+  Agent.send {
+    session
+    scheme := URI.Scheme.ofPort port
+    host := host
+    port := port
+    cookieJar := pool.cookieJar
+    interceptors := pool.interceptors
+    connectTo := some pool.getOrCreateSession
+    onBrokenSession := fun brokenSession h p => pool.evictSession h p brokenSession.id
+  } request
 
 end Agent.Pool
 
@@ -211,11 +199,6 @@ def connect (host : URI.Host) (port : UInt16) (config : Config := {}) : Async (A
   let session ← createTcpSession host port config
   let cookieJar ← Cookie.Jar.new
   let scheme := URI.Scheme.ofPort port
-  pure { session, scheme, host, port, redirectHistory := #[], cookieJar,
-         connectTo := some (fun h p => createTcpSession h p config) }
+  pure { session, scheme, host, port, cookieJar, connectTo := some (createTcpSession · · config) }
 
-end Agent
-
-end Client
-end Http
-end Std
+end Std.Http.Client.Agent

@@ -44,6 +44,12 @@ public structure Session (α : Type) where
   -/
   config : Config
 
+  /--
+  Unique identifier assigned by the pool when this session is registered.
+  Zero for sessions created outside a pool.
+  -/
+  id : UInt64 := 0
+
 namespace Session
 
 /--
