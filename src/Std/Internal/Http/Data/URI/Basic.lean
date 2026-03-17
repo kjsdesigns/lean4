@@ -798,10 +798,6 @@ def build (b : Builder) : URI :=
 
 end Builder
 
-end URI
-
-namespace URI
-
 /--
 Returns a new URI with the scheme replaced.
 -/
@@ -959,7 +955,7 @@ inductive RequestTarget where
   Absolute-form request target containing a complete URI. Used when making requests through a proxy.
   Example: `http://example.com:8080/path?key=value`
   -/
-  | absoluteForm (t : RequestTarget.Absolute)
+  | absoluteForm (uri : URI)
 
   /--
   Authority-form request target (used for CONNECT requests).
@@ -981,8 +977,8 @@ Extracts the path component from a request target, if available.
 Returns an empty relative path for targets without a path.
 -/
 def path : RequestTarget → URI.Path
-  | .originForm o => o.path
-  | .absoluteForm af => af.path
+  | .originForm p _ => p
+  | .absoluteForm uri => uri.path
   | _ => { segments := #[], absolute := false }
 
 /--
@@ -990,8 +986,8 @@ Extracts the query component from a request target, if available.
 Returns an empty array for targets without a query.
 -/
 def query : RequestTarget → URI.Query
-  | .originForm o => o.query.getD URI.Query.empty
-  | .absoluteForm af => af.query
+  | .originForm _ q => q.getD URI.Query.empty
+  | .absoluteForm uri => uri.query
   | _ => URI.Query.empty
 
 /--
@@ -999,7 +995,7 @@ Extracts the authority component from a request target, if available.
 -/
 def authority? : RequestTarget → Option URI.Authority
   | .authorityForm a => some a
-  | .absoluteForm af => af.authority
+  | .absoluteForm uri => uri.authority
   | _ => none
 
 instance : ToString RequestTarget where
@@ -1008,7 +1004,7 @@ instance : ToString RequestTarget where
         let pathStr := toString o.path
         let queryStr := o.query.map toString |>.getD ""
         s!"{pathStr}{queryStr}"
-    | .absoluteForm af => toString af
+    | .absoluteForm uri => toString uri
     | .authorityForm auth => toString auth
     | .asteriskForm => "*"
 

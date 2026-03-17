@@ -142,32 +142,3 @@ def parseOrRoot (s : String) : Std.Http.URI.Path :=
   parse? s |>.getD { segments := #[], absolute := true }
 
 end Std.Http.URI.Path
-
-namespace Std.Http.URI.AuthorityForm
-
-/--
-Attempts to parse a URL with a required authority component.
-Accepts absolute URLs such as `"http://host:8080/path?k=v"`.
-The port defaults to 80 for `http` and 443 for `https` if omitted.
-Returns `none` if the URL is invalid or has no authority.
--/
-@[inline]
-def parse? (s : String) : Option Std.Http.URI.AuthorityForm := do
-  let uri ← Std.Http.URI.parse? s
-  let auth ← uri.authority
-  let port : UInt16 := match auth.port with
-    | .value p => p
-    | _ => URI.Scheme.defaultPort uri.scheme
-  some { scheme := uri.scheme, host := auth.host, port, path := uri.path, query := uri.query }
-
-/--
-Parses a URL with a required authority component. Panics if parsing fails.
-Use `parse?` if you need a safe option-returning version.
--/
-@[inline]
-def parse! (s : String) : Std.Http.URI.AuthorityForm :=
-  match parse? s with
-  | some af => af
-  | none    => panic! s!"invalid URL (expected scheme://host/path): {s.quote}"
-
-end Std.Http.URI.AuthorityForm
