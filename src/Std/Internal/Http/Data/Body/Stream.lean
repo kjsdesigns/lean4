@@ -12,10 +12,13 @@ public import Std.Internal.Http.Data.Request
 public import Std.Internal.Http.Data.Response
 public import Std.Internal.Http.Data.Chunk
 public import Std.Internal.Http.Data.Body.Basic
-public import Std.Internal.Http.Data.Body.Length
 public import Init.Data.ByteArray
 
 public section
+
+namespace Std.Http
+
+namespace Body
 
 /-!
 # Body.Stream
@@ -29,7 +32,6 @@ There is no queue and no capacity. A send waits for a receiver and a receive wai
 At most one blocked producer and one blocked consumer are supported.
 -/
 
-namespace Std.Http.Body
 open Std Internal IO Async
 
 set_option linter.all true
@@ -368,20 +370,40 @@ protected partial def forIn'
   loop incoming acc
 
 /--
-Reads all remaining chunks and decodes them into `α`.
+Abstracts over how the next chunk is received, allowing `readAll` to work in both `Async`
+(no cancellation) and `ContextAsync` (races with cancellation via `doneSelector`).
 -/
-partial def readAll
-    [FromByteArray α]
-    (incoming : Incoming)
-    (maximumSize : Option UInt64 := none) :
-    ContextAsync α := do
-  let rec loop (result : ByteArray) : ContextAsync ByteArray := do
-    let data ← Selectable.one #[
+class NextChunk (m : Type → Type) where
+  /--
+  Receives the next chunk, stopping at EOF or (in `ContextAsync`) when the context is cancelled.
+  -/
+  nextChunk : Incoming → m (Option Chunk)
+
+instance : NextChunk Async where
+  nextChunk := Incoming.recv
+
+instance : NextChunk ContextAsync where
+  nextChunk incoming := do
+    Selectable.one #[
       .case incoming.recvSelector pure,
       .case (← ContextAsync.doneSelector) (fun _ => pure none),
     ]
 
-    match data with
+/--
+Reads all remaining chunks and decodes them into `α`.
+
+Works in both `Async` (reads until EOF, no cancellation) and `ContextAsync` (also stops if the
+context is cancelled).
+-/
+partial def readAll
+    [FromByteArray α]
+    [Monad m] [MonadExceptOf IO.Error m] [NextChunk m]
+    (incoming : Incoming)
+    (maximumSize : Option UInt64 := none) :
+    m α := do
+
+  let rec loop (result : ByteArray) : m ByteArray := do
+    match ← NextChunk.nextChunk incoming with
     | none => return result
     | some chunk =>
       let result := result ++ chunk.data
@@ -628,9 +650,16 @@ instance : ForIn Async Incoming Chunk where
 instance : ForIn ContextAsync Incoming Chunk where
   forIn := Incoming.forIn'
 
-end Std.Http.Body
+instance : Http.Body Incoming where
+  recv := Incoming.recv
+  close := Incoming.close
+  isClosed := Incoming.isClosed
+  recvSelector := Incoming.recvSelector
 
-namespace Std.Http.Request.Builder
+end Body
+
+namespace Request.Builder
+
 open Internal.IO.Async
 
 /--
@@ -639,13 +668,13 @@ Builds a request with a streaming body generator.
 def stream
     (builder : Builder)
     (gen : Body.Outgoing → Async Unit) :
-    Async (Request Body.Outgoing) := do
+    Async (Request Body.Incoming) := do
   let incoming ← Body.stream gen
-  return Request.Builder.body builder (Body.Internal.incomingToOutgoing incoming)
+  return Request.Builder.body builder incoming
 
-end Std.Http.Request.Builder
+end Request.Builder
 
-namespace Std.Http.Response.Builder
+namespace Response.Builder
 open Internal.IO.Async
 
 /--
@@ -654,8 +683,8 @@ Builds a response with a streaming body generator.
 def stream
     (builder : Builder)
     (gen : Body.Outgoing → Async Unit) :
-    Async (Response Body.Outgoing) := do
+    Async (Response Body.Incoming) := do
   let incoming ← Body.stream gen
-  return Response.Builder.body builder (Body.Internal.incomingToOutgoing incoming)
+  return Response.Builder.body builder incoming
 
-end Std.Http.Response.Builder
+end Response.Builder

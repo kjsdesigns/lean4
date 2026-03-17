@@ -7,12 +7,9 @@ module
 
 prelude
 public import Std.Sync
-public import Std.Internal.Async
 public import Std.Internal.Http.Data.Request
 public import Std.Internal.Http.Data.Response
-public import Std.Internal.Http.Data.Body.Length
-public import Std.Internal.Http.Data.Body.Reader
-public import Std.Internal.Http.Data.Chunk
+public import Std.Internal.Http.Data.Body.Any
 public import Init.Data.ByteArray
 
 public section
@@ -25,10 +22,6 @@ A body backed by a fixed `ByteArray` held in a `Mutex`.
 The byte array is consumed at most once: the first call to `recv` or `tryRecv` atomically
 takes the data and returns it as a single chunk; subsequent calls return `none` (end-of-stream).
 Closing the body discards any unconsumed data.
-
-`Full` implements `Body.Writer`. The `Writer` instance is a no-op for sends since the content is
-fixed at construction; it is provided so that `Full` can substitute for a streaming channel in
-contexts that require a writable body handle.
 -/
 
 namespace Std.Http.Body
@@ -49,8 +42,7 @@ deriving Nonempty
 
 namespace Full
 
-private def takeChunk [Monad m] [MonadLiftT (ST IO.RealWorld) m] :
-    AtomicT (Option ByteArray) m (Option Chunk) := do
+private def takeChunk : AtomicT (Option ByteArray) Async (Option Chunk) := do
   match ← get with
   | none =>
     pure none
@@ -91,13 +83,6 @@ def recv (full : Full) : Async (Option Chunk) :=
   full.tryRecv
 
 /--
-No-op send for a fixed full body.
--/
-@[inline]
-def send (_ : Full) (_ : Chunk) (_incomplete : Bool := false) : Async Unit :=
-  pure ()
-
-/--
 Closes the body, discarding any unconsumed data.
 -/
 def close (full : Full) : Async Unit :=
@@ -112,13 +97,6 @@ def isClosed (full : Full) : Async Bool :=
     return (← get).isNone
 
 /--
-A fixed full body never has consumer interest.
--/
-@[inline]
-def hasInterest (_ : Full) : Async Bool :=
-  pure false
-
-/--
 Returns known-size metadata based on current remaining bytes.
 -/
 def getKnownSize (full : Full) : Async (Option Body.Length) :=
@@ -128,27 +106,6 @@ def getKnownSize (full : Full) : Async (Option Body.Length) :=
     | some data => pure (some (.fixed data.size))
 
 /--
-No-op metadata setter for a fixed full body.
--/
-@[inline]
-def setKnownSize (_ : Full) (_ : Option Body.Length) : Async Unit :=
-  pure ()
-
-open Internal.IO.Async in
-/--
-Selector that immediately resolves to `false` for interest.
--/
-def interestSelector (_ : Full) : Selector Bool where
-  tryFn := pure (some false)
-  registerFn waiter := do
-    let lose := pure ()
-    let win promise := do
-      promise.resolve (.ok false)
-    waiter.race lose win
-  unregisterFn := pure ()
-
-open Internal.IO.Async in
-/--
 Selector that immediately resolves to the remaining chunk (or EOF).
 -/
 def recvSelector (full : Full) : Selector (Option Chunk) where
@@ -156,26 +113,46 @@ def recvSelector (full : Full) : Selector (Option Chunk) where
     let chunk ← full.state.atomically do
       takeChunk
     pure (some chunk)
+
   registerFn waiter := do
-    let chunk ← full.state.atomically do
-      takeChunk
-    let lose := pure ()
-    let win promise := do
-      promise.resolve (.ok chunk)
-    waiter.race lose win
+    full.state.atomically do
+      let lose := pure ()
+
+      let win promise := do
+        let chunk ← takeChunk
+        promise.resolve (.ok chunk)
+
+      waiter.race lose win
+
   unregisterFn := pure ()
 
 end Full
 
-instance : Reader Full where
+instance : Http.Body Full where
   recv := Full.recv
   close := Full.close
   isClosed := Full.isClosed
   recvSelector := Full.recvSelector
 
-end Std.Http.Body
+instance : Coe Full Any := ⟨Any.ofBody⟩
 
-namespace Std.Http.Request.Builder
+instance : Coe (Response Full) (Response Any) where
+  coe f := { f with }
+
+instance : Coe (ContextAsync (Response Full)) (ContextAsync (Response Any)) where
+  coe action := do
+    let response ← action
+    pure (response : Response Any)
+
+instance : Coe (Async (Response Full)) (ContextAsync (Response Any)) where
+  coe action := do
+    let response ← action
+    pure (response : Response Any)
+
+end Body
+
+namespace Request.Builder
+
 open Internal.IO.Async
 
 private def fromBytesCore
@@ -218,9 +195,9 @@ def html (builder : Builder) (content : String) : Async (Request Body.Full) := d
   let builder := builder.header Header.Name.contentType (Header.Value.ofString! "text/html; charset=utf-8")
   fromBytesCore builder content.toUTF8
 
-end Std.Http.Request.Builder
+end Request.Builder
 
-namespace Std.Http.Response.Builder
+namespace Response.Builder
 open Internal.IO.Async
 
 private def fromBytesCore
