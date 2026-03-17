@@ -228,6 +228,126 @@ def channelInterestSelectorClose : Async Unit := do
 
 #eval channelInterestSelectorClose.block
 
+-- Test incomplete sends are buffered and merged into one chunk on the final send
+
+def channelIncompleteChunks : Async Unit := do
+  let (outgoing, incoming) ← Body.mkChannel
+
+  let sendTask ← async (t := AsyncTask) <| do
+    outgoing.send (Chunk.ofByteArray "hel".toUTF8) (incomplete := true)
+    outgoing.send (Chunk.ofByteArray "lo".toUTF8)
+
+  let result ← incoming.recv
+
+  assert! result.isSome
+  assert! result.get!.data == "hello".toUTF8
+  await sendTask
+
+#eval channelIncompleteChunks.block
+
+-- Test sending to a closed channel raises an error
+
+def channelSendAfterClose : Async Unit := do
+  let (outgoing, _incoming) ← Body.mkChannel
+  outgoing.close
+
+  let failed ←
+    try
+      outgoing.send (Chunk.ofByteArray "test".toUTF8)
+      pure false
+    catch _ =>
+      pure true
+  assert! failed
+
+#eval channelSendAfterClose.block
+
+-- Test Body.stream runs producer and returns the receive handle
+
+def channelStreamHelper : Async Unit := do
+  let incoming ← Body.stream fun outgoing => do
+    outgoing.send (Chunk.ofByteArray "hello".toUTF8)
+
+  let result ← incoming.recv
+  assert! result.isSome
+  assert! result.get!.data == "hello".toUTF8
+
+  let eof ← incoming.recv
+  assert! eof.isNone
+
+#eval channelStreamHelper.block
+
+-- Test Body.fromBytes creates an Incoming with correct known-size metadata
+
+def channelFromBytesHelper : Async Unit := do
+  let incoming ← Body.fromBytes "world".toUTF8
+
+  let size ← incoming.getKnownSize
+  assert! size == some (.fixed 5)
+
+  let result ← incoming.recv
+  assert! result.isSome
+  assert! result.get!.data == "world".toUTF8
+
+#eval channelFromBytesHelper.block
+
+-- Test Body.empty creates an already-closed Incoming
+
+def channelEmptyHelper : Async Unit := do
+  let incoming ← Body.empty
+  assert! (← incoming.isClosed)
+
+  let result ← incoming.recv
+  assert! result.isNone
+
+#eval channelEmptyHelper.block
+
+-- Test Incoming.readAll concatenates all chunks
+
+def channelReadAll : Async Unit := do
+  let (outgoing, incoming) ← Body.mkChannel
+
+  let sendTask ← async (t := AsyncTask) <| do
+    outgoing.send (Chunk.ofByteArray "foo".toUTF8)
+    outgoing.send (Chunk.ofByteArray "bar".toUTF8)
+    outgoing.close
+
+  let result : ByteArray ← incoming.readAll
+  assert! result == "foobar".toUTF8
+  await sendTask
+
+#eval channelReadAll.block
+
+-- Test Incoming.readAll enforces a maximum size limit
+
+def channelReadAllMaxSize : Async Unit := do
+  let (outgoing, incoming) ← Body.mkChannel
+
+  let sendTask ← async (t := AsyncTask) <| do
+    outgoing.send (Chunk.ofByteArray "abcdefgh".toUTF8)
+    outgoing.close
+
+  let failed ←
+    try
+      let _ : ByteArray ← incoming.readAll (maximumSize := some 4)
+      pure false
+    catch _ =>
+      pure true
+  assert! failed
+  await sendTask
+
+#eval channelReadAllMaxSize.block
+
+-- Test Outgoing.getKnownSize reflects the value set via setKnownSize
+
+def channelOutgoingKnownSize : Async Unit := do
+  let (outgoing, _incoming) ← Body.mkChannel
+  outgoing.setKnownSize (some (.fixed 42))
+
+  let size ← outgoing.getKnownSize
+  assert! size == some (.fixed 42)
+
+#eval channelOutgoingKnownSize.block
+
 /-! ## Full tests -/
 
 -- Test Full.recv returns content once then EOF
@@ -268,6 +388,152 @@ def fullClose : Async Unit := do
 
 #eval fullClose.block
 
+-- Test Full from an empty ByteArray returns none on the first recv
+
+def fullEmptyBytes : Async Unit := do
+  let full ← Body.Full.ofByteArray ByteArray.empty
+  let result ← full.recv
+  assert! result.isNone
+
+#eval fullEmptyBytes.block
+
+-- Test Full.recvSelector resolves immediately with the stored chunk
+
+def fullRecvSelectorResolves : Async Unit := do
+  let full ← Body.Full.ofString "world"
+  let result ← Selectable.one #[
+    .case full.recvSelector pure
+  ]
+  assert! result.isSome
+  assert! result.get!.data == "world".toUTF8
+
+#eval fullRecvSelectorResolves.block
+
+-- Test Full.getKnownSize returns 0 after close
+
+def fullKnownSizeAfterClose : Async Unit := do
+  let full ← Body.Full.ofString "data"
+  assert! (← full.getKnownSize) == some (.fixed 4)
+  full.close
+  assert! (← full.getKnownSize) == some (.fixed 0)
+
+#eval fullKnownSizeAfterClose.block
+
+-- Test Full.tryRecv succeeds once and returns none thereafter
+
+def fullTryRecvIdempotent : Async Unit := do
+  let full ← Body.Full.ofString "once"
+  let first ← full.tryRecv
+  let second ← full.tryRecv
+  assert! first.isSome
+  assert! first.get!.data == "once".toUTF8
+  assert! second.isNone
+
+#eval fullTryRecvIdempotent.block
+
+/-! ## Empty tests -/
+
+-- Test Empty.recv always returns none
+
+def emptyBodyRecv : Async Unit := do
+  let body : Body.Empty := {}
+  let result ← body.recv
+  assert! result.isNone
+
+#eval emptyBodyRecv.block
+
+-- Test Empty.isClosed is always true
+
+def emptyBodyIsClosed : Async Unit := do
+  let body : Body.Empty := {}
+  assert! (← body.isClosed)
+
+#eval emptyBodyIsClosed.block
+
+-- Test Empty.close is a no-op: still closed and recv still returns none
+
+def emptyBodyClose : Async Unit := do
+  let body : Body.Empty := {}
+  body.close
+  assert! (← body.isClosed)
+  let result ← body.recv
+  assert! result.isNone
+
+#eval emptyBodyClose.block
+
+-- Test Empty.recvSelector resolves immediately with none
+
+def emptyBodyRecvSelector : Async Unit := do
+  let body : Body.Empty := {}
+  let result ← Selectable.one #[
+    .case body.recvSelector pure
+  ]
+  assert! result.isNone
+
+#eval emptyBodyRecvSelector.block
+
+/-! ## Any tests -/
+
+-- Test Any wrapping a Full body forwards recv correctly
+
+def anyFromFull : Async Unit := do
+  let full ← Body.Full.ofString "hello"
+  let any : Body.Any := full
+  let result ← any.recv
+  assert! result.isSome
+  assert! result.get!.data == "hello".toUTF8
+
+#eval anyFromFull.block
+
+-- Test Any wrapping an Empty body returns none and reports closed
+
+def anyFromEmpty : Async Unit := do
+  let empty : Body.Empty := {}
+  let any : Body.Any := empty
+  let result ← any.recv
+  assert! result.isNone
+  assert! (← any.isClosed)
+
+#eval anyFromEmpty.block
+
+-- Test Any wrapping an Incoming channel receives chunks
+
+def anyFromChannel : Async Unit := do
+  let (outgoing, incoming) ← Body.mkChannel
+  let any := Body.Any.ofBody incoming
+
+  let sendTask ← async (t := AsyncTask) <| outgoing.send (Chunk.ofByteArray "data".toUTF8)
+  let result ← any.recv
+  assert! result.isSome
+  assert! result.get!.data == "data".toUTF8
+  await sendTask
+
+#eval anyFromChannel.block
+
+-- Test Any.close closes the underlying body
+
+def anyCloseForwards : Async Unit := do
+  let full ← Body.Full.ofString "test"
+  let any : Body.Any := full
+  any.close
+  assert! (← any.isClosed)
+  let result ← any.recv
+  assert! result.isNone
+
+#eval anyCloseForwards.block
+
+-- Test Any.recvSelector resolves immediately for a Full body
+
+def anyRecvSelectorFromFull : Async Unit := do
+  let full ← Body.Full.ofString "sel"
+  let any : Body.Any := full
+  let result ← Selectable.one #[
+    .case any.recvSelector pure
+  ]
+  assert! result.isSome
+  assert! result.get!.data == "sel".toUTF8
+
+#eval anyRecvSelectorFromFull.block
 
 /-! ## Request.Builder body tests -/
 
@@ -321,11 +587,63 @@ def requestBuilderFromBytes : Async Unit := do
 
 def requestBuilderNoBody : Async Unit := do
   let req ← Request.get (.originForm! "/api")
-    |>.empty
+    |>.noBody
 
   assert! req.body == {}
 
 #eval requestBuilderNoBody.block
+
+-- Test Request.Builder.bytes sets application/octet-stream content type
+
+def requestBuilderBytes : Async Unit := do
+  let data := ByteArray.mk #[0xde, 0xad, 0xbe, 0xef]
+  let req ← Request.post (.originForm! "/api")
+    |>.bytes data
+
+  assert! req.line.headers.get? Header.Name.contentType == some (Header.Value.ofString! "application/octet-stream")
+  let body ← recvBuiltBody req.body
+  assert! body.isSome
+  assert! body.get!.data == data
+
+#eval requestBuilderBytes.block
+
+-- Test Request.Builder.html sets text/html content type
+
+def requestBuilderHtml : Async Unit := do
+  let req ← Request.post (.originForm! "/api")
+    |>.html "<h1>Hello</h1>"
+
+  assert! req.line.headers.get? Header.Name.contentType == some (Header.Value.ofString! "text/html; charset=utf-8")
+  let body ← recvBuiltBody req.body
+  assert! body.isSome
+  assert! body.get!.data == "<h1>Hello</h1>".toUTF8
+
+#eval requestBuilderHtml.block
+
+-- Test Request.Builder.stream creates a streaming body
+
+def requestBuilderStream : Async Unit := do
+  let req ← Request.post (.originForm! "/api")
+    |>.stream fun outgoing => do
+      outgoing.send (Chunk.ofByteArray "streamed".toUTF8)
+
+  let result ← req.body.recv
+  assert! result.isSome
+  assert! result.get!.data == "streamed".toUTF8
+
+#eval requestBuilderStream.block
+
+-- Test Request.Builder.noBody body is always closed and returns none
+
+def requestBuilderNoBodyAlwaysClosed : Async Unit := do
+  let req ← Request.get (.originForm! "/api")
+    |>.noBody
+
+  assert! (← req.body.isClosed)
+  let result ← req.body.recv
+  assert! result.isNone
+
+#eval requestBuilderNoBodyAlwaysClosed.block
 
 /-! ## Response.Builder body tests -/
 
@@ -376,8 +694,60 @@ def responseBuilderFromBytes : Async Unit := do
 
 def responseBuilderNoBody : Async Unit := do
   let res ← Response.ok
-    |>.empty
+    |>.noBody
 
   assert! res.body == {}
 
 #eval responseBuilderNoBody.block
+
+-- Test Response.Builder.bytes sets application/octet-stream content type
+
+def responseBuilderBytes : Async Unit := do
+  let data := ByteArray.mk #[0xca, 0xfe]
+  let res ← Response.ok
+    |>.bytes data
+
+  assert! res.line.headers.get? Header.Name.contentType == some (Header.Value.ofString! "application/octet-stream")
+  let body ← recvBuiltBody res.body
+  assert! body.isSome
+  assert! body.get!.data == data
+
+#eval responseBuilderBytes.block
+
+-- Test Response.Builder.html sets text/html content type
+
+def responseBuilderHtml : Async Unit := do
+  let res ← Response.ok
+    |>.html "<p>OK</p>"
+
+  assert! res.line.headers.get? Header.Name.contentType == some (Header.Value.ofString! "text/html; charset=utf-8")
+  let body ← recvBuiltBody res.body
+  assert! body.isSome
+  assert! body.get!.data == "<p>OK</p>".toUTF8
+
+#eval responseBuilderHtml.block
+
+-- Test Response.Builder.stream creates a streaming body
+
+def responseBuilderStream : Async Unit := do
+  let res ← Response.ok
+    |>.stream fun outgoing => do
+      outgoing.send (Chunk.ofByteArray "streamed".toUTF8)
+
+  let result ← res.body.recv
+  assert! result.isSome
+  assert! result.get!.data == "streamed".toUTF8
+
+#eval responseBuilderStream.block
+
+-- Test Response.Builder.noBody body is always closed and returns none
+
+def responseBuilderNoBodyAlwaysClosed : Async Unit := do
+  let res ← Response.ok
+    |>.noBody
+
+  assert! (← res.body.isClosed)
+  let result ← res.body.recv
+  assert! result.isNone
+
+#eval responseBuilderNoBodyAlwaysClosed.block

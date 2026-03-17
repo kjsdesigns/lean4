@@ -42,8 +42,19 @@ namespace Length
 /--
 Checks if the `Length` is chunked.
 -/
+@[inline]
 def isChunked : Length → Bool
   | .chunked => true
   | _ => false
 
-end Std.Http.Body.Length
+/--
+Checks if the `Length` is a fixed size.
+-/
+@[inline]
+def isFixed : Length → Bool
+  | .fixed _ => true
+  | _ => false
+
+end Length
+
+end Std.Http.Body

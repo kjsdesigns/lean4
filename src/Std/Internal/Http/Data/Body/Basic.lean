@@ -54,8 +54,6 @@ end Std.Http
 
 namespace Std.Http.Body
 
-set_option linter.all true
-
 /--
 Typeclass for types that can be converted to a `ByteArray`.
 -/

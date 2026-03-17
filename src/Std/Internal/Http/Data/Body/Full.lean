@@ -19,8 +19,8 @@ public section
 
 A body backed by a fixed `ByteArray` held in a `Mutex`.
 
-The byte array is consumed at most once: the first call to `recv` or `tryRecv` atomically
-takes the data and returns it as a single chunk; subsequent calls return `none` (end-of-stream).
+The byte array is consumed at most once: the first call to `recv` atomically takes the data
+and returns it as a single chunk; subsequent calls return `none` (end-of-stream).
 Closing the body discards any unconsumed data.
 -/
 
@@ -68,19 +68,12 @@ def ofString (data : String) : Async Full := do
   return { state }
 
 /--
-Atomically takes the byte array and returns it as a chunk.
-Returns `none` if the data has already been consumed or the body is closed.
--/
-def tryRecv (full : Full) : Async (Option Chunk) :=
-  full.state.atomically do
-    takeChunk
-
-/--
 Receives the body data. Returns the full byte array on the first call as a single chunk,
 then `none` on all subsequent calls.
 -/
 def recv (full : Full) : Async (Option Chunk) :=
-  full.tryRecv
+  full.state.atomically do
+    takeChunk
 
 /--
 Closes the body, discarding any unconsumed data.
@@ -97,7 +90,9 @@ def isClosed (full : Full) : Async Bool :=
     return (← get).isNone
 
 /--
-Returns known-size metadata based on current remaining bytes.
+Returns the known size of the remaining data.
+Returns `some (.fixed n)` with the current byte count, or `some (.fixed 0)` if the body has
+already been consumed or closed.
 -/
 def getKnownSize (full : Full) : Async (Option Body.Length) :=
   full.state.atomically do
@@ -134,6 +129,8 @@ instance : Http.Body Full where
   isClosed := Full.isClosed
   recvSelector := Full.recvSelector
 
+-- Coercions to `Any` allow response builders to return concrete body types while the
+-- handler signature expects `Response Body.Any`.
 instance : Coe Full Any := ⟨Any.ofBody⟩
 
 instance : Coe (Response Full) (Response Any) where
@@ -155,89 +152,69 @@ namespace Request.Builder
 
 open Internal.IO.Async
 
-private def fromBytesCore
-    (builder : Builder)
-    (content : ByteArray) :
-    Async (Request Body.Full) := do
-  return builder.body (← Body.Full.ofByteArray content)
-
 /--
 Builds a request from raw bytes.
 -/
-def fromBytes (builder : Builder) (content : ByteArray) : Async (Request Body.Full) :=
-  fromBytesCore builder content
+def fromBytes (builder : Builder) (content : ByteArray) : Async (Request Body.Full) := do
+  return builder.body (← Body.Full.ofByteArray content)
 
 /--
 Builds a request with a binary body.
 -/
-def bytes (builder : Builder) (content : ByteArray) : Async (Request Body.Full) := do
-  let builder := builder.header Header.Name.contentType (Header.Value.ofString! "application/octet-stream")
-  fromBytesCore builder content
+def bytes (builder : Builder) (content : ByteArray) : Async (Request Body.Full) :=
+  fromBytes (builder.header Header.Name.contentType (Header.Value.ofString! "application/octet-stream")) content
 
 /--
 Builds a request with a text body.
 -/
-def text (builder : Builder) (content : String) : Async (Request Body.Full) := do
-  let builder := builder.header Header.Name.contentType (Header.Value.ofString! "text/plain; charset=utf-8")
-  fromBytesCore builder content.toUTF8
+def text (builder : Builder) (content : String) : Async (Request Body.Full) :=
+  fromBytes (builder.header Header.Name.contentType (Header.Value.ofString! "text/plain; charset=utf-8")) content.toUTF8
 
 /--
 Builds a request with a JSON body.
 -/
-def json (builder : Builder) (content : String) : Async (Request Body.Full) := do
-  let builder := builder.header Header.Name.contentType (Header.Value.ofString! "application/json")
-  fromBytesCore builder content.toUTF8
+def json (builder : Builder) (content : String) : Async (Request Body.Full) :=
+  fromBytes (builder.header Header.Name.contentType (Header.Value.ofString! "application/json")) content.toUTF8
 
 /--
 Builds a request with an HTML body.
 -/
-def html (builder : Builder) (content : String) : Async (Request Body.Full) := do
-  let builder := builder.header Header.Name.contentType (Header.Value.ofString! "text/html; charset=utf-8")
-  fromBytesCore builder content.toUTF8
+def html (builder : Builder) (content : String) : Async (Request Body.Full) :=
+  fromBytes (builder.header Header.Name.contentType (Header.Value.ofString! "text/html; charset=utf-8")) content.toUTF8
 
 end Request.Builder
 
 namespace Response.Builder
 open Internal.IO.Async
 
-private def fromBytesCore
-    (builder : Builder)
-    (content : ByteArray) :
-    Async (Response Body.Full) := do
-  return builder.body (← Body.Full.ofByteArray content)
-
 /--
 Builds a response from raw bytes.
 -/
-def fromBytes (builder : Builder) (content : ByteArray) : Async (Response Body.Full) :=
-  fromBytesCore builder content
+def fromBytes (builder : Builder) (content : ByteArray) : Async (Response Body.Full) := do
+  return builder.body (← Body.Full.ofByteArray content)
 
 /--
 Builds a response with a binary body.
 -/
-def bytes (builder : Builder) (content : ByteArray) : Async (Response Body.Full) := do
-  let builder := builder.header Header.Name.contentType (Header.Value.ofString! "application/octet-stream")
-  fromBytesCore builder content
+def bytes (builder : Builder) (content : ByteArray) : Async (Response Body.Full) :=
+  fromBytes (builder.header Header.Name.contentType (Header.Value.ofString! "application/octet-stream")) content
 
 /--
 Builds a response with a text body.
 -/
-def text (builder : Builder) (content : String) : Async (Response Body.Full) := do
-  let builder := builder.header Header.Name.contentType (Header.Value.ofString! "text/plain; charset=utf-8")
-  fromBytesCore builder content.toUTF8
+def text (builder : Builder) (content : String) : Async (Response Body.Full) :=
+  fromBytes (builder.header Header.Name.contentType (Header.Value.ofString! "text/plain; charset=utf-8")) content.toUTF8
 
 /--
 Builds a response with a JSON body.
 -/
-def json (builder : Builder) (content : String) : Async (Response Body.Full) := do
-  let builder := builder.header Header.Name.contentType (Header.Value.ofString! "application/json")
-  fromBytesCore builder content.toUTF8
+def json (builder : Builder) (content : String) : Async (Response Body.Full) :=
+  fromBytes (builder.header Header.Name.contentType (Header.Value.ofString! "application/json")) content.toUTF8
 
 /--
 Builds a response with an HTML body.
 -/
-def html (builder : Builder) (content : String) : Async (Response Body.Full) := do
-  let builder := builder.header Header.Name.contentType (Header.Value.ofString! "text/html; charset=utf-8")
-  fromBytesCore builder content.toUTF8
+def html (builder : Builder) (content : String) : Async (Response Body.Full) :=
+  fromBytes (builder.header Header.Name.contentType (Header.Value.ofString! "text/html; charset=utf-8")) content.toUTF8
 
-end Std.Http.Response.Builder
+end Response.Builder

@@ -12,3 +12,13 @@ public import Std.Internal.Http.Data.Body.Any
 public import Std.Internal.Http.Data.Body.Stream
 public import Std.Internal.Http.Data.Body.Empty
 public import Std.Internal.Http.Data.Body.Full
+
+public section
+
+/-!
+# Body
+
+This module re-exports all HTTP body types: `Body.Empty`, `Body.Full`, `Body.Incoming`,
+`Body.Outgoing` (from `Body.Stream`), `Body.Any`, and `Body.Length`, along with the
+`Http.Body` typeclass and conversion utilities (`ToByteArray`, `FromByteArray`).
+-/

@@ -52,8 +52,6 @@ Empty bodies are always closed for reading.
 def isClosed (_ : Empty) : Async Bool :=
   pure true
 
-open Internal.IO.Async in
-
 /--
 Selector that immediately resolves with end-of-stream for an empty body.
 -/
@@ -75,6 +73,8 @@ instance : Http.Body Empty where
   isClosed := Empty.isClosed
   recvSelector := Empty.recvSelector
 
+-- Coercions to `Any` allow response builders to return concrete body types while the
+-- handler signature expects `Response Body.Any`.
 instance : Coe Empty Any := ⟨Any.ofBody⟩
 
 instance : Coe (Response Empty) (Response Any) where
@@ -112,4 +112,4 @@ Builds a response with no body.
 def empty (builder : Builder) : Async (Response Body.Empty) :=
   pure <| builder.body {}
 
-end Std.Http.Response.Builder
+end Response.Builder

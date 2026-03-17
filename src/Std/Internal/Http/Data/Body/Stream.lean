@@ -16,10 +16,6 @@ public import Init.Data.ByteArray
 
 public section
 
-namespace Std.Http
-
-namespace Body
-
 /-!
 # Body.Stream
 
@@ -31,6 +27,10 @@ This module defines a zero-buffer rendezvous body channel split into two faces:
 There is no queue and no capacity. A send waits for a receiver and a receive waits for a sender.
 At most one blocked producer and one blocked consumer are supported.
 -/
+
+namespace Std.Http
+
+namespace Body
 
 open Std Internal IO Async
 
@@ -449,9 +449,9 @@ private def collapseForSend
       set { st with pendingIncompleteChunk := none }
       return .ok (some merged)
 
-/-
-Returns `some true` = delivered directly, `some false` = consumer race lost (retry),
-`none` = producer installed, caller must await `done`.
+/--
+Sends a chunk, retrying if a select-mode consumer races and loses. If no consumer is ready,
+installs the chunk as a pending producer and awaits acknowledgement from the receiver.
 -/
 private partial def send' (outgoing : Outgoing) (chunk : Chunk) : Async Unit := do
   let done ← IO.Promise.new
@@ -489,7 +489,8 @@ private partial def send' (outgoing : Outgoing) (chunk : Chunk) : Async Unit := 
     | .ok (some true) =>
       return ()
     | .ok (some false) =>
-      send' outgoing chunk
+      -- The select-mode consumer raced and lost; recurse to allocate a fresh `done` promise.
+      return (← send' outgoing chunk)
     | .ok none =>
       match ← await done.result? with
       | some true => return ()
@@ -591,8 +592,6 @@ def interestSelector (outgoing : Outgoing) : Selector Bool where
 
 end Outgoing
 
-/- Internal conversions between channel faces.
-Use these only in HTTP internals where body direction must be adapted. -/
 namespace Internal
 
 /--
@@ -636,7 +635,10 @@ def fromBytes (content : ByteArray) : Async Incoming := do
       outgoing.send (Chunk.ofByteArray content)
 
 /--
-Creates an empty body.
+Creates an empty `Incoming` body channel (already closed, no data).
+
+Prefer `Body.Empty` when you need a concrete zero-cost type. Use this when the calling
+context requires an `Incoming` specifically.
 -/
 def empty : Async Incoming := do
   let (outgoing, incoming) ← mkChannel
