@@ -798,10 +798,6 @@ def build (b : Builder) : URI :=
 
 end Builder
 
-end URI
-
-namespace URI
-
 /--
 Returns a new URI with the scheme replaced.
 -/
@@ -844,7 +840,6 @@ def normalize (uri : URI) : URI :=
   { uri with path := uri.path.normalize }
 
 end URI
-
 
 /--
 HTTP request target forms as defined in RFC 9112 Section 3.3.
