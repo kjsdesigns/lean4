@@ -141,25 +141,6 @@ info: "X-Custom-Header: value\x0d\n"
 info: "GET /path HTTP/1.1\x0d\n\x0d\n"
 -/
 #guard_msgs in
-#eval encodeStr Headers.empty
-
-/--
-info: "POST /submit HTTP/1.1\x0d\n\x0d\n"
--/
-#guard_msgs in
-#eval encodeStr (Headers.empty.insert! "content-type" "text/html")
-
-/--
-info: "X-Custom-Header: value\x0d\n"
--/
-#guard_msgs in
-#eval encodeStr (Headers.empty.insert! "x-custom-header" "value")
-
-
-/--
-info: "GET /path HTTP/1.1\x0d\n\x0d\n"
--/
-#guard_msgs in
 #eval encodeStr ({ method := .get, version := .v11, uri := .parse! "/path" } : Request.Head)
 
 /--
