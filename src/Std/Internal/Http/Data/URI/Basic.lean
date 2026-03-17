@@ -81,6 +81,18 @@ def ofString! (s : String) : Scheme :=
   | some scheme => scheme
   | none => panic! s!"invalid URI scheme: {s.quote}"
 
+/--
+Returns the default port number for this URI scheme: 443 for `https`, 80 for everything else.
+-/
+def defaultPort (scheme : URI.Scheme) : UInt16 :=
+  if scheme.val == "https" then 443 else 80
+
+/--
+Returns the URI scheme for a given port: `"https"` for 443, `"http"` otherwise.
+-/
+def ofPort (port : UInt16) : URI.Scheme :=
+  if port == 443 then ⟨"https", by decide⟩ else ⟨"http", by decide⟩
+
 end Scheme
 
 /--
@@ -104,7 +116,7 @@ structure UserInfo where
   The optional encoded password.
   -/
   password : Option EncodedUserInfo
-deriving Inhabited, Repr
+deriving Inhabited, Repr, BEq
 
 namespace UserInfo
 
@@ -203,7 +215,7 @@ inductive Host
   An IPv6 address.
   -/
   | ipv6 (ipv6 : Net.IPv6Addr)
-deriving Inhabited
+deriving Inhabited, BEq
 
 instance : Repr Host where
   reprPrec x prec :=
@@ -268,7 +280,7 @@ structure Authority where
   explicitly empty (`example.com:`), or numeric (`example.com:443`).
   -/
   port : Port := .omitted
-deriving Inhabited, Repr
+deriving Inhabited, Repr, BEq
 
 instance : ToString Authority where
   toString auth :=
@@ -299,7 +311,7 @@ structure Path where
   Whether the path is absolute (begins with '/') or relative.
   -/
   absolute : Bool
-deriving Inhabited, Repr
+deriving Inhabited, Repr, BEq
 
 instance : ToString Path where
   toString path :=
@@ -380,7 +392,7 @@ Reference: https://www.rfc-editor.org/rfc/rfc3986.html#section-3.4
 -/
 @[expose]
 def Query := Array (EncodedQueryParam × Option EncodedQueryParam)
-deriving Repr, Inhabited
+deriving Repr, Inhabited, BEq
 
 namespace Query
 
@@ -584,7 +596,7 @@ structure URI where
   Optional fragment identifier (the part after '#'), percent-encoded.
   -/
   fragment : Option String
-deriving Repr, Inhabited
+deriving Repr, Inhabited, BEq
 
 instance : ToString URI where
   toString uri :=
@@ -833,6 +845,7 @@ def normalize (uri : URI) : URI :=
 
 end URI
 
+
 /--
 HTTP request target forms as defined in RFC 9112 Section 3.3.
 
@@ -849,7 +862,7 @@ inductive RequestTarget where
   Absolute-form request target containing a complete URI. Used when making requests through a proxy.
   Example: `http://example.com:8080/path?key=value`
   -/
-  | absoluteForm (uri : URI) (noFrag : uri.fragment.isNone)
+  | absoluteForm (uri : URI)
 
   /--
   Authority-form request target (used for CONNECT requests).
@@ -872,7 +885,7 @@ Returns an empty relative path for targets without a path.
 -/
 def path : RequestTarget → URI.Path
   | .originForm p _ => p
-  | .absoluteForm u _ => u.path
+  | .absoluteForm uri => uri.path
   | _ => { segments := #[], absolute := false }
 
 /--
@@ -881,7 +894,7 @@ Returns an empty array for targets without a query.
 -/
 def query : RequestTarget → URI.Query
   | .originForm _ q => q.getD URI.Query.empty
-  | .absoluteForm u _ => u.query
+  | .absoluteForm uri => uri.query
   | _ => URI.Query.empty
 
 /--
@@ -889,14 +902,7 @@ Extracts the authority component from a request target, if available.
 -/
 def authority? : RequestTarget → Option URI.Authority
   | .authorityForm a => some a
-  | .absoluteForm u _ => u.authority
-  | _ => none
-
-/--
-Extracts the full URI if the request target is in absolute form.
--/
-def uri? : RequestTarget → Option URI
-  | .absoluteForm u _ => some u
+  | .absoluteForm uri => uri.authority
   | _ => none
 
 instance : ToString RequestTarget where
@@ -905,7 +911,7 @@ instance : ToString RequestTarget where
         let pathStr := toString path
         let queryStr := query.map toString |>.getD ""
         s!"{pathStr}{queryStr}"
-    | .absoluteForm uri _ => toString uri
+    | .absoluteForm uri => toString uri
     | .authorityForm auth => toString auth
     | .asteriskForm => "*"
 

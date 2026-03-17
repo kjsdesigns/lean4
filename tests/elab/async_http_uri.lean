@@ -250,7 +250,7 @@ info: some " "
 
 #guard
   match (parseRequestTarget <* Std.Internal.Parsec.eof).run "http:80".toUTF8 with
-  | .ok (.absoluteForm _ _) => true
+  | .ok (.authorityForm _) => true
   | _ => false
 
 -- Parse failure tests
@@ -354,7 +354,6 @@ info: Std.Http.RequestTarget.absoluteForm
     path := { segments := #["ata"], absolute := true },
     query := #[],
     fragment := none }
-  _
 -/
 #guard_msgs in
 #eval show IO _ from do
@@ -370,7 +369,6 @@ info: Std.Http.RequestTarget.absoluteForm
     path := { segments := #["path"], absolute := true },
     query := #[],
     fragment := none }
-  _
 -/
 #guard_msgs in
 #eval show IO _ from do
@@ -386,7 +384,6 @@ info: Std.Http.RequestTarget.absoluteForm
     path := { segments := #["private"], absolute := true },
     query := #[],
     fragment := none }
-  _
 -/
 #guard_msgs in
 #eval show IO _ from do
@@ -908,7 +905,6 @@ info: Std.Http.RequestTarget.absoluteForm
     path := { segments := #["path"], absolute := true },
     query := #[],
     fragment := none }
-  _
 -/
 #guard_msgs in
 #eval show IO _ from do
@@ -924,7 +920,6 @@ info: Std.Http.RequestTarget.absoluteForm
     path := { segments := #["page"], absolute := true },
     query := #[],
     fragment := none }
-  _
 -/
 #guard_msgs in
 #eval show IO _ from do

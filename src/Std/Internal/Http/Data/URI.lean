@@ -76,4 +76,22 @@ def parse! (string : String) : URI :=
   | some res => res
   | none => panic! "invalid URI"
 
-end URI
+namespace Path
+
+/--
+Attempts to parse a URI path from the given string.
+Returns `none` if the string is not a valid path.
+-/
+@[inline]
+def parse? (s : String) : Option Std.Http.URI.Path :=
+  (Std.Http.URI.Parser.parsePath {} true true <* Std.Internal.Parsec.eof).run s.toUTF8 |>.toOption
+
+/--
+Parses a URI path from the given string. Returns the root path `"/"` if parsing fails.
+-/
+@[inline]
+def parseOrRoot (s : String) : Std.Http.URI.Path :=
+  parse? s |>.getD { segments := #[], absolute := true }
+
+end Std.Http.URI.Path
+
