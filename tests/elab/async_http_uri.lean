@@ -279,8 +279,7 @@ info: some " "
 -- ============================================================================
 
 /--
-info: Std.Http.RequestTarget.originForm
-  { path := { segments := #["path", "with", "encoded%20space"], absolute := true }, query := none }
+info: Std.Http.RequestTarget.originForm { segments := #["path", "with", "encoded%20space"], absolute := true } none
 -/
 #guard_msgs in
 #eval show IO _ from do
@@ -288,8 +287,7 @@ info: Std.Http.RequestTarget.originForm
   IO.println (repr result)
 
 /--
-info: Std.Http.RequestTarget.originForm
-  { path := { segments := #["", "", "path", "with", "encoded%20space"], absolute := true }, query := none }
+info: Std.Http.RequestTarget.originForm { segments := #["", "", "path", "with", "encoded%20space"], absolute := true } none
 -/
 #guard_msgs in
 #eval show IO _ from do
@@ -313,7 +311,7 @@ info: #[("q", some "hello%20world"), ("category", some "tech%2Bgames")]
   IO.println (repr result.query)
 
 /--
-info: Std.Http.RequestTarget.originForm { path := { segments := #[], absolute := true }, query := none }
+info: Std.Http.RequestTarget.originForm { segments := #[], absolute := true } none
 -/
 #guard_msgs in
 #eval show IO _ from do
@@ -844,8 +842,7 @@ info: https://user:pass@secure.example.com/private
 -- ============================================================================
 
 /--
-info: Std.Http.RequestTarget.originForm
-  { path := { segments := #["path%2Fwith%2Fslashes"], absolute := true }, query := none }
+info: Std.Http.RequestTarget.originForm { segments := #["path%2Fwith%2Fslashes"], absolute := true } none
 -/
 #guard_msgs in
 #eval show IO _ from do
@@ -853,7 +850,7 @@ info: Std.Http.RequestTarget.originForm
   IO.println (repr result)
 
 /--
-info: Std.Http.RequestTarget.originForm { path := { segments := #["file%20name.txt"], absolute := true }, query := none }
+info: Std.Http.RequestTarget.originForm { segments := #["file%20name.txt"], absolute := true } none
 -/
 #guard_msgs in
 #eval show IO _ from do
@@ -861,7 +858,7 @@ info: Std.Http.RequestTarget.originForm { path := { segments := #["file%20name.t
   IO.println (repr result)
 
 /--
-info: Std.Http.RequestTarget.originForm { path := { segments := #["caf%C3%A9"], absolute := true }, query := none }
+info: Std.Http.RequestTarget.originForm { segments := #["caf%C3%A9"], absolute := true } none
 -/
 #guard_msgs in
 #eval show IO _ from do

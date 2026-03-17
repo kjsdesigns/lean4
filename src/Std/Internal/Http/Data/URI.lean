@@ -6,139 +6,278 @@ Authors: Sofia Rodrigues
 module
 
 prelude
-public import Std.Internal.Http.Data.URI.Basic
-public import Std.Internal.Http.Data.URI.Parser
+public import Std.Internal.Http.Data.Extensions
+public import Std.Internal.Http.Data.Method
+public import Std.Internal.Http.Data.Version
+public import Std.Internal.Http.Data.Headers
+public import Std.Internal.Http.Data.URI
 
 public section
 
 /-!
-# URI
+# Request
 
-This module defines the `URI` and `RequestTarget` types that represent and manipulate components of
-URIs as defined by RFC 3986. It provides parsing, rendering, and normalization utilities for working
-with URIs and request targets in HTTP messages.
+This module provides the `Request` type, which represents an HTTP request. It also defines ways
+to build a `Request` using functions that make it easier.
 
 References:
-* https://www.rfc-editor.org/rfc/rfc3986.html
-* https://www.rfc-editor.org/rfc/rfc9112.html#section-3.3
+* https://httpwg.org/specs/rfc9112.html#request.line
 -/
 
-namespace Std.Http.RequestTarget
+namespace Std.Http
 
 set_option linter.all true
 
 /--
-Attempts to parse a `RequestTarget` from the given string.
+The main parts of a request containing the HTTP method, version, and request target URI.
+
+Reference: https://httpwg.org/specs/rfc9112.html#request.line
 -/
-@[inline]
-def parse? (string : String) : Option RequestTarget :=
-  (URI.Parser.parseRequestTarget <* Std.Internal.Parsec.eof).run string.toUTF8 |>.toOption
+structure Request.Head where
+  /--
+  The HTTP method (GET, POST, PUT, DELETE, etc.) for the request
+
+  Reference: https://httpwg.org/specs/rfc9112.html#rfc.section.3.1
+  -/
+  method : Method
+
+  /--
+  The HTTP protocol version for the request (e.g. HTTP/1.1, HTTP/2.0, HTTP/3.0).
+
+  Reference: https://httpwg.org/specs/rfc9112.html#http.version
+  -/
+  version : Version
+
+  /--
+  The raw request-target string (commonly origin-form path/query, `"*"`, or authority-form).
+  -/
+  uri : RequestTarget := .asteriskForm
+
+  /--
+  Collection of HTTP headers for the request (Content-Type, Authorization, etc.).
+  -/
+  headers : Headers := .empty
+deriving Inhabited, Repr
 
 /--
-Parses a `RequestTarget` from the given string. Panics if parsing fails. Use `parse?`
-if you need a safe option-returning version.
+HTTP request structure parameterized by body type.
 -/
-@[inline]
-def parse! (string : String) : RequestTarget :=
-  match parse? string with
-  | some res => res
-  | none => panic! "invalid request target"
+structure Request (t : Type) where
+  /--
+  The request line information (`method`, `version`, and request-target `uri`).
+  -/
+  line : Request.Head
+
+  /--
+  The request body content of type t.
+  -/
+  body : t
+
+  /--
+  Optional dynamic metadata attached to the request.
+  -/
+  extensions : Extensions := .empty
+deriving Inhabited
 
 /--
-Creates an origin-form request target from a path string.
-The path should start with '/' (e.g., "/api/users" or "/search?q=test").
-Panics if the string is not a valid origin-form request target.
+Builds an HTTP Request.
 -/
-@[inline]
-def originForm! (path : String) : RequestTarget :=
-  match parse? path with
-  | some (.originForm o) => .originForm o
-  | _ => panic! s!"invalid origin-form request target: {path}"
+structure Request.Builder where
+  /--
+  The request-line of an HTTP request.
+  -/
+  line : Head := { method := .get, version := .v11, uri := .asteriskForm }
 
-namespace PathAndQuery
+  /--
+  Optional dynamic metadata attached to the request.
+  -/
+  extensions : Extensions := .empty
+
+namespace Request
+
+instance : ToString Head where
+  toString req :=
+    toString req.method ++ " " ++
+    toString req.uri ++ " " ++
+    toString req.version ++
+    "\r\n" ++
+    toString req.headers ++
+    "\r\n"
+
+open Internal in
+instance : Encode .v11 Head where
+  encode buffer req :=
+    let buffer := Encode.encode (v := .v11) buffer req.method
+    let buffer := buffer.writeChar ' '
+    let buffer := Encode.encode (v := .v11) buffer req.uri
+    let buffer := buffer.writeChar ' '
+    let buffer := Encode.encode (v := .v11) buffer req.version
+    let buffer := buffer.writeString "\r\n"
+    let buffer := Encode.encode (v := .v11) buffer req.headers
+    buffer.writeString "\r\n"
 
 /--
-Attempts to parse an origin-form request target from a string such as `"/path?key=value"`.
-Returns `none` if the string is not a valid origin-form target.
+Creates a new HTTP request builder with the default head
+(method: GET, version: HTTP/1.1, target: `*`).
 -/
-@[inline]
-def parse? (s : String) : Option RequestTarget.PathAndQuery := do
-  match ← RequestTarget.parse? s with
-  | .originForm o => some o
-  | _ => none
+def new : Builder := { }
+
+namespace Builder
 
 /--
-Parses an origin-form request target from a string. Panics if parsing fails.
-Use `parse?` if you need a safe option-returning version.
+Creates a new HTTP request builder with the default head
+(method: GET, version: HTTP/1.1, target: `*`).
 -/
-@[inline]
-def parse! (s : String) : RequestTarget.PathAndQuery :=
-  match parse? s with
-  | some o => o
-  | none   => panic! s!"invalid origin-form request target: {s.quote}"
-
-end PathAndQuery
-
-namespace Absolute
+def empty : Builder := { }
 
 /--
-Attempts to parse an absolute-form request target from a string such as `"http://host/path"`.
-Returns `none` if the string is not a valid absolute-form target.
+Sets the HTTP method for the request being built.
 -/
-@[inline]
-def parse? (s : String) : Option RequestTarget.Absolute := do
-  match ← RequestTarget.parse? s with
-  | .absoluteForm af => some af
-  | _ => none
+def method (builder : Builder) (method : Method) : Builder :=
+  { builder with line := { builder.line with method := method } }
 
 /--
-Parses an absolute-form request target from a string. Panics if parsing fails.
-Use `parse?` if you need a safe option-returning version.
+Sets the HTTP version for the request being built.
 -/
-@[inline]
-def parse! (s : String) : RequestTarget.Absolute :=
-  match parse? s with
-  | some af => af
-  | none    => panic! s!"invalid absolute-form request target: {s.quote}"
-
-end Absolute
-
-end RequestTarget
-
-namespace URI
+def version (builder : Builder) (version : Version) : Builder :=
+  { builder with line := { builder.line with version := version } }
 
 /--
-Attempts to parse a `URI` from the given string.
+Sets the request target/URI for the request being built.
 -/
-@[inline]
-def parse? (string : String) : Option URI :=
-  (Parser.parseURI <* Std.Internal.Parsec.eof).run string.toUTF8 |>.toOption
+def uri (builder : Builder) (uri : RequestTarget) : Builder :=
+  { builder with line := { builder.line with uri := uri } }
 
 /--
-Parses a `URI` from the given string. Panics if parsing fails. Use `parse?` if you need a safe
-option-returning version.
+Sets the request target/URI for the request being built
 -/
-@[inline]
-def parse! (string : String) : URI :=
-  match parse? string with
-  | some res => res
-  | none => panic! "invalid URI"
-
-namespace Path
+def uri! (builder : Builder) (uri : String) : Builder :=
+  let uri := RequestTarget.parse! uri
+  { builder with line := { builder.line with uri } }
 
 /--
-Attempts to parse a URI path from the given string.
-Returns `none` if the string is not a valid path.
+Sets the headers for the request being built
 -/
-@[inline]
-def parse? (s : String) : Option Std.Http.URI.Path :=
-  (Std.Http.URI.Parser.parsePath {} true true <* Std.Internal.Parsec.eof).run s.toUTF8 |>.toOption
+def headers (builder : Builder) (headers : Headers) : Builder :=
+  { builder with line := { builder.line with headers } }
 
 /--
-Parses a URI path from the given string. Returns the root path `"/"` if parsing fails.
+Adds a single header to the request being built.
 -/
-@[inline]
-def parseOrRoot (s : String) : Std.Http.URI.Path :=
-  parse? s |>.getD { segments := #[], absolute := true }
+def header (builder : Builder) (key : Header.Name) (value : Header.Value) : Builder :=
+  { builder with line := { builder.line with headers := builder.line.headers.insert key value } }
 
-end Std.Http.URI.Path
+/--
+Adds a single header to the request being built, panics if the header is invalid.
+-/
+def header! (builder : Builder) (key : String) (value : String) : Builder :=
+  let key := Header.Name.ofString! key
+  let value := Header.Value.ofString! value
+  { builder with line := { builder.line with headers := builder.line.headers.insert key value } }
+
+/--
+Adds a single header to the request being built.
+Returns `none` if the header name or value is invalid.
+-/
+def header? (builder : Builder) (key : String) (value : String) : Option Builder := do
+  let key ← Header.Name.ofString? key
+  let value ← Header.Value.ofString? value
+  pure <| { builder with line := { builder.line with headers := builder.line.headers.insert key value } }
+
+/--
+Adds a header to the request being built only if the Option Header.Value is some.
+-/
+def headerOpt (builder : Builder) (key : Header.Name) (value : Option Header.Value) : Builder :=
+  match value with
+  | some v => builder.header key v
+  | none => builder
+
+/--
+Inserts a typed extension value into the request being built.
+-/
+def extension (builder : Builder) [TypeName α] (data : α) : Builder :=
+  { builder with extensions := builder.extensions.insert data }
+
+/--
+Builds and returns the final HTTP Request with the specified body.
+-/
+def body (builder : Builder) (body : t) : Request t :=
+  { line := builder.line, body := body, extensions := builder.extensions }
+
+end Builder
+
+/--
+Creates a new HTTP GET Request with the specified URI.
+-/
+def get (uri : RequestTarget) : Builder :=
+  new
+  |>.method .get
+  |>.uri uri
+
+/--
+Creates a new HTTP POST Request builder with the specified URI.
+-/
+def post (uri : RequestTarget) : Builder :=
+  new
+  |>.method .post
+  |>.uri uri
+
+/--
+Creates a new HTTP PUT Request builder with the specified URI.
+-/
+def put (uri : RequestTarget) : Builder :=
+  new
+  |>.method .put
+  |>.uri uri
+
+/--
+Creates a new HTTP DELETE Request builder with the specified URI.
+-/
+def delete (uri : RequestTarget) : Builder :=
+  new
+  |>.method .delete
+  |>.uri uri
+
+/--
+Creates a new HTTP PATCH Request builder with the specified URI.
+-/
+def patch (uri : RequestTarget) : Builder :=
+  new
+  |>.method .patch
+  |>.uri uri
+
+/--
+Creates a new HTTP HEAD Request builder with the specified URI.
+-/
+def head (uri : RequestTarget) : Builder :=
+  new
+  |>.method .head
+  |>.uri uri
+
+/--
+Creates a new HTTP OPTIONS Request builder with the specified URI.
+Use `Request.options (RequestTarget.asteriskForm)` for server-wide OPTIONS.
+-/
+def options (uri : RequestTarget) : Builder :=
+  new
+  |>.method .options
+  |>.uri uri
+
+/--
+Creates a new HTTP CONNECT Request builder with the specified URI.
+Typically used with `RequestTarget.authorityForm` for tunneling.
+-/
+def connect (uri : RequestTarget) : Builder :=
+  new
+  |>.method .connect
+  |>.uri uri
+
+/--
+Creates a new HTTP TRACE Request builder with the specified URI.
+-/
+def trace (uri : RequestTarget) : Builder :=
+  new
+  |>.method .trace
+  |>.uri uri
+
+end Std.Http.Request

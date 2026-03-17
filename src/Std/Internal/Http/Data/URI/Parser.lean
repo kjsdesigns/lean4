@@ -361,7 +361,7 @@ where
       let path ← parsePath config true true
       let query ← optional (skipByte '?'.toUInt8 *> parseQuery config)
 
-      return .originForm { path, query }
+      return .originForm path query
     else
       fail "not origin"
 
