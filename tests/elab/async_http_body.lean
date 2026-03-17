@@ -268,62 +268,11 @@ def fullClose : Async Unit := do
 
 #eval fullClose.block
 
--- Test Full interest API always reports no consumer interest
-
-def fullInterest : Async Unit := do
-  let full ← Body.Full.ofString "x"
-  assert! !(← full.hasInterest)
-  let interested ← Selectable.one #[
-    .case full.interestSelector pure
-  ]
-  assert! interested == false
-
-#eval fullInterest.block
-
-/-! ## Empty tests -/
-
--- Test Empty writer metadata and interest behavior
-
-def emptyWriterBasics : Async Unit := do
-  let body : Body.Empty := {}
-  assert! (← Writer.getKnownSize body) == some (.fixed 0)
-  assert! (← Writer.isClosed body)
-  assert! !(← Writer.hasInterest body)
-
-  Writer.setKnownSize body (some (.fixed 99))
-  assert! (← Writer.getKnownSize body) == some (.fixed 0)
-
-  Writer.close body
-
-  let interested ← Selectable.one #[
-    .case (Writer.interestSelector body) pure
-  ]
-
-  assert! interested == false
-
-#eval emptyWriterBasics.block
-
--- Test Empty writer rejects send
-
-def emptyWriterSendFails : Async Unit := do
-  let body : Body.Empty := {}
-  let failed ←
-    try
-      Writer.send body (Chunk.ofByteArray "x".toUTF8) false
-      pure false
-    catch _ =>
-      pure true
-  assert! failed
-
-#eval emptyWriterSendFails.block
 
 /-! ## Request.Builder body tests -/
 
 private def recvBuiltBody (body : Body.Full) : Async (Option Chunk) :=
   body.recv
-
-private def emptyBodyKnownSize (body : Body.Empty) : Async (Option Body.Length) :=
-  Writer.getKnownSize body
 
 -- Test Request.Builder.text sets correct headers
 
@@ -368,13 +317,13 @@ def requestBuilderFromBytes : Async Unit := do
 
 #eval requestBuilderFromBytes.block
 
--- Test Request.Builder.blank creates empty body
+-- Test Request.Builder.noBody creates empty body
 
 def requestBuilderNoBody : Async Unit := do
   let req ← Request.get (.originForm! "/api")
-    |>.blank
+    |>.empty
 
-  assert! (← emptyBodyKnownSize req.body) == some (.fixed 0)
+  assert! req.body == {}
 
 #eval requestBuilderNoBody.block
 
@@ -423,12 +372,12 @@ def responseBuilderFromBytes : Async Unit := do
 
 #eval responseBuilderFromBytes.block
 
--- Test Response.Builder.blank creates empty body
+-- Test Response.Builder.noBody creates empty body
 
 def responseBuilderNoBody : Async Unit := do
   let res ← Response.ok
-    |>.blank
+    |>.empty
 
-  assert! (← emptyBodyKnownSize res.body) == some (.fixed 0)
+  assert! res.body == {}
 
 #eval responseBuilderNoBody.block
