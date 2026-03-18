@@ -60,7 +60,7 @@ partial def normalizeInstance (inst expectedType : Expr) : MetaM Expr := withRed
     let .ctorInfo ci ← getConstInfo c
       | trace[Meta.instanceNormalForm] "reduces to {c}, not a constructor, skipping"
         return inst
-    let (mvars, bis, cls) ← forallMetaTelescope (← inferType f)
+    let (mvars, _, cls) ← forallMetaTelescope (← inferType f)
     unless args.size == mvars.size do
       throwError "instance normal form: incorrect number of arguments for \
         constructor application `{f}`: {args}"
@@ -68,7 +68,6 @@ partial def normalizeInstance (inst expectedType : Expr) : MetaM Expr := withRed
       throwError "instance normal form: `{expectedType}` does not unify with the conclusion of \
         `{.ofConstName c}`"
     for i in ci.numParams...args.size do
-      let bi := bis[i]!
       let mvarId := mvars[i]!.mvarId!
       let mvarDecl ← mvarId.getDecl
       let argExpectedType ← instantiateMVars mvarDecl.type
