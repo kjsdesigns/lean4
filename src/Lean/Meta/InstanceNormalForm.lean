@@ -49,7 +49,7 @@ reduce to the canonical sub-instance, rather than requiring unfolding through he
 -/
 partial def normalizeInstance (inst expectedType : Expr) : MetaM Expr := withReducible do
   withTraceNode `Meta.instanceNormalForm
-      (fun e => return m!"{exceptEmoji e} type: {expectedType}") do
+      (fun _ => return m!"type: {expectedType}") do
   let some className ← isClass? expectedType
     | return inst
   trace[Meta.instanceNormalForm] "class is {className}"
