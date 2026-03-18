@@ -61,26 +61,31 @@ partial def normalizeInstance (inst expectedType : Expr) : MetaM Expr := withRed
       | trace[Meta.instanceNormalForm] "reduces to {c}, not a constructor, skipping"
         return inst
     let (mvars, _, cls) ← forallMetaTelescope (← inferType f)
-    unless args.size == mvars.size do
+    if h₁ : args.size ≠ mvars.size then
       throwError "instance normal form: incorrect number of arguments for \
         constructor application `{f}`: {args}"
-    unless ← isDefEq expectedType cls do
-      throwError "instance normal form: `{expectedType}` does not unify with the conclusion of \
-        `{.ofConstName c}`"
-    for i in ci.numParams...args.size do
-      let mvarId := mvars[i]!.mvarId!
-      let mvarDecl ← mvarId.getDecl
-      let argExpectedType ← instantiateMVars mvarDecl.type
-      let arg := args[i]!
-      if ← isProp argExpectedType then
-        -- For proofs, assign directly. Proof abstraction is handled by `abstractNestedProofs`.
-        mvarId.assign arg
-      -- Recurse into instance arguments of the constructor
-      else if (← isClass? argExpectedType).isSome then
-        mvarId.assign (← normalizeInstance arg argExpectedType)
-      else
-        -- For data fields, assign directly.
-        mvarId.assign arg
-    return mkAppN f (← mvars.mapM instantiateMVars)
+    else
+      unless ← isDefEq expectedType cls do
+        throwError "instance normal form: `{expectedType}` does not unify with the conclusion of \
+          `{.ofConstName c}`"
+      for h₂ : i in ci.numParams...args.size do
+        have : i < mvars.size := by
+          simp only [ne_eq, Decidable.not_not] at h₁
+          rw [← h₁]
+          get_elem_tactic
+        let mvarId := mvars[i].mvarId!
+        let mvarDecl ← mvarId.getDecl
+        let argExpectedType ← instantiateMVars mvarDecl.type
+        let arg := args[i]
+        if ← isProp argExpectedType then
+          -- For proofs, assign directly. Proof abstraction is handled by `abstractNestedProofs`.
+          mvarId.assign arg
+        -- Recurse into instance arguments of the constructor
+        else if (← isClass? argExpectedType).isSome then
+          mvarId.assign (← normalizeInstance arg argExpectedType)
+        else
+          -- For data fields, assign directly.
+          mvarId.assign arg
+      return mkAppN f (← mvars.mapM instantiateMVars)
 
 end Lean.Meta
