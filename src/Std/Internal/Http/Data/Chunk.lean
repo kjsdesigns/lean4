@@ -7,6 +7,7 @@ module
 
 prelude
 public import Std.Internal.Http.Internal
+public import Std.Internal.Http.Data.Headers
 public meta import Std.Internal.Http.Internal.String
 
 public section
@@ -20,8 +21,7 @@ Reference: https://www.rfc-editor.org/rfc/rfc9112.html#section-7.1
 -/
 
 namespace Std.Http
-
-open Internal
+open Internal Char
 
 set_option linter.all true
 
@@ -87,13 +87,13 @@ def ofString! (s : String) : ExtensionName :=
 end ExtensionName
 
 /--
-A proposition asserting that `s` is a valid extension value, meaning it can be correctly encoded and
-decoded as either a token or a quoted-string.
+A proposition asserting that `s` is a valid extension value, meaning every character passes
+`Char.quotedStringChar` (i.e. is `qdtext` or a valid `quoted-pair` payload).
 
 Reference: https://httpwg.org/specs/rfc9112.html#chunked.extension
 -/
 abbrev IsValidExtensionValue (s : String) : Prop :=
-  (quoteHttpString? s).isSome
+  s.toList.all Char.quotedStringChar
 
 /--
 A validated chunk extension value that ensures all characters conform to HTTP standards per RFC 9112 §7.1.1.
@@ -115,30 +115,29 @@ structure ExtensionValue where
   /--
   The proof that it's a valid extension value.
   -/
-  validExtensionValue : IsValidExtensionValue value := by decide
+  isValidExtensionValue : IsValidExtensionValue value := by decide
 deriving Repr, DecidableEq, BEq
 
 namespace ExtensionValue
 
 instance : Inhabited ExtensionValue where
-  default := ⟨"", by native_decide⟩
+  default := ⟨"", by decide⟩
 
 instance : ToString ExtensionValue where
   toString v := v.value
 
 /--
 Quotes an extension value if it contains non-token characters, otherwise returns it as-is.
-
 -/
 def quote (s : ExtensionValue) : String :=
-  quoteHttpString? s.value |>.get s.validExtensionValue
+  quoteHttpString s.value s.isValidExtensionValue
 
 /--
 Attempts to create an `ExtensionValue` from a `String`, returning `none` if the string contains
 characters that cannot be encoded as an HTTP quoted-string.
 -/
 def ofString? (s : String) : Option ExtensionValue :=
-  if h : (quoteHttpString? s).isSome then
+  if h : IsValidExtensionValue s then
     some ⟨s, h⟩
   else
     none
@@ -208,3 +207,114 @@ instance : Encode .v11 Chunk where
     buffer.append #[size, exts.toUTF8, "\r\n".toUTF8, chunk.data, "\r\n".toUTF8]
 
 end Chunk
+
+
+/--
+Trailer headers sent after the final chunk in HTTP/1.1 chunked transfer encoding.
+Per RFC 9112 §7.1.2, trailers allow the sender to include additional metadata after
+the message body, such as message integrity checks or digital signatures.
+-/
+structure Trailer where
+  /--
+  The trailer header fields as key-value pairs.
+  -/
+  headers : Headers
+deriving Inhabited
+
+namespace Trailer
+
+/--
+Creates an empty trailer with no headers.
+-/
+def empty : Trailer :=
+  { headers := .empty }
+
+/--
+Inserts a trailer header field.
+-/
+@[inline]
+def insert (trailer : Trailer) (name : Header.Name) (value : Header.Value) : Trailer :=
+  { headers := trailer.headers.insert name value }
+
+/--
+Inserts a trailer header field from string name and value, panicking if either is invalid.
+-/
+@[inline]
+def insert! (trailer : Trailer) (name : String) (value : String) : Trailer :=
+  { headers := trailer.headers.insert! name value }
+
+/--
+Retrieves the first value for the given trailer header name.
+Returns `none` if absent.
+-/
+@[inline]
+def get? (trailer : Trailer) (name : Header.Name) : Option Header.Value :=
+  trailer.headers.get? name
+
+/--
+Retrieves all values for the given trailer header name.
+Returns `none` if absent.
+-/
+@[inline]
+def getAll? (trailer : Trailer) (name : Header.Name) : Option (Array Header.Value) :=
+  trailer.headers.getAll? name
+
+/--
+Checks if a trailer header with the given name exists.
+-/
+@[inline]
+def contains (trailer : Trailer) (name : Header.Name) : Bool :=
+  trailer.headers.contains name
+
+/--
+Removes a trailer header with the given name.
+-/
+@[inline]
+def erase (trailer : Trailer) (name : Header.Name) : Trailer :=
+  { headers := trailer.headers.erase name }
+
+/--
+Gets the number of trailer headers.
+-/
+@[inline]
+def size (trailer : Trailer) : Nat :=
+  trailer.headers.size
+
+/--
+Checks if the trailer has no headers.
+-/
+@[inline]
+def isEmpty (trailer : Trailer) : Bool :=
+  trailer.headers.isEmpty
+
+/--
+Merges two trailers, accumulating values for duplicate keys from both.
+-/
+def merge (t1 t2 : Trailer) : Trailer :=
+  { headers := t1.headers.merge t2.headers }
+
+/--
+Converts the trailer headers to a list of key-value pairs.
+-/
+def toList (trailer : Trailer) : List (Header.Name × Header.Value) :=
+  trailer.headers.toList
+
+/--
+Converts the trailer headers to an array of key-value pairs.
+-/
+def toArray (trailer : Trailer) : Array (Header.Name × Header.Value) :=
+  trailer.headers.toArray
+
+/--
+Folds over all key-value pairs in the trailer headers.
+-/
+def fold (trailer : Trailer) (init : α) (f : α → Header.Name → Header.Value → α) : α :=
+  trailer.headers.fold init f
+
+instance : Encode .v11 Trailer where
+  encode buffer trailer :=
+    buffer.write "0\r\n".toUTF8
+    |> (Encode.encode .v11 · trailer.headers)
+    |>.write  "\r\n".toUTF8
+
+end Trailer

@@ -6,6 +6,7 @@ Authors: Mac Malone
 module
 
 prelude
+import Init.Control.Do
 public import Lake.Util.Log
 public import Lake.Util.Version
 public import Lake.Config.Artifact
@@ -165,8 +166,7 @@ where go as o := do
   match o with
   | .null =>
     return as
-  | .bool b =>
-    logError s!"unsupported output: {b}"
+  | .bool _ => -- boolean metadata is allowed (as of 2025-03-13)
     return as
   | .num o =>
     match Hash.ofJsonNumber? o with
@@ -296,7 +296,8 @@ public structure CacheOutput where
 
 namespace CacheOutput
 
-@[inline] def ofData (data : Json) : CacheOutput := {data}
+/-- **For internal use only.** -/
+@[inline] public def ofData (data : Json) : CacheOutput := {data}
 
 public protected def toJson (out : CacheOutput) : Json := Id.run do
   let mut obj :=
@@ -351,26 +352,29 @@ namespace Cache
   cache.artifactDir / artifactPath contentHash ext
 
 /-- Returns the artifact in the Lake cache corresponding the given artifact description. -/
+@[deprecated "Deprecated without replacelement." (since := "2025-03-04")]
 public def getArtifact? (cache : Cache) (descr : ArtifactDescr) : BaseIO (Option Artifact) := do
   let path := cache.artifactDir / descr.relPath
-  if let .ok mtime ← getMTime path |>.toBaseIO then
-    return some {descr, path, mtime}
-  else if (← path.pathExists) then
-    return some {descr, path, mtime := 0}
-  else
-    return none
+  let .ok mtime ← getMTime path |>.toBaseIO
+    | return none
+  return some {descr, path, mtime}
 
 /-- Returns the artifact in the Lake cache corresponding the given artifact description. Errors if missing. -/
+@[deprecated "Deprecated without replacelement." (since := "2025-03-04")]
 public def getArtifact (cache : Cache) (descr : ArtifactDescr) : EIO String Artifact := do
   let path := cache.artifactDir / descr.relPath
-  if let .ok mtime ← getMTime path |>.toBaseIO then
+  match (← getMTime path |>.toBaseIO) with
+  | .ok mtime =>
     return {descr, path, mtime}
-  else if (← path.pathExists) then
-    return {descr, path, mtime := 0}
-  else
+  | .error (.noFileOrDirectory ..) =>
     error s!"artifact not found in cache: {path}"
+  | .error e =>
+    error s!"failed to retrieve artifact from cache: {e}"
 
-/-- Returns path to the artifact for each output. Errors if any are missing. -/
+/--
+**For internal use only.**
+Returns path to the artifact for each output. Errors if any are missing.
+-/
 public def getArtifactPaths
   (cache : Cache) (descrs : Array ArtifactDescr)
 : LogIO (Vector FilePath descrs.size) := throwIfLogs do
