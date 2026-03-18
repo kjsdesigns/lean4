@@ -187,7 +187,7 @@ private def unfold? (e : Expr) : SimpM (Option Expr) := do
       -- We are not unfolding partial applications, and `fName` does not have smart unfolding support.
       -- Thus, we must check whether the arity of the function >= number of arguments.
       let some cinfo := (← getEnv).find? fName | return none
-      let some value := cinfo.value? (allowOpaque := true) | return none
+      let some value := cinfo.value? | return none
       let arity := value.getNumHeadLambdas
       -- Partially applied function, return `none`. See issue #2042
       if arity > e.getAppNumArgs then return none
