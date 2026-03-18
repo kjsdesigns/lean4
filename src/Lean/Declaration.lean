@@ -472,21 +472,21 @@ def type (d : ConstantInfo) : Expr :=
 def value? (info : ConstantInfo) (allowOpaque := false) : Option Expr :=
   match info with
   | .defnInfo {value, ..}   => some value
-  | .thmInfo  {value, ..}   => some value
+  | .thmInfo  {value, ..}   => if allowOpaque then some value else none
   | .opaqueInfo {value, ..} => if allowOpaque then some value else none
   | _                       => none
 
 def hasValue (info : ConstantInfo) (allowOpaque := false) : Bool :=
   match info with
   | .defnInfo _   => true
-  | .thmInfo  _   => true
+  | .thmInfo  _   => allowOpaque
   | .opaqueInfo _ => allowOpaque
   | _             => false
 
 def value! (info : ConstantInfo) (allowOpaque := false) : Expr :=
   match info with
   | .defnInfo {value, ..}   => value
-  | .thmInfo  {value, ..}   => value
+  | .thmInfo  {value, ..}   => if allowOpaque then value else panic! "declaration with value expected"
   | .opaqueInfo {value, ..} => if allowOpaque then value else panic! "declaration with value expected"
   | _                       => panic! s!"declaration with value expected, but {info.name} has none"
 
@@ -509,6 +509,10 @@ def isInductive : ConstantInfo → Bool
 def isDefinition : ConstantInfo → Bool
   | .defnInfo _ => true
   | _           => false
+
+def isTheorem : ConstantInfo → Bool
+  | .thmInfo _ => true
+  | _          => false
 
 def inductiveVal! : ConstantInfo → InductiveVal
   | .inductInfo val => val

@@ -350,6 +350,14 @@ partial def foldAndCollect (oldIH newIH : FVarId) (isRecCall : Expr → Option E
       -- So beta-reduce that definition. We need to look through theorems here!
       if let some e' ← withTransparency .all do unfoldDefinition? e then
         return ← foldAndCollect oldIH newIH isRecCall e'
+      else if let .const declName lvls := e.getAppFn then
+        -- `unfoldDefinition?` does not unfold theorems; do it manually here
+        if let some cinfo := (← getEnv).find? declName then
+          if let some val := cinfo.value? (allowOpaque := true) then
+            let e' := val.instantiateLevelParams cinfo.levelParams lvls
+            let e' := Expr.betaRev e' e.getAppRevArgs
+            return ← foldAndCollect oldIH newIH isRecCall e'
+        throwError "Internal error in `foldAndCollect`: Cannot reduce application of `{e.getAppFn}` in:{indentExpr e}"
       else
         throwError "Internal error in `foldAndCollect`: Cannot reduce application of `{e.getAppFn}` in:{indentExpr e}"
 
