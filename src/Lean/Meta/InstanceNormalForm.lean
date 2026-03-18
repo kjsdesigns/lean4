@@ -19,6 +19,21 @@ register_builtin_option «instance».normalForm : Bool := {
   descr := "normalize instance bodies to constructor-based normal form"
 }
 
+register_builtin_option «instance».normalForm.wrapFields.instances : Bool := {
+  defValue := false
+  descr := "wrap instance fields in implicit_reducible auxiliary definitions to fix their types"
+}
+
+register_builtin_option «instance».normalForm.wrapFields.data : Bool := {
+  defValue := false
+  descr := "wrap data fields in auxiliary definitions to fix their types"
+}
+
+register_builtin_option «instance».normalForm.wrapFields.proofs : Bool := {
+  defValue := false
+  descr := "wrap proof fields in auxiliary theorems to fix their types"
+}
+
 builtin_initialize registerTraceClass `Meta.instanceNormalForm
 
 /--
@@ -78,14 +93,41 @@ partial def normalizeInstance (inst expectedType : Expr) : MetaM Expr := withRed
         let argExpectedType ← instantiateMVars mvarDecl.type
         let arg := args[i]
         if ← isProp argExpectedType then
-          -- For proofs, assign directly. Proof abstraction is handled by `abstractNestedProofs`.
-          mvarId.assign arg
+          -- Question: is this just redundant with `abstractNestedProofs`?
+          -- Or does `mkAuxTheorem` help prevent leakage?
+          if «instance».normalForm.wrapFields.proofs.get (← getOptions) then
+            let argType ← inferType arg
+            if ← withTransparency .instances <| isDefEq argExpectedType argType then
+              mvarId.assign arg
+            else
+              mvarId.assign (← mkAuxTheorem argExpectedType arg (zetaDelta := true))
+          else
+            mvarId.assign arg
         -- Recurse into instance arguments of the constructor
         else if (← isClass? argExpectedType).isSome then
-          mvarId.assign (← normalizeInstance arg argExpectedType)
+          let normalized ← normalizeInstance arg argExpectedType
+          if «instance».normalForm.wrapFields.instances.get (← getOptions) then
+            let normalizedType ← inferType normalized
+            if ← withDefault <| isDefEq argExpectedType normalizedType then
+              mvarId.assign normalized
+            else
+              let name ← mkAuxDeclName
+              let wrapped ← mkAuxDefinition name argExpectedType normalized
+              setReducibilityStatus name .implicitReducible
+              mvarId.assign wrapped
+          else
+            mvarId.assign normalized
         else
-          -- For data fields, assign directly.
-          mvarId.assign arg
+          -- For data fields, assign directly or wrap in aux def to fix types.
+          if «instance».normalForm.wrapFields.data.get (← getOptions) then
+            let argType ← inferType arg
+            if ← withDefault <| isDefEq argExpectedType argType then
+              mvarId.assign arg
+            else
+              let name ← mkAuxDeclName
+              mvarId.assign (← mkAuxDefinition name argExpectedType arg)
+          else
+            mvarId.assign arg
       return mkAppN f (← mvars.mapM instantiateMVars)
 
 end Lean.Meta
