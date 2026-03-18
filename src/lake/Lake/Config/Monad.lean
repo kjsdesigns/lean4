@@ -308,9 +308,9 @@ variable [Functor m]
 @[inline] public def getLeanSharedLib : m FilePath :=
   (·.sharedLib) <$> getLeanInstall
 
-/-- Get the path of the {lit}`ar` binary in the detected Lean installation. -/
-@[inline] public def getLeanAr : m FilePath :=
-  (·.ar) <$> getLeanInstall
+/-- Get the path of the {lit}`ar` binary in the detected Lean installation, if one was found. -/
+@[inline] public def getLeanAr? : m (Option FilePath) :=
+  (·.ar?) <$> getLeanInstall
 
 /-- Get the path of C compiler in the detected Lean installation. -/
 @[inline] public def getLeanCc : m FilePath :=

@@ -102,7 +102,7 @@ public structure LeanInstall where
   leantar := leantarExe sysroot
   sharedLib := leanSharedLibDir sysroot / leanSharedLib
   initSharedLib := leanSharedLibDir sysroot / initSharedLib
-  ar : FilePath := "ar"
+  ar? : Option FilePath := none
   cc : FilePath := "cc"
   customCc : Bool := true
   cFlags := getCFlags'.push "-Wno-unused-command-line-argument"
@@ -231,8 +231,8 @@ public def LeanInstall.get (sysroot : FilePath) (collocated : Bool := false) : B
     else
       -- Remark: This is expensive (at least on Windows), so try to avoid it.
       getGithash
-  let ar ← findAr
-  setCc {sysroot, githash, ar}
+  let ar? ← findAr
+  setCc {sysroot, githash, ar?}
 where
   getGithash := do
     EIO.catchExceptions (h := fun _ => pure "") do
@@ -243,15 +243,15 @@ where
       return out.stdout.trimAscii.copy
   findAr := do
     if let some ar ← IO.getEnv "LEAN_AR" then
-      return FilePath.mk ar
+      return some (FilePath.mk ar)
     else
       let ar := leanArExe sysroot
       if (← ar.pathExists) then
-        return ar
+        return some ar
       else if let some ar ← IO.getEnv "AR" then
-        return ar
+        return some ar
       else
-        return "ar"
+        return none
   setCc i := do
     if let some cc ← IO.getEnv "LEAN_CC" then
       return withCustomCc i cc
