@@ -41,6 +41,32 @@
    {"replace":
     {"start": {"line": 1, "character": 11},
      "end": {"line": 1, "character": 17}},
+    "newText": "instance.normalForm.wrapFields.instances",
+    "insert":
+    {"start": {"line": 1, "character": 11},
+     "end": {"line": 1, "character": 17}}},
+   "label": "instance.normalForm.wrapFields.instances",
+   "kind": 10,
+   "detail":
+   "(false), wrap instance fields in implicit_reducible auxiliary definitions to fix their types",
+   "data": ["file:///completionOption.lean", 1, 17, 0]},
+  {"textEdit":
+   {"replace":
+    {"start": {"line": 1, "character": 11},
+     "end": {"line": 1, "character": 17}},
+    "newText": "instance.normalForm.wrapFields.data",
+    "insert":
+    {"start": {"line": 1, "character": 11},
+     "end": {"line": 1, "character": 17}}},
+   "label": "instance.normalForm.wrapFields.data",
+   "kind": 10,
+   "detail":
+   "(false), wrap data fields in auxiliary definitions to fix their types",
+   "data": ["file:///completionOption.lean", 1, 17, 0]},
+  {"textEdit":
+   {"replace":
+    {"start": {"line": 1, "character": 11},
+     "end": {"line": 1, "character": 17}},
     "newText": "trace.PrettyPrinter.format.input",
     "insert":
     {"start": {"line": 1, "character": 11},
@@ -121,6 +147,30 @@ Resolution of format.inputWidth:
  "label": "format.inputWidth",
  "kind": 10,
  "detail": "(100), ideal input width",
+ "data": ["file:///completionOption.lean", 1, 17, 0]}
+Resolution of instance.normalForm.wrapFields.instances:
+{"textEdit":
+ {"replace":
+  {"start": {"line": 1, "character": 11}, "end": {"line": 1, "character": 17}},
+  "newText": "instance.normalForm.wrapFields.instances",
+  "insert":
+  {"start": {"line": 1, "character": 11}, "end": {"line": 1, "character": 17}}},
+ "label": "instance.normalForm.wrapFields.instances",
+ "kind": 10,
+ "detail":
+ "(false), wrap instance fields in implicit_reducible auxiliary definitions to fix their types",
+ "data": ["file:///completionOption.lean", 1, 17, 0]}
+Resolution of instance.normalForm.wrapFields.data:
+{"textEdit":
+ {"replace":
+  {"start": {"line": 1, "character": 11}, "end": {"line": 1, "character": 17}},
+  "newText": "instance.normalForm.wrapFields.data",
+  "insert":
+  {"start": {"line": 1, "character": 11}, "end": {"line": 1, "character": 17}}},
+ "label": "instance.normalForm.wrapFields.data",
+ "kind": 10,
+ "detail":
+ "(false), wrap data fields in auxiliary definitions to fix their types",
  "data": ["file:///completionOption.lean", 1, 17, 0]}
 Resolution of trace.PrettyPrinter.format.input:
 {"textEdit":
@@ -553,6 +603,32 @@ Resolution of trace.pp.analyze.annotate:
    {"replace":
     {"start": {"line": 13, "character": 11},
      "end": {"line": 13, "character": 17}},
+    "newText": "instance.normalForm.wrapFields.instances",
+    "insert":
+    {"start": {"line": 13, "character": 11},
+     "end": {"line": 13, "character": 17}}},
+   "label": "instance.normalForm.wrapFields.instances",
+   "kind": 10,
+   "detail":
+   "(false), wrap instance fields in implicit_reducible auxiliary definitions to fix their types",
+   "data": ["file:///completionOption.lean", 13, 17, 0]},
+  {"textEdit":
+   {"replace":
+    {"start": {"line": 13, "character": 11},
+     "end": {"line": 13, "character": 17}},
+    "newText": "instance.normalForm.wrapFields.data",
+    "insert":
+    {"start": {"line": 13, "character": 11},
+     "end": {"line": 13, "character": 17}}},
+   "label": "instance.normalForm.wrapFields.data",
+   "kind": 10,
+   "detail":
+   "(false), wrap data fields in auxiliary definitions to fix their types",
+   "data": ["file:///completionOption.lean", 13, 17, 0]},
+  {"textEdit":
+   {"replace":
+    {"start": {"line": 13, "character": 11},
+     "end": {"line": 13, "character": 17}},
     "newText": "trace.PrettyPrinter.format.input",
     "insert":
     {"start": {"line": 13, "character": 11},
@@ -639,6 +715,34 @@ Resolution of format.inputWidth:
  "label": "format.inputWidth",
  "kind": 10,
  "detail": "(100), ideal input width",
+ "data": ["file:///completionOption.lean", 13, 17, 0]}
+Resolution of instance.normalForm.wrapFields.instances:
+{"textEdit":
+ {"replace":
+  {"start": {"line": 13, "character": 11},
+   "end": {"line": 13, "character": 17}},
+  "newText": "instance.normalForm.wrapFields.instances",
+  "insert":
+  {"start": {"line": 13, "character": 11},
+   "end": {"line": 13, "character": 17}}},
+ "label": "instance.normalForm.wrapFields.instances",
+ "kind": 10,
+ "detail":
+ "(false), wrap instance fields in implicit_reducible auxiliary definitions to fix their types",
+ "data": ["file:///completionOption.lean", 13, 17, 0]}
+Resolution of instance.normalForm.wrapFields.data:
+{"textEdit":
+ {"replace":
+  {"start": {"line": 13, "character": 11},
+   "end": {"line": 13, "character": 17}},
+  "newText": "instance.normalForm.wrapFields.data",
+  "insert":
+  {"start": {"line": 13, "character": 11},
+   "end": {"line": 13, "character": 17}}},
+ "label": "instance.normalForm.wrapFields.data",
+ "kind": 10,
+ "detail":
+ "(false), wrap data fields in auxiliary definitions to fix their types",
  "data": ["file:///completionOption.lean", 13, 17, 0]}
 Resolution of trace.PrettyPrinter.format.input:
 {"textEdit":
