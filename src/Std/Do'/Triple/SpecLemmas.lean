@@ -245,6 +245,16 @@ theorem Spec.monadLift_OptionT (x : m α) (post : α → l) (epost : e × l) :
   Triple.iff.mpr (monadLift_OptionT_wp x)
 -/
 
+/-! # `MonadLiftT` -/
+
+omit [Monad m] in
+theorem Spec.UnfoldLift.monadLift_trans [MonadLift n o] [MonadLiftT m n] (x : m α) :
+    (MonadLiftT.monadLift x : o α) = MonadLift.monadLift (m := n) (monadLift x) := rfl
+
+omit [Monad m] in
+theorem Spec.UnfoldLift.monadLift_refl (x : m α) :
+    (MonadLiftT.monadLift x : m α) = x := rfl
+
 /-! # `MonadFunctor` -/
 
 attribute [refl] PartialOrder.rel_refl
@@ -512,6 +522,30 @@ theorem Spec.adaptExcept_EStateM (f : ε → ε') (x : EStateM ε σ α)
     Triple (wp x post (fun e => epost (f e)))
       (EStateM.adaptExcept f x : EStateM ε' σ α) post epost :=
   Triple.iff.mpr (by rw [WP.adaptExcept_EStateM_wp]; rfl)
+
+/-! # Lifting `MonadStateOf` -/
+
+omit [Monad m] [WPMonad m l e] in
+theorem Spec.UnfoldLift.get [MonadLift m n] [MonadStateOf σ m] :
+    (MonadStateOf.get : n σ) = monadLift (MonadStateOf.get : m σ) := rfl
+
+omit [Monad m] [WPMonad m l e] in
+theorem Spec.UnfoldLift.set [MonadLift m n] [MonadStateOf σ m] (s : σ) :
+    (MonadStateOf.set (m := n) s) = monadLift (MonadStateOf.set (m := m) s) := rfl
+
+omit [Monad m] [WPMonad m l e] in
+theorem Spec.UnfoldLift.modifyGet [MonadLift m n] [MonadStateOf σ m] (f : σ → α × σ) :
+    MonadStateOf.modifyGet (m := n) f = monadLift (MonadStateOf.modifyGet (m := m) f) := rfl
+
+/-! # Lifting `MonadReaderOf` -/
+
+omit [Monad m] [WPMonad m l e] in
+theorem Spec.UnfoldLift.read [MonadLift m n] [MonadReaderOf ρ m] :
+    (MonadReaderOf.read : n ρ) = monadLift (MonadReaderOf.read : m ρ) := rfl
+
+omit [Monad m] [WPMonad m l e] in
+theorem Spec.UnfoldLift.withReader [MonadFunctor m n] [MonadWithReaderOf ρ m] (f : ρ → ρ) :
+    (MonadWithReaderOf.withReader f : n α → n α) = monadMap (m := m) (MonadWithReaderOf.withReader f) := rfl
 
 /-! # Lifting `MonadExceptOf` -/
 
@@ -1880,7 +1914,7 @@ theorem Spec.Iter.forIn_filter {α β γ : Type w}
     Triple P (forIn (it.filter f) init g) Q eQ := by
   rwa [Std.Iter.forIn_filter]
 
-theorem Spec.Iter.foldM_filterMapWithPostcondition {α β γ δ : Type w}
+theorem Iter.foldM_filterMapWithPostcondition {α β γ δ : Type w}
     {n : Type w → Type w'} {o : Type w → Type w''}
     {l : Type w} {e : Type w}
     [Iterator α Id β] [Finite α Id]
@@ -1896,7 +1930,7 @@ theorem Spec.Iter.foldM_filterMapWithPostcondition {α β γ δ : Type w}
     Triple P ((it.filterMapWithPostcondition f).foldM (init := init) g) Q eQ := by
   rwa [Std.Iter.foldM_filterMapWithPostcondition]
 
-theorem Spec.Iter.foldM_filterMapM {α β γ δ : Type w}
+theorem Iter.foldM_filterMapM {α β γ δ : Type w}
     {n : Type w → Type w'} {o : Type w → Type w''}
     {l : Type w} {e : Type w}
     [Iterator α Id β] [Finite α Id]
@@ -1913,7 +1947,7 @@ theorem Spec.Iter.foldM_filterMapM {α β γ δ : Type w}
     Triple P ((it.filterMapM f).foldM (init := init) g) Q eQ := by
   rwa [Std.Iter.foldM_filterMapM]
 
-theorem Spec.Iter.foldM_mapWithPostcondition {α β γ δ : Type w}
+theorem Iter.foldM_mapWithPostcondition {α β γ δ : Type w}
     {m : Type w → Type w'''} {n : Type w → Type w'} {o : Type w → Type w''}
     {l : Type w} {e : Type w}
     [Iterator α Id β] [Finite α Id]
@@ -1927,7 +1961,7 @@ theorem Spec.Iter.foldM_mapWithPostcondition {α β γ δ : Type w}
     Triple P ((it.mapWithPostcondition f).foldM (init := init) g) Q eQ := by
   rwa [Std.Iter.foldM_mapWithPostcondition (m := m)]
 
-theorem Spec.Iter.foldM_mapM {α β γ δ : Type w}
+theorem Iter.foldM_mapM {α β γ δ : Type w}
     {n : Type w → Type w'} {o : Type w → Type w''}
     {l : Type w} {e : Type w}
     [Iterator α Id β] [Finite α Id]
@@ -1942,7 +1976,7 @@ theorem Spec.Iter.foldM_mapM {α β γ δ : Type w}
     Triple P ((it.mapM f).foldM (init := init) g) Q eQ := by
   rwa [Std.Iter.foldM_mapM]
 
-theorem Spec.Iter.foldM_filterWithPostcondition {α β δ : Type w}
+theorem Iter.foldM_filterWithPostcondition {α β δ : Type w}
     {n : Type w → Type w'} {o : Type w → Type w''}
     {l : Type w} {e : Type w}
     [Iterator α Id β] [Finite α Id]
@@ -1956,7 +1990,7 @@ theorem Spec.Iter.foldM_filterWithPostcondition {α β δ : Type w}
     Triple P ((it.filterWithPostcondition f).foldM (init := init) g) Q eQ := by
   rwa [Std.Iter.foldM_filterWithPostcondition]
 
-theorem Spec.Iter.foldM_filterM {α β δ : Type w}
+theorem Iter.foldM_filterM {α β δ : Type w}
     {n : Type w → Type w'} {o : Type w → Type w''}
     {l : Type w} {e : Type w}
     [Iterator α Id β] [Finite α Id]
@@ -1971,7 +2005,7 @@ theorem Spec.Iter.foldM_filterM {α β δ : Type w}
     Triple P ((it.filterM f).foldM (init := init) g) Q eQ := by
   rwa [Std.Iter.foldM_filterM]
 
-theorem Spec.Iter.foldM_filterMap {α β γ δ : Type w}
+theorem Iter.foldM_filterMap {α β γ δ : Type w}
     {n : Type w → Type w'}
     {l : Type w} {e : Type w}
     [Iterator α Id β] [Finite α Id] [Monad n] [LawfulMonad n] [WPMonad n l e]
@@ -1985,7 +2019,7 @@ theorem Spec.Iter.foldM_filterMap {α β γ δ : Type w}
     Triple P ((it.filterMap f).foldM (init := init) g) Q eQ := by
   rwa [Std.Iter.foldM_filterMap]
 
-theorem Spec.Iter.foldM_map {α β γ δ : Type w}
+theorem Iter.foldM_map {α β γ δ : Type w}
     {n : Type w → Type w'}
     {l : Type w} {e : Type w}
     [Iterator α Id β] [Finite α Id] [Monad n] [LawfulMonad n] [WPMonad n l e]
@@ -1996,7 +2030,7 @@ theorem Spec.Iter.foldM_map {α β γ δ : Type w}
     Triple P ((it.map f).foldM (init := init) g) Q eQ := by
   rwa [Std.Iter.foldM_map]
 
-theorem Spec.Iter.foldM_filter {α β δ : Type w}
+theorem Iter.foldM_filter {α β δ : Type w}
     {n : Type w → Type w'}
     {l : Type w} {e : Type w}
     [Iterator α Id β] [Finite α Id] [Monad n] [LawfulMonad n] [WPMonad n l e]
@@ -2007,7 +2041,7 @@ theorem Spec.Iter.foldM_filter {α β δ : Type w}
     Triple P ((it.filter f).foldM (init := init) g) Q eQ := by
   rwa [Std.Iter.foldM_filter]
 
-theorem Spec.Iter.fold_filterMapWithPostcondition {α β γ δ : Type w}
+theorem Iter.fold_filterMapWithPostcondition {α β γ δ : Type w}
     {n : Type w → Type w'}
     {l : Type w} {e : Type w}
     [Iterator α Id β] [Finite α Id]
@@ -2021,7 +2055,7 @@ theorem Spec.Iter.fold_filterMapWithPostcondition {α β γ δ : Type w}
     Triple P ((it.filterMapWithPostcondition f).fold (init := init) g) Q eQ := by
   rwa [Std.Iter.fold_filterMapWithPostcondition]
 
-theorem Spec.Iter.fold_filterMapM {α β γ δ : Type w}
+theorem Iter.fold_filterMapM {α β γ δ : Type w}
     {n : Type w → Type w'}
     {l : Type w} {e : Type w}
     [Iterator α Id β] [Finite α Id]
@@ -2035,7 +2069,7 @@ theorem Spec.Iter.fold_filterMapM {α β γ δ : Type w}
     Triple P ((it.filterMapM f).fold (init := init) g) Q eQ := by
   rwa [Std.Iter.fold_filterMapM]
 
-theorem Spec.Iter.fold_mapWithPostcondition {α β γ δ : Type w}
+theorem Iter.fold_mapWithPostcondition {α β γ δ : Type w}
     {n : Type w → Type w'}
     {l : Type w} {e : Type w}
     [Iterator α Id β] [Finite α Id]
@@ -2047,7 +2081,7 @@ theorem Spec.Iter.fold_mapWithPostcondition {α β γ δ : Type w}
     Triple P ((it.mapWithPostcondition f).fold (init := init) g) Q eQ := by
   rwa [Std.Iter.fold_mapWithPostcondition]
 
-theorem Spec.Iter.fold_mapM {α β γ δ : Type w}
+theorem Iter.fold_mapM {α β γ δ : Type w}
     {n : Type w → Type w'}
     {l : Type w} {e : Type w}
     [Iterator α Id β] [Finite α Id]
@@ -2059,7 +2093,7 @@ theorem Spec.Iter.fold_mapM {α β γ δ : Type w}
     Triple P ((it.mapM f).fold (init := init) g) Q eQ := by
   rwa [Std.Iter.fold_mapM]
 
-theorem Spec.Iter.fold_filterWithPostcondition {α β δ : Type w}
+theorem Iter.fold_filterWithPostcondition {α β δ : Type w}
     {n : Type w → Type w'}
     {l : Type w} {e : Type w}
     [Iterator α Id β] [Finite α Id]
@@ -2071,7 +2105,7 @@ theorem Spec.Iter.fold_filterWithPostcondition {α β δ : Type w}
     Triple P ((it.filterWithPostcondition f).fold (init := init) g) Q eQ := by
   rwa [Std.Iter.fold_filterWithPostcondition]
 
-theorem Spec.Iter.fold_filterM {α β δ : Type w}
+theorem Iter.fold_filterM {α β δ : Type w}
     {n : Type w → Type w'}
     {l : Type w} {e : Type w}
     [Iterator α Id β] [Finite α Id]
@@ -2138,5 +2172,93 @@ theorem Spec.foldlM_array [LawfulMonad m]
       (fun b => inv (⟨xs.toList, [], by simp⟩, b))
       eInv := by
   cases xs; simp; apply Spec.foldlM_list inv eInv step
+
+/--
+The type of loop invariants used by the specifications of `for ... in ...` loops over strings.
+A loop invariant is a function mapping the current position and state to a lattice element.
+-/
+abbrev StringInvariant (s : String) (β : Type u)
+    (l : Type u) :=
+  (s.Pos × β → l)
+
+theorem Spec.forIn_string
+    {s : String} {init : β} {f : Char → β → m (ForInStep β)}
+    (inv : StringInvariant s β l)
+    (eInv : e)
+    (step : ∀ pos b (h : pos ≠ s.endPos),
+      Triple
+        (inv (pos, b))
+        (f (pos.get h) b)
+        (fun r => match r with
+          | .yield b' => inv (pos.next h, b')
+          | .done b' => inv (s.endPos, b'))
+        eInv) :
+    Triple (inv (s.startPos, init)) (forIn s init f) (fun b => inv (s.endPos, b)) eInv := by
+  suffices h : ∀ (p : s.Pos) (t₁ t₂ : String) (h : p.Splits t₁ t₂),
+      Triple (inv (p, init)) (forIn t₂.toList init f) (fun b => inv (s.endPos, b)) eInv by
+    simpa using h s.startPos _ _ s.splits_startPos
+  intro p
+  induction p using String.Pos.next_induction generalizing init with
+  | next p hp ih =>
+    intro t₁ t₂ hsp
+    obtain ⟨t₂, rfl⟩ := hsp.exists_eq_singleton_append hp
+    simp only [String.toList_append, String.toList_singleton, List.cons_append, List.nil_append,
+      List.forIn_cons]
+    apply Triple.bind
+    case hx => exact step _ _ hp
+    case hf =>
+      intro r
+      cases r with
+      | yield b => exact ih _ _ hsp.next
+      | done b => exact Triple.pure _ (by dsimp; exact Lean.Order.PartialOrder.rel_refl)
+  | endPos =>
+    intro t₁ t₂ hsp
+    obtain ⟨-, rfl⟩ := String.splits_endPos_iff.mp hsp
+    simp only [String.toList_empty, List.forIn_nil]
+    exact Triple.pure init Lean.Order.PartialOrder.rel_refl
+
+/--
+The type of loop invariants used by the specifications of `for ... in ...` loops over string slices.
+A loop invariant is a function mapping the current position and state to a lattice element.
+-/
+abbrev StringSliceInvariant (s : String.Slice) (β : Type u)
+    (l : Type u) :=
+  (s.Pos × β → l)
+
+theorem Spec.forIn_stringSlice
+    {s : String.Slice} {init : β} {f : Char → β → m (ForInStep β)}
+    (inv : StringSliceInvariant s β l)
+    (eInv : e)
+    (step : ∀ pos b (h : pos ≠ s.endPos),
+      Triple
+        (inv (pos, b))
+        (f (pos.get h) b)
+        (fun r => match r with
+          | .yield b' => inv (pos.next h, b')
+          | .done b' => inv (s.endPos, b'))
+        eInv) :
+    Triple (inv (s.startPos, init)) (forIn s init f) (fun b => inv (s.endPos, b)) eInv := by
+  suffices h : ∀ (p : s.Pos) (t₁ t₂ : String) (h : p.Splits t₁ t₂),
+      Triple (inv (p, init)) (forIn t₂.toList init f) (fun b => inv (s.endPos, b)) eInv by
+    simpa using h s.startPos _ _ s.splits_startPos
+  intro p
+  induction p using String.Slice.Pos.next_induction generalizing init with
+  | next p hp ih =>
+    intro t₁ t₂ hsp
+    obtain ⟨t₂, rfl⟩ := hsp.exists_eq_singleton_append hp
+    simp only [String.toList_append, String.toList_singleton, List.cons_append, List.nil_append,
+      List.forIn_cons]
+    apply Triple.bind
+    case hx => exact step _ _ hp
+    case hf =>
+      intro r
+      cases r with
+      | yield b => exact ih _ _ hsp.next
+      | done b => exact Triple.pure _ (by dsimp; exact Lean.Order.PartialOrder.rel_refl)
+  | endPos =>
+    intro t₁ t₂ hsp
+    obtain ⟨-, rfl⟩ := String.Slice.splits_endPos_iff.mp hsp
+    simp only [String.toList_empty, List.forIn_nil]
+    exact Triple.pure init Lean.Order.PartialOrder.rel_refl
 
 end Std.Do'
