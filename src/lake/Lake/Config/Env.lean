@@ -297,7 +297,7 @@ public def baseVars (env : Env) : Array (String × Option String)  :=
     ("LAKE_CACHE_SERVICE", env.cacheService?.map (·.toString)),
     ("LEAN", env.lean.lean.toString),
     ("LEAN_SYSROOT", env.lean.sysroot.toString),
-    ("LEAN_AR", env.lean.ar?.map (·.toString)),
+    ("LEAN_AR", env.lean.ar.toString),
     ("LEAN_CC", env.lean.leanCc?)
   ]
 

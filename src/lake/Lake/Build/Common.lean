@@ -854,7 +854,7 @@ public def buildStaticLib
 : SpawnM (Job FilePath) :=
   (Job.collectArray oFileJobs "objs").mapM fun oFiles => do
     let art ← buildArtifactUnlessUpToDate libFile (ext := "a") (restore := true) do
-      compileStaticLib libFile oFiles (← getLeanAr?) thin
+      compileStaticLib libFile oFiles (← getLeanAr) thin
     return art.path
 
 private def mkLinkObjArgs

@@ -104,25 +104,15 @@ public def mkArgs (basePath : FilePath) (args : Array String) : LogIO (Array Str
 
 public def compileStaticLib
   (libFile : FilePath) (oFiles : Array FilePath)
-  (ar? : Option FilePath := none) (thin := false)
+  (ar : FilePath := "ar") (thin := false)
 : LogIO Unit := do
   createParentDirs libFile
   -- `ar rcs` does not remove old files from the archive, so it must be deleted first
   removeFileIfExists libFile
-  if Platform.isOSX && ar?.isNone then
-    -- macOS BSD `ar` does not support `@file` response files.
-    -- Use `libtool -static -filelist` instead, which handles long argument lists natively.
-    let filelistPath := libFile.addExtension "filelist"
-    let h ← IO.FS.Handle.mk filelistPath .write
-    oFiles.forM fun f => h.putStr s!"{f}\n"
-    proc {cmd := "libtool", args := #["-static", "-o", libFile.toString,
-      "-filelist", filelistPath.toString]}
-  else
-    let ar := ar?.getD "ar"
-    let args := #["rcs"]
-    let args := if thin then args.push "--thin" else args
-    let args := args.push libFile.toString ++ (← mkArgs libFile <| oFiles.map toString)
-    proc {cmd := ar.toString, args}
+  let args := #["rcs"]
+  let args := if thin then args.push "--thin" else args
+  let args := args.push libFile.toString ++ (← mkArgs libFile <| oFiles.map toString)
+  proc {cmd := ar.toString, args}
 
 private def getMacOSXDeploymentEnv : BaseIO (Array (String × Option String)) := do
   -- It is difficult to identify the correct minor version here, leading to linking warnings like:
