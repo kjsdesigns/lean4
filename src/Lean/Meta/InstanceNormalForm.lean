@@ -77,7 +77,7 @@ partial def normalizeInstance (inst expectedType : Expr) : MetaM Expr := withRed
         -- For proofs, assign directly. Proof abstraction is handled by `abstractNestedProofs`.
         mvarId.assign arg
       -- Recurse into instance arguments of the constructor
-      else if bi.isInstImplicit then
+      else if (← isClass? argExpectedType).isSome then
         mvarId.assign (← normalizeInstance arg argExpectedType)
       else
         -- For data fields, assign directly.
