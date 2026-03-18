@@ -41,11 +41,11 @@ deriving Repr, DecidableEq, Inhabited, Add, Sub, Neg, LE, LT, ToString
 
 instance {x y : Offset} : Decidable (x ≤ y) :=
   let x : Int := x
-  inferInstanceAs (Decidable (x ≤ y))
+  (inferInstance : Decidable (x ≤ y))
 
 instance {x y : Offset} : Decidable (x < y) :=
   let x : Int := x
-  inferInstanceAs (Decidable (x < y))
+  (inferInstance : Decidable (x < y))
 
 instance : OfNat Offset n := ⟨Int.ofNat n⟩
 
