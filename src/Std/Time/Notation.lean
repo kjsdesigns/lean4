@@ -212,9 +212,12 @@ macro_rules
       match ZonedDateTime.fromLeanDateTimeWithZoneString date.getString with
       | .ok res => do return ← convertZonedDateTime res
       | .error _ =>
-        match ZonedDateTime.fromLeanDateTimeWithIdentifierString date.getString with
-        | .ok res => do return ← convertZonedDateTime res (identifier := true)
-        | .error res => Macro.throwErrorAt date s!"error: {res}"
+        match ZonedDateTime.fromLeanDateTimeWithZoneAndNameString date.getString with
+        | .ok res => do return ← convertZonedDateTime res
+        | .error _ =>
+          match ZonedDateTime.fromLeanDateTimeWithIdentifierString date.getString with
+          | .ok res => do return ← convertZonedDateTime res (identifier := true)
+          | .error res => Macro.throwErrorAt date s!"error: {res}"
 
   | `(zoned( $date:str, $timezone )) => do
       match PlainDateTime.fromLeanDateTimeString date.getString with

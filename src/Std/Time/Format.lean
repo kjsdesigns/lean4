@@ -117,6 +117,20 @@ notation of dates.
 def leanDateTimeWithIdentifierAndNanos : GenericFormat .any := datespec("uuuu-MM-dd'T'HH:mm:ss.SSSSSSSSS'['zzzz']'")
 
 /--
+The leanDateTimeWithZoneAndName format, which follows the pattern
+`uuuu-MM-dd'T'HH:mm:ss.SSSSSSSSSZZZZZ'['zzzz']'` for representing date, time, timezone offset,
+and timezone identifier. This is the canonical Lean format used in `repr` for named timezones.
+-/
+def leanDateTimeWithZoneAndName : GenericFormat .any := datespec("uuuu-MM-dd'T'HH:mm:ss.SSSSSSSSSZZZZZ'['zzzz']'")
+
+/--
+The leanDateTimeWithZoneAndNameNoNanos format, which follows the pattern
+`uuuu-MM-dd'T'HH:mm:ssZZZZZ'['zzzz']'` for representing date, time, timezone offset, and timezone
+identifier without nanoseconds.
+-/
+def leanDateTimeWithZoneAndNameNoNanos : GenericFormat .any := datespec("uuuu-MM-dd'T'HH:mm:ssZZZZZ'['zzzz']'")
+
+/--
 The Lean Date format, which follows the pattern `uuuu-MM-dd`. It uses the default value that can be parsed with the
 notation of dates.
 -/
@@ -386,13 +400,17 @@ def toRFC850String (date : ZonedDateTime) : String :=
   Formats.rfc850.format date.toDateTime
 
 /--
-Parses a `String` in the dateTimeWithZone format and returns a `ZonedDateTime`.
+Parses a `String` in the `dateTimeWithZone` format (`uuuu-MM-dd'T'HH:mm:ss.SSSSSSSSSZZZ`)
+and returns a `ZonedDateTime`. The offset uses the `ZZZ` specifier: `±HHMMss` without colon
+and without `Z` for UTC (e.g., `+0100`, `+0000`). Fractional nanoseconds (9 digits) are required.
+Use `fromLeanDateTimeWithZoneString` for a more flexible parser that also accepts `±HH:mm` and `Z`.
 -/
 def fromDateTimeWithZoneString (input : String) : Except String ZonedDateTime :=
   Formats.dateTimeWithZone.parse input
 
 /--
-Formats a `ZonedDateTime` value into a simple date time with timezone string.
+Formats a `ZonedDateTime` value into the `dateTimeWithZone` format (`uuuu-MM-dd'T'HH:mm:ss.SSSSSSSSSZZZ`).
+The offset is formatted with the `ZZZ` specifier: `±HHMMss` without colon (e.g., `+0100`).
 -/
 def toDateTimeWithZoneString (pdt : ZonedDateTime) : String :=
   Formats.dateTimeWithZone.format pdt.toDateTime
@@ -421,10 +439,30 @@ def fromLeanDateTimeWithIdentifierStringIO (input : String) : IO ZonedDateTime :
   return ZonedDateTime.ofPlainDateTime parsed.toPlainDateTime rules
 
 /--
+Parses a `String` in the lean date time format with both a timezone offset and a timezone identifier
+and returns a `ZonedDateTime`. The offset is used directly as the UTC offset; the identifier is
+stored as the timezone name but is not resolved via the timezone database. Accepts formats with
+and without fractional nanoseconds (e.g., `2022-07-08T00:14:07.000000000+01:00[Europe/Paris]`
+or `2022-07-08T00:14:07+01:00[Europe/Paris]`).
+-/
+def fromLeanDateTimeWithZoneAndNameString (input : String) : Except String ZonedDateTime :=
+  Formats.leanDateTimeWithZoneAndName.parse input
+  <|> Formats.leanDateTimeWithZoneAndNameNoNanos.parse input
+
+/--
 Formats a `DateTime` value into a simple date time with timezone string that can be parsed by the date% notation.
 -/
 def toLeanDateTimeWithZoneString (zdt : ZonedDateTime) : String :=
   Formats.leanDateTimeWithZone.formatBuilder zdt.year zdt.month zdt.day zdt.hour zdt.minute zdt.date.get.time.second zdt.nanosecond zdt.offset
+
+/--
+Formats a `ZonedDateTime` value into the lean date time format with both timezone offset and
+identifier (`uuuu-MM-dd'T'HH:mm:ss.SSSSSSSSSZZZZZ'['zzzz']'`). This is the format used by `repr`
+for named timezones — it round-trips through the `zoned` macro.
+-/
+def toLeanDateTimeWithZoneAndNameString (zdt : ZonedDateTime) : String :=
+  Formats.leanDateTimeWithZoneAndName.formatBuilder zdt.year zdt.month zdt.day zdt.hour zdt.minute zdt.date.get.time.second zdt.nanosecond zdt.offset zdt.timezone.name
+
 /--
 Formats a `DateTime` value into a simple date time with timezone string that can be parsed by the date% notation with the timezone identifier.
 -/
@@ -440,6 +478,7 @@ def parse (input : String) : Except String ZonedDateTime :=
   <|> fromRFC822String input
   <|> fromRFC850String input
   <|> fromLeanDateTimeWithZoneString input
+  <|> fromLeanDateTimeWithZoneAndNameString input
   <|> fromDateTimeWithZoneString input
 
 /--
@@ -460,7 +499,14 @@ instance : ToString ZonedDateTime where
   toString := toLeanDateTimeWithIdentifierString
 
 instance : Repr ZonedDateTime where
-  reprPrec data := Repr.addAppParen ("zoned(\"" ++ toLeanDateTimeWithZoneString data ++ "\")")
+  reprPrec data :=
+    let name := data.timezone.name
+    let str :=
+      if name == data.timezone.offset.toIsoString true then
+        toLeanDateTimeWithZoneString data
+      else
+        toLeanDateTimeWithZoneAndNameString data
+    Repr.addAppParen ("zoned(\"" ++ str ++ "\")")
 
 end ZonedDateTime
 

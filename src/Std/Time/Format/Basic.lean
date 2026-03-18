@@ -439,7 +439,10 @@ inductive Modifier
   | x (presentation : OffsetX)
 
   /--
-  `Z`: Zone offset. `Z`, `ZZ`, `ZZZ` output `±HHMM[ss]`; `ZZZZ` outputs localized GMT form; `ZZZZZ` outputs `±HH:mm[:ss]` and uses `Z` for UTC.
+  `Z`: Zone offset.
+  - `Z`, `ZZ`, `ZZZ`: output `±HHMMss` (no colon); parse `±HHMM[ss]`. Does **not** accept the literal `Z` character for UTC — use `ZZZZZ` or `XXX` for that.
+  - `ZZZZ`: outputs/parses localized GMT form (e.g., `GMT+08:00`).
+  - `ZZZZZ`: outputs `±HH:mm[:ss]` and uses `Z` for UTC (e.g., `Z`, `+01:30`).
   -/
   | Z (presentation : OffsetZ)
   deriving Repr, Inhabited
