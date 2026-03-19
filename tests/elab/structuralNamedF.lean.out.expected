@@ -1,0 +1,3 @@
+addAdjacent._f : (x : List Nat) → List.below x → List Nat
+even._f : (t : Nat) → Nat.below t → Bool ×' Bool
+@myMap._f : {α : Type u_1} → {β : Type u_2} → (α → β) → (x : List α) → List.below x → List β
