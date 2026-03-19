@@ -51,17 +51,24 @@ def fib (n : Nat) :=
 termination_by structural n
 
 /--
-info: 573147844013817084101
----
 trace: [diag] Diagnostics
-  [reduction] unfolded declarations (max: 400, num: 1):
-    [reduction] Nat.rec ↦ 400
-  [reduction] unfolded reducible declarations (max: 201, num: 2):
-    [reduction] Nat.casesOn ↦ 201
-    [reduction] fib._f ↦ 199
+  [reduction] unfolded declarations (max: 79, num: 4):
+    [reduction] Nat.rec ↦ 79
+    [reduction] Add.add ↦ 41
+    [reduction] HAdd.hAdd ↦ 41
+    [reduction] fib ↦ 40
+  [reduction] unfolded reducible declarations (max: 79, num: 1):
+    [reduction] Nat.casesOn ↦ 79
+  [kernel] unfolded declarations (max: 80, num: 6):
+    [kernel] Nat.rec ↦ 80
+    [kernel] Nat.casesOn ↦ 77
+    [kernel] fib._f ↦ 39
+    [kernel] fib.match_1 ↦ 39
+    [kernel] Add.add ↦ 36
+    [kernel] HAdd.hAdd ↦ 36
   use `set_option diagnostics.threshold <num>` to control threshold for reporting counters
 -/
 #guard_msgs in
 set_option diagnostics true in
-set_option diagnostics.threshold 100 in
-#reduce fib 100
+set_option diagnostics.threshold 10 in
+theorem fib_20 : fib 20 = 10946 := rfl
