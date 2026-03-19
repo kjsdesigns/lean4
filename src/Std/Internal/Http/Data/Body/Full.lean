@@ -129,8 +129,6 @@ instance : Http.Body Full where
   isClosed := Full.isClosed
   recvSelector := Full.recvSelector
 
--- Coercions to `Any` allow response builders to return concrete body types while the
--- handler signature expects `Response Body.Any`.
 instance : Coe Full Any := ⟨Any.ofBody⟩
 
 instance : Coe (Response Full) (Response Any) where
