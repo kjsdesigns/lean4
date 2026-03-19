@@ -169,3 +169,26 @@ trace: [sym.simp.debug.cache] persistent cache hit: 2
 #guard_msgs in
 example (n : Nat) (h : 0 < n) : (if n + 2 = 2 + n then 1 else 0) = 1 := by
   sym_simp_twice [Nat.add_comm_of_pos]
+
+-- Test 7: Dependent forall — body cd under binder with `withFreshTransientCache`.
+-- Simplifying `∀ (m : Nat), n + 2 = 2 + n` enters a binder (for `m`).
+-- The transient cache is cleared on binder entry (`withFreshTransientCache`).
+-- The body uses a cd rewrite, so the overall result is cd=true.
+-- After "second traversal": `Nat` (the binder type) hits persistent cache.
+set_option trace.sym.simp.debug.cache true in
+/--
+trace: [sym.simp.debug.cache] persistent cache hit: 2
+[sym.simp.debug.cache] persistent cache hit: n
+[sym.simp.debug.cache] transient cache hit: 2 + n
+[sym.simp.debug.cache] second traversal
+[sym.simp.debug.cache] persistent cache hit: Nat
+[sym.simp.debug.cache] persistent cache hit: n
+[sym.simp.debug.cache] persistent cache hit: 2
+[sym.simp.debug.cache] persistent cache hit: 2
+[sym.simp.debug.cache] persistent cache hit: n
+[sym.simp.debug.cache] transient cache hit: 2 + n
+-/
+#guard_msgs in
+set_option linter.unusedVariables false in
+example (n : Nat) (h : 0 < n) : ∀ (_ : Nat), n + 2 = 2 + n := by
+  sym_simp_twice [Nat.add_comm_of_pos]
