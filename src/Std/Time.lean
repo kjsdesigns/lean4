@@ -137,10 +137,10 @@ If the repetition count is one, the format allows values ranging from 1 up to th
 the respective data type.
 
 The supported formats include:
-- `G`: Represents the era, such as AD (Anno Domini) or BC (Before Christ).
-  - `G`, `GG`, `GGG` (short): Displays the era in a short format (e.g., "AD").
-  - `GGGG` (full): Displays the era in a full format (e.g., "Anno Domini").
-  - `GGGGG` (narrow): Displays the era in a narrow format (e.g., "A").
+- `G`: Represents the era, such as BCE (Before Common Era) or CE (Common Era).
+  - `G`, `GG`, `GGG` (short): Displays the era in a short format (e.g., "CE").
+  - `GGGG` (full): Displays the era in a full format (e.g., "Common Era").
+  - `GGGGG` (narrow): Displays the era in a narrow format (e.g., "C").
 - `y`: Represents the year of the era.
   - `y`: Represents the year in its full form, without a fixed length. It can handle years of any size, (e.g., "1", "2025", or "12345678").
   - `yy`: Displays the year in a two-digit format, showing the last two digits (e.g., "04" for 2004).
@@ -149,6 +149,7 @@ The supported formats include:
 - `Y`: Represents the week-based year (ISO-like behavior around year boundaries).
   - `Y`, `YYY`, `YYYY`: Displays the week-based year (e.g., "2017").
   - `YY`: Displays the last two digits of the week-based year (e.g., "17").
+  - `YYYYY+`: Extended format for week-based years with more than four digits.
 - `u`: Represents the year.
   - `u`: Represents the year in its full form, without a fixed length. It can handle years of any size, (e.g., "1", "2025", or "12345678").
   - `uu`: Two-digit year format, showing the last two digits (e.g., "04" for 2004).
@@ -199,23 +200,23 @@ The supported formats include:
 - `S`: Represents a fraction of a second, typically displayed as a decimal number (e.g., "978" for milliseconds).
   - One or more repetitions of the character indicates the truncation of the value to the specified number of characters.
 - `A`: Represents the millisecond of the day (e.g., "1234").
-  - One or more repetitions of the character indicates the truncation of the value to the specified number of characters.
+  - One or more repetitions of the character indicates zero-padding to the specified number of characters (no truncation is applied).
 - `n`: Represents the nanosecond of the second (e.g., "987654321").
   - One or more repetitions of the character indicates the truncation of the value to the specified number of characters.
 - `N`: Represents the nanosecond of the day (e.g., "1234000000").
   - One or more repetitions of the character indicates the truncation of the value to the specified number of characters.
 - `V`: Time zone ID variants.
-  - `V`: Displays `"unk"` (unknown short zone-id form).
+  - `V`: Unsupported.
   - `VV`, `VVV`, `VVVV`: Displays the zone identifier/name (UTC-normalized where applicable).
 - `z`: Represents the time zone name.
-  - `z`, `zz`, `zzz`: Shows a short zone name (e.g., "PST", or `"UTC"` at zero offset).
-  - `zzzz`: Displays the full zone name (e.g., "Pacific Standard Time", or `"Coordinated Universal Time"` at zero offset).
+  - `z`, `zz`, `zzz`: Shows a short zone name; for offset-only zones this is the numeric offset (e.g., "+09:00"), for UTC this is "UTC", otherwise the abbreviation (e.g., "PST").
+  - `zzzz`: Displays the full zone name; for offset-only zones this is the numeric offset (e.g., "+09:00"), for UTC this is "Coordinated Universal Time", otherwise the full zone name (e.g., "Pacific Standard Time").
 - `v`: Generic time zone name.
-  - `v`: Displays a short generic name (e.g., "UTC").
-  - `vvvv`: Displays a full generic name (e.g., "Coordinated Universal Time").
+  - `v`: Displays a short generic name; for offset-only zones this is the numeric offset (e.g., "+09:00"), for UTC this is "UTC", otherwise the abbreviation.
+  - `vvvv`: Displays a full generic name; for offset-only zones this is the numeric offset (e.g., "+09:00"), for UTC this is "Coordinated Universal Time", otherwise the full zone name.
 - `O`: Represents the localized zone offset in the format "GMT" followed by the time difference from UTC.
-  - `O`: Displays the GMT offset in a short format (e.g., "GMT+8", "GMT+0").
-  - `OOOO`: Displays the full GMT offset with padded hour and minutes (e.g., "GMT+08:00", "GMT+00:00"), and includes seconds when needed.
+  - `O`: Displays the GMT offset in a short format (e.g., "GMT+8"), or "GMT" for UTC.
+  - `OOOO`: Displays the full GMT offset with padded hour and minutes (e.g., "GMT+08:00"), or "GMT" for UTC.
 - `X`: Represents the zone offset. It uses 'Z' for UTC and can represent any offset (positive or negative).
   - `X`: Displays hour and optional minute offset (e.g., "-08", "-0830", or "Z").
   - `XX`: Displays the hour and minute offset without a colon (e.g., "-0830").
@@ -232,7 +233,6 @@ The supported formats include:
   - `Z`, `ZZ`, `ZZZ`: Displays hour and minute offset without colon, with optional seconds (e.g., "+0800", "+083045").
   - `ZZZZ`: Displays localized GMT form (e.g., "GMT+08:00").
   - `ZZZZZ`: Displays hour and minute offset with a colon and optional seconds, and uses `"Z"` for UTC (e.g., "Z", "+08:30", "+08:30:45").
-
 # Runtime Parsing
 
 - `ZonedDateTime.parse` parses common zoned date-time formats with explicit offsets, but does not resolve timezone identifiers like `[Europe/Paris]`.
