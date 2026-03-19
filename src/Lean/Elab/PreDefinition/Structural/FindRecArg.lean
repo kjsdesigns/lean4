@@ -289,8 +289,9 @@ def findRecArgCandidates (fnNames : Array Name) (fixedParamPerms : FixedParamPer
 
 /--
 Try each candidate combination from `findRecArgCandidates`.
-Uses `saveState`/`restoreState` to properly backtrack environment changes
-(such as temporary `_f` axioms) on failure.
+Uses `Meta.saveState`/`restore` to properly backtrack meta state and environment on failure.
+The callback `k` is responsible for managing its own environment changes (e.g. wrapping
+axiom additions in `withoutModifyingEnv`).
 -/
 def tryCandidates (fnNames : Array Name) (xs : Array Expr) (values : Array Expr)
     (candidates : RecArgCandidates) (k : Array RecArgInfo → M α) : M α := do
@@ -316,14 +317,5 @@ def tryCandidates (fnNames : Array Name) (xs : Array Expr) (values : Array Expr)
     report := m!"failed to infer structural recursion:\n" ++ report
   trace[Elab.definition.structural] "tryCandidates:\n{report}"
   throwError report
-
-/--
-Find and try all possible recursive argument combinations for structural recursion.
-Combines `findRecArgCandidates` and `tryCandidates`.
--/
-def tryAllArgs (fnNames : Array Name) (fixedParamPerms : FixedParamPerms) (xs : Array Expr)
-   (values : Array Expr) (termMeasure?s : Array (Option TerminationMeasure)) (k : Array RecArgInfo → M α) : M α := do
-  let candidates ← findRecArgCandidates fnNames fixedParamPerms xs values termMeasure?s
-  tryCandidates fnNames xs values candidates k
 
 end Lean.Elab.Structural

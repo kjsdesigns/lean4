@@ -125,20 +125,23 @@ private def inferRecArgPos (preDefs : Array PreDefinition) (termMeasure?s : Arra
     preDefs.forM (addAsAxiom ·)
     preDefs.mapM fun preDef =>
       return { preDef with value := (← preprocess preDef.value fnNames numSectionVars) }
-  -- Function axioms are needed by `getFixedParamPerms` (for `isDefEq` on arguments of recursive
-  -- calls), by `findRecArgCandidates` (inside `tryAllArgs`), and by `elimMutualRecursion` (for
-  -- `replaceRecApps`). Use `withoutModifyingEnv` to prevent these from leaking to the caller.
-  -- Within this scope, `tryCandidates` uses `saveState`/`restoreState` to properly backtrack
-  -- environment changes (such as temporary `_f` axioms) across retries.
-  withoutModifyingEnv do
-  preDefs.forM (addAsAxiom ·)
-  -- The syntactically fixed arguments
-  let fixedParamPerms ← getFixedParamPerms preDefs
+  -- `getFixedParamPerms` needs function axioms (for `isDefEq` on arguments of recursive calls).
+  let fixedParamPerms ← withoutModifyingEnv do
+    preDefs.forM (addAsAxiom ·)
+    getFixedParamPerms preDefs
 
   fixedParamPerms.perms[0]!.forallTelescope preDefs[0]!.type fun xs => do
     let values ← preDefs.mapIdxM (fixedParamPerms.perms[·]!.instantiateLambda ·.value xs)
 
-    tryAllArgs fnNames fixedParamPerms xs values termMeasure?s fun recArgInfos => do
+    -- `findRecArgCandidates` needs function axioms (for `isDefEq`, `inferType`).
+    let candidates ← withoutModifyingEnv do
+      preDefs.forM (addAsAxiom ·)
+      findRecArgCandidates fnNames fixedParamPerms xs values termMeasure?s
+
+    -- `tryCandidates` uses `saveState`/`restoreState` to properly backtrack on failure.
+    tryCandidates fnNames xs values candidates fun recArgInfos => withoutModifyingEnv do
+      -- Function axioms are needed by `elimMutualRecursion` (for `replaceRecApps`).
+      preDefs.forM (addAsAxiom ·)
       let recArgPoss := recArgInfos.map (·.recArgPos)
       trace[Elab.definition.structural] "Trying argument set {recArgPoss}"
       let (fixedParamPerms', xs', toErase) := fixedParamPerms.erase xs (recArgInfos.map (·.indicesAndRecArgPos))
@@ -164,9 +167,6 @@ private def inferRecArgPos (preDefs : Array PreDefinition) (termMeasure?s : Arra
                     which cannot be fixed as it is an index or depends on an index, and indices \
                     cannot be fixed parameters when using structural recursion."
       withErasedFVars toErase do
-        -- `tryCandidates` uses `saveState`/`restoreState`, so environment changes from
-        -- `elimMutualRecursion` (including temporary `_f` axioms) are properly backtracked
-        -- on failure.
         let result ← elimMutualRecursion preDefs fixedParamPerms' xs' recArgInfos
         return (recArgPoss, result, fixedParamPerms')
 
