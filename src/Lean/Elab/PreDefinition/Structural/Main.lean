@@ -21,9 +21,22 @@ namespace Lean.Elab
 namespace Structural
 open Meta
 
+/--
+The result of `elimMutualRecursion`: the individual functional values (one per function,
+to be used for `_f` helper definitions) and the non-recursive PreDefinitions.
+-/
+private structure ElimRecResult where
+  /-- Individual functional values, closed over fixed parameters (one per function). -/
+  fValues : Array Expr
+  /-- Whether the function is an inductive predicate (skip `_f` naming). -/
+  isIndPred : Bool
+  /-- The non-recursive PreDefinitions. -/
+  preDefsNonRec : Array PreDefinition
+
 private def elimMutualRecursion (preDefs : Array PreDefinition) (fixedParamPerms : FixedParamPerms)
-    (xs : Array Expr) (recArgInfos : Array RecArgInfo) : M (Array PreDefinition × Array PreDefinition) := do
+    (xs : Array Expr) (recArgInfos : Array RecArgInfo) : M ElimRecResult := do
   let values ← preDefs.mapIdxM (fixedParamPerms.perms[·]!.instantiateLambda ·.value xs)
+  let fnTypes ← preDefs.mapIdxM (fixedParamPerms.perms[·]!.instantiateForall ·.type xs)
   let indInfo ← getConstInfoInduct recArgInfos[0]!.indGroupInst.all[0]!
 
   -- Groups the (indices of the) definitions by their position in indInfo.all
@@ -32,15 +45,16 @@ private def elimMutualRecursion (preDefs : Array PreDefinition) (fixedParamPerms
 
   let isIndPred ← isInductivePredicate indInfo.name
 
-  let withFunTypesAndMotives (k : Array Expr → Array Expr → M (Array PreDefinition × Array PreDefinition)) :
-      M (Array PreDefinition × Array PreDefinition) := do
+  let withFunTypesAndMotives (k : Array Expr → Array Expr → M ElimRecResult) :
+      M ElimRecResult := do
     if isIndPred then
       withFunTypes values fun funTypes => do
         let motives ← recArgInfos.mapIdxM fun idx r =>
           mkIndPredBRecOnMotive r values[idx]! funTypes[idx]!
         k funTypes motives
     else
-      let motives ← recArgInfos.zipWithM (bs := values) fun r v => mkBRecOnMotive r v
+      let motives ← recArgInfos.mapIdxM fun idx r =>
+        mkBRecOnMotive r values[idx]! fnTypes[idx]!
       k #[] motives
   withFunTypesAndMotives fun funTypes motives => do
   trace[Elab.definition.structural] "funTypes: {funTypes}, motives: {motives}"
@@ -65,35 +79,29 @@ private def elimMutualRecursion (preDefs : Array PreDefinition) (fixedParamPerms
   let packedFArgs ← positions.mapMwith (PProdN.mkLambdas · ·) packedFTypes FArgs
   trace[Elab.definition.structural] "packedFArgs: {packedFArgs}"
 
-  -- Create `_f` helper definitions for each function's individual functional argument, so that it
-  -- shows up with a helpful name in kernel diagnostics rather than as an anonymous lambda.
-  -- Skip for inductive predicates, where `funTypes` fvars would escape their scope.
+  -- Compute `_f` values (closed over fixed parameters) for each function
+  let fValues ← FArgs.mapM (mkLambdaFVars xs ·)
+
+  -- For single-function position groups, reference the `_f` constant in the
+  -- packed functional so it shows up in kernel diagnostics.
+  -- Add temporary `_f` axioms to the environment so the brecOn application type-checks.
   let us := preDefs[0]!.levelParams.map mkLevelParam
-  let (fPreDefs, packedFArgs) ←
+  let packedFArgs ←
     if isIndPred then
-      pure (#[], packedFArgs)
-    else try
-      let fPreDefs ← FArgs.mapIdxM fun idx fArg => do
+      pure packedFArgs
+    else
+      for idx in [:preDefs.size] do
         let fName := preDefs[idx]!.declName ++ `_f
-        let fValue ← mkLambdaFVars xs fArg
-        let fType ← inferType fValue
-        let fPreDef : PreDefinition := { preDefs[idx]! with
-          declName := fName, type := fType, value := fValue,
-          kind := .abbrev, modifiers := {}, termination := default }
-        addAsAxiom fPreDef
-        return fPreDef
-      -- For single-function position groups, reference the `_f` constant in the packed functional
-      -- so it shows up in kernel diagnostics. For multi-function groups, keep the inline packing
-      -- (the individual `_f` defs still exist but aren't referenced from brecOn).
-      let packedFArgs ← packedFArgs.mapIdxM fun i packedFArg => do
+        let fType ← inferType fValues[idx]!
+        addDecl (.axiomDecl {
+          name := fName, levelParams := preDefs[idx]!.levelParams,
+          type := fType, isUnsafe := preDefs[idx]!.modifiers.isUnsafe })
+      packedFArgs.mapIdxM fun i packedFArg => do
         let poss := positions[i]!
         if poss.size == 1 then
-          return mkAppN (mkConst fPreDefs[poss[0]!]!.declName us) xs
+          return mkAppN (mkConst (preDefs[poss[0]!]!.declName ++ `_f) us) xs
         else
           return packedFArg
-      pure (fPreDefs, packedFArgs)
-    catch _ =>
-      pure (#[], packedFArgs)
 
   -- Assemble the individual `.brecOn` applications
   let valuesNew ← (Array.zip recArgInfos values).mapIdxM fun i (r, v) => do
@@ -104,53 +112,56 @@ private def elimMutualRecursion (preDefs : Array PreDefinition) (fixedParamPerms
       -- NB: Do not eta-contract here, other code (e.g. FunInd) expects this to have the
       -- same number of head lambdas as the original definition
       mkLambdaFVars (fixedParamPerms.perms[i]!.buildArgs xs ys) (valueNew.beta ys)
-  return (fPreDefs, preDefs.zipWith (bs := valuesNew) fun preDef valueNew => { preDef with value := valueNew })
+  let preDefsNonRec := preDefs.zipWith (bs := valuesNew) fun preDef valueNew =>
+    { preDef with value := valueNew }
+  return { fValues, isIndPred, preDefsNonRec }
 
 private def inferRecArgPos (preDefs : Array PreDefinition) (termMeasure?s : Array (Option TerminationMeasure)) :
-    M (Array Nat × Array PreDefinition × Array PreDefinition × FixedParamPerms) := do
+    M (Array Nat × ElimRecResult × FixedParamPerms) := do
+  let fnNames := preDefs.map (·.declName)
+  let numSectionVars := preDefs[0]!.numSectionVars
   withoutModifyingEnv do
-    preDefs.forM (addAsAxiom ·)
-    let fnNames := preDefs.map (·.declName)
-    let numSectionVars := preDefs[0]!.numSectionVars
-    let preDefs ← preDefs.mapM fun preDef =>
-      return { preDef with value := (← preprocess preDef.value fnNames numSectionVars) }
-    -- The syntactically fixed arguments
-    let fixedParamPerms ← getFixedParamPerms preDefs
+  preDefs.forM (addAsAxiom ·)
+  let preDefs ← preDefs.mapM fun preDef =>
+    return { preDef with value := (← preprocess preDef.value fnNames numSectionVars) }
+  -- The syntactically fixed arguments
+  let fixedParamPerms ← getFixedParamPerms preDefs
 
-    fixedParamPerms.perms[0]!.forallTelescope preDefs[0]!.type fun xs => do
-      let values ← preDefs.mapIdxM (fixedParamPerms.perms[·]!.instantiateLambda ·.value xs)
+  fixedParamPerms.perms[0]!.forallTelescope preDefs[0]!.type fun xs => do
+    let values ← preDefs.mapIdxM (fixedParamPerms.perms[·]!.instantiateLambda ·.value xs)
 
-      tryAllArgs fnNames fixedParamPerms xs values termMeasure?s fun recArgInfos => do
-        let recArgPoss := recArgInfos.map (·.recArgPos)
-        trace[Elab.definition.structural] "Trying argument set {recArgPoss}"
-        let (fixedParamPerms', xs', toErase) := fixedParamPerms.erase xs (recArgInfos.map (·.indicesAndRecArgPos))
-        -- We may have to turn some fixed parameters into varying parameters
-        let recArgInfos := recArgInfos.mapIdx fun i recArgInfo =>
-          {recArgInfo with fixedParamPerm := fixedParamPerms'.perms[i]!}
-        if xs'.size != xs.size then
-          trace[Elab.definition.structural] "Reduced fixed params from {xs} to {xs'}, erasing {toErase.map mkFVar}"
-          trace[Elab.definition.structural] "New recArgInfos {repr recArgInfos}"
-        -- Check that the parameters of the IndGroupInsts are still fine
-          for recArgInfo in recArgInfos do
-            for indParam in recArgInfo.indGroupInst.params do
-              for y in toErase do
-                if (← dependsOn indParam y) then
-                  if indParam.isFVarOf y then
-                    throwError "its type is an inductive datatype and the datatype parameter\
-                      {indentExpr indParam}\n\
-                      which cannot be fixed as it is an index or depends on an index, and indices \
-                      cannot be fixed parameters when using structural recursion."
-                  else
-                    throwError "its type is an inductive datatype and the datatype parameter\
-                      {indentExpr indParam}\ndepends on the function parameter{indentExpr (mkFVar y)}\n\
-                      which cannot be fixed as it is an index or depends on an index, and indices \
-                      cannot be fixed parameters when using structural recursion."
-        withErasedFVars toErase do
-          -- Use `withoutModifyingEnv` so that the `_f` axioms added by `elimMutualRecursion`
-          -- do not leak into subsequent attempts by `tryAllArgs`.
-          let (fDefs, preDefs') ← withoutModifyingEnv do
-            elimMutualRecursion preDefs fixedParamPerms' xs' recArgInfos
-          return (recArgPoss, fDefs, preDefs', fixedParamPerms')
+    tryAllArgs fnNames fixedParamPerms xs values termMeasure?s fun recArgInfos => do
+      let recArgPoss := recArgInfos.map (·.recArgPos)
+      trace[Elab.definition.structural] "Trying argument set {recArgPoss}"
+      let (fixedParamPerms', xs', toErase) := fixedParamPerms.erase xs (recArgInfos.map (·.indicesAndRecArgPos))
+      -- We may have to turn some fixed parameters into varying parameters
+      let recArgInfos := recArgInfos.mapIdx fun i recArgInfo =>
+        {recArgInfo with fixedParamPerm := fixedParamPerms'.perms[i]!}
+      if xs'.size != xs.size then
+        trace[Elab.definition.structural] "Reduced fixed params from {xs} to {xs'}, erasing {toErase.map mkFVar}"
+        trace[Elab.definition.structural] "New recArgInfos {repr recArgInfos}"
+      -- Check that the parameters of the IndGroupInsts are still fine
+        for recArgInfo in recArgInfos do
+          for indParam in recArgInfo.indGroupInst.params do
+            for y in toErase do
+              if (← dependsOn indParam y) then
+                if indParam.isFVarOf y then
+                  throwError "its type is an inductive datatype and the datatype parameter\
+                    {indentExpr indParam}\n\
+                    which cannot be fixed as it is an index or depends on an index, and indices \
+                    cannot be fixed parameters when using structural recursion."
+                else
+                  throwError "its type is an inductive datatype and the datatype parameter\
+                    {indentExpr indParam}\ndepends on the function parameter{indentExpr (mkFVar y)}\n\
+                    which cannot be fixed as it is an index or depends on an index, and indices \
+                    cannot be fixed parameters when using structural recursion."
+      withErasedFVars toErase do
+        -- Use `withoutModifyingEnv` so that the `_f` definitions added by `elimMutualRecursion`
+        -- do not leak into subsequent attempts by `tryAllArgs`.
+        -- The returned `fValues` and `preDefsNonRec` are self-contained expressions.
+        let result ← withoutModifyingEnv do
+          elimMutualRecursion preDefs fixedParamPerms' xs' recArgInfos
+        return (recArgPoss, result, fixedParamPerms')
 
 def reportTermMeasure (preDef : PreDefinition) (recArgPos : Nat) : MetaM Unit := do
   if let some ref := preDef.termination.terminationBy?? then
@@ -165,16 +176,22 @@ def structuralRecursion
     (termMeasure?s : Array (Option TerminationMeasure)) :
     TermElabM Unit := do
   let names := preDefs.map (·.declName)
-  let ((recArgPoss, fDefs, preDefsNonRec, fixedParamPerms), state) ← run <| inferRecArgPos preDefs termMeasure?s
+  let ((recArgPoss, result, fixedParamPerms), state) ← run <| inferRecArgPos preDefs termMeasure?s
   for recArgPos in recArgPoss, preDef in preDefs do
     reportTermMeasure preDef recArgPos
   state.addMatchers.forM liftM
-  -- Add `_f` helper definitions (the functionals passed to `brecOn`)
-  for fDef in fDefs do
-    let fDef ← eraseRecAppSyntax fDef
-    addNonRec docCtx fDef (applyAttrAfterCompilation := false)
-    setReducibleAttribute fDef.declName
-  preDefsNonRec.forM fun preDefNonRec => do
+  -- Add `_f` helper definitions (the individual functionals)
+  unless result.isIndPred do
+    for preDef in preDefs, fValue in result.fValues do
+      let fName := preDef.declName ++ `_f
+      let fValue ← eraseRecAppSyntaxExpr fValue
+      let fType ← inferType fValue
+      let fPreDef : PreDefinition := { preDef with
+        declName := fName, type := fType, value := fValue,
+        kind := .abbrev, modifiers := {}, termination := default }
+      addNonRec docCtx fPreDef (applyAttrAfterCompilation := false)
+      setReducibleAttribute fName
+  result.preDefsNonRec.forM fun preDefNonRec => do
     let preDefNonRec ← eraseRecAppSyntax preDefNonRec
     prependError m!"structural recursion failed, produced type incorrect term" do
       -- We create the `_unsafe_rec` before we abstract nested proofs.
@@ -199,7 +216,7 @@ def structuralRecursion
     enableRealizationsForConst preDef.declName
     -- must happen after `enableRealizationsForConst`
     generateEagerEqns preDef.declName
-  applyAttributesOf preDefsNonRec AttributeApplicationTime.afterCompilation
+  applyAttributesOf result.preDefsNonRec AttributeApplicationTime.afterCompilation
 
 
 end Structural

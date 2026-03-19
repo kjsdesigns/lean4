@@ -208,10 +208,11 @@ private partial def replaceRecApps (recArgInfos : Array RecArgInfo) (positions :
 /--
 Calculates the `.brecOn` motive corresponding to one structural recursive function.
 The `value` is the function with (only) the fixed parameters moved into the context.
+The `type` is the corresponding function type with (only) the fixed parameters instantiated.
 -/
-def mkBRecOnMotive (recArgInfo : RecArgInfo) (value : Expr) : M Expr := do
-  lambdaTelescope value fun xs value => do
-    let type  := (← inferType value).headBeta
+def mkBRecOnMotive (recArgInfo : RecArgInfo) (value : Expr) (type : Expr) : M Expr := do
+  lambdaTelescope value fun xs _value => do
+    let type ← instantiateForall type xs
     let (indexMajorArgs, otherArgs) := recArgInfo.pickIndicesMajor xs
     let motive ← mkForallFVars otherArgs type
     mkLambdaFVars indexMajorArgs motive
