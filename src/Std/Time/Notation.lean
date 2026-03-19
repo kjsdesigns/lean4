@@ -20,7 +20,7 @@ private meta def convertText : Text → MacroM (TSyntax `term)
   | .short  => `(Std.Time.Text.short)
   | .full   => `(Std.Time.Text.full)
   | .narrow => `(Std.Time.Text.narrow)
-  | .twoLetterShort => `(Std.Time.Text.short2)
+  | .twoLetterShort => `(Std.Time.Text.twoLetterShort)
 
 private meta def convertNumber : Number → MacroM (TSyntax `term)
   | ⟨padding⟩ => `(Std.Time.Number.mk $(quote padding))
