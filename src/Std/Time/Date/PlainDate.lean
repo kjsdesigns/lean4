@@ -356,13 +356,23 @@ def weekOfYear (date : PlainDate) : Week.Ordinal :=
 Returns the week-based year for a given `PlainDate`.
 -/
 def weekBasedYear (date : PlainDate) : Year.Offset :=
-  let week := date.weekOfYear
-  if date.month.val = 1 ∧ week.val ≥ 52 then
-    date.year - 1
-  else if date.month.val = 12 ∧ week.val = 1 then
-    date.year + 1
+  let year := date.year
+  let doy  := date.dayOfYear
+  let dow  := date.weekday.toOrdinal.sub 1
+
+  if doy.val ≤ 3 then
+    if doy.val - dow.val < -2 then
+      year - 1
+    else
+      year
+  else if doy.val ≥ 363 then
+    let leap := if date.inLeapYear then 1 else 0
+    if (doy.val - 363 - leap) - dow.val ≥ 0 then
+      year + 1
+    else
+      year
   else
-    date.year
+    year
 
 instance : HAdd PlainDate Day.Offset PlainDate where
   hAdd := addDays
