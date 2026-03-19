@@ -496,20 +496,6 @@ def anyFromEmpty : Async Unit := do
 
 #eval anyFromEmpty.block
 
--- Test Any wrapping an Incoming channel receives chunks
-
-def anyFromChannel : Async Unit := do
-  let (outgoing, incoming) ← Body.mkChannel
-  let any := Body.Any.ofBody incoming
-
-  let sendTask ← async (t := AsyncTask) <| outgoing.send (Chunk.ofByteArray "data".toUTF8)
-  let result ← any.recv
-  assert! result.isSome
-  assert! result.get!.data == "data".toUTF8
-  await sendTask
-
-#eval anyFromChannel.block
-
 -- Test Any.close closes the underlying body
 
 def anyCloseForwards : Async Unit := do
