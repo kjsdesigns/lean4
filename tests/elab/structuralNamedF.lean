@@ -15,7 +15,7 @@ def addAdjacent : List Nat → List Nat
 /-- info: [3, 7] -/
 #guard_msgs in #eval addAdjacent [1, 2, 3, 4]
 
--- Mutual recursion: both functions on the same type get a shared `_f`
+-- Mutual recursion: each function gets its own `_f`
 mutual
   def even : Nat → Bool
     | 0 => true
@@ -26,8 +26,11 @@ mutual
     | n + 1 => even n
 end
 
-/-- info: even._f : (t : Nat) → Nat.below t → Bool ×' Bool -/
+/-- info: even._f : (x : Nat) → Nat.below x → Bool -/
 #guard_msgs in #check @even._f
+
+/-- info: odd._f : (x : Nat) → Nat.below x → Bool -/
+#guard_msgs in #check @odd._f
 
 /-- info: true -/
 #guard_msgs in #eval even 4

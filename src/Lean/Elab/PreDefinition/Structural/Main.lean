@@ -65,29 +65,32 @@ private def elimMutualRecursion (preDefs : Array PreDefinition) (fixedParamPerms
   let packedFArgs ← positions.mapMwith (PProdN.mkLambdas · ·) packedFTypes FArgs
   trace[Elab.definition.structural] "packedFArgs: {packedFArgs}"
 
-  -- Create `_f` helper definitions for each packed functional argument, so that the functional
+  -- Create `_f` helper definitions for each function's individual functional argument, so that it
   -- shows up with a helpful name in kernel diagnostics rather than as an anonymous lambda.
   -- Skip for inductive predicates, where `funTypes` fvars would escape their scope.
-  -- Skip when not all position groups have functions (e.g., nested inductives with unused type formers).
   let us := preDefs[0]!.levelParams.map mkLevelParam
-  let canNameF := !isIndPred && positions.all (!·.isEmpty)
   let (fPreDefs, packedFArgs) ←
-    if !canNameF then
+    if isIndPred then
       pure (#[], packedFArgs)
     else try
-      let fPreDefs ← packedFArgs.mapIdxM fun i packedFArg => do
-        let fnIdx := positions[i]![0]!
-        let fName := preDefs[fnIdx]!.declName ++ `_f
-        let fValue ← mkLambdaFVars xs packedFArg
+      let fPreDefs ← FArgs.mapIdxM fun idx fArg => do
+        let fName := preDefs[idx]!.declName ++ `_f
+        let fValue ← mkLambdaFVars xs fArg
         let fType ← inferType fValue
-        let fPreDef : PreDefinition := { preDefs[fnIdx]! with
+        let fPreDef : PreDefinition := { preDefs[idx]! with
           declName := fName, type := fType, value := fValue,
           kind := .abbrev, modifiers := {}, termination := default }
         addAsAxiom fPreDef
         return fPreDef
-      -- Replace inline functionals with references to `_f` constants
-      let packedFArgs := fPreDefs.map fun fPreDef =>
-        mkAppN (mkConst fPreDef.declName us) xs
+      -- For single-function position groups, reference the `_f` constant in the packed functional
+      -- so it shows up in kernel diagnostics. For multi-function groups, keep the inline packing
+      -- (the individual `_f` defs still exist but aren't referenced from brecOn).
+      let packedFArgs ← packedFArgs.mapIdxM fun i packedFArg => do
+        let poss := positions[i]!
+        if poss.size == 1 then
+          return mkAppN (mkConst fPreDefs[poss[0]!]!.declName us) xs
+        else
+          return packedFArg
       pure (fPreDefs, packedFArgs)
     catch _ =>
       pure (#[], packedFArgs)
