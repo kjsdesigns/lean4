@@ -6,7 +6,9 @@ Authors: Sofia Rodrigues
 module
 
 prelude
+public import Std.Internal.Async
 public import Std.Internal.Async.ContextAsync
+public import Std.Internal.Http.Data.Chunk
 public import Std.Internal.Http.Data.Headers
 public import Std.Internal.Http.Data.Body.Length
 
@@ -15,12 +17,42 @@ public section
 /-!
 # Body.Basic
 
-This module defines shared types for HTTP body handling.
+This module defines the `Body` typeclass for HTTP body streams, and shared conversion types
+`ToByteArray` and `FromByteArray` used for encoding and decoding body content.
 -/
 
-namespace Std.Http.Body
+namespace Std.Http
+open Std Internal IO Async
 
 set_option linter.all true
+
+/--
+Typeclass for values that can be read as HTTP body streams.
+-/
+class Body (α : Type) where
+  /--
+  Receives the next body chunk. Returns `none` at end-of-stream.
+  -/
+  recv : α → Async (Option Chunk)
+
+  /--
+  Closes the body stream.
+  -/
+  close : α → Async Unit
+
+  /--
+  Returns `true` when the body stream is closed.
+  -/
+  isClosed : α → Async Bool
+
+  /--
+  Selector that resolves when a chunk is available or EOF is reached.
+  -/
+  recvSelector : α → Selector (Option Chunk)
+
+end Std.Http
+
+namespace Std.Http.Body
 
 /--
 Typeclass for types that can be converted to a `ByteArray`.

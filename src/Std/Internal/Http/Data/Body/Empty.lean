@@ -6,12 +6,9 @@ Authors: Sofia Rodrigues
 module
 
 prelude
-public import Std.Internal.Async
 public import Std.Internal.Http.Data.Request
 public import Std.Internal.Http.Data.Response
-public import Std.Internal.Http.Data.Body.Length
-public import Std.Internal.Http.Data.Body.Reader
-public import Std.Internal.Http.Data.Chunk
+public import Std.Internal.Http.Data.Body.Any
 
 public section
 
@@ -30,7 +27,7 @@ set_option linter.all true
 An empty body handle.
 -/
 structure Empty where
-deriving Inhabited
+deriving Inhabited, BEq
 
 namespace Empty
 
@@ -55,8 +52,6 @@ Empty bodies are always closed for reading.
 def isClosed (_ : Empty) : Async Bool :=
   pure true
 
-open Internal.IO.Async in
-
 /--
 Selector that immediately resolves with end-of-stream for an empty body.
 -/
@@ -72,32 +67,47 @@ def recvSelector (_ : Empty) : Selector (Option Chunk) where
 
 end Empty
 
-instance : Reader Empty where
+instance : Http.Body Empty where
   recv := Empty.recv
   close := Empty.close
   isClosed := Empty.isClosed
   recvSelector := Empty.recvSelector
 
-end Std.Http.Body
+instance : Coe Empty Any := ⟨Any.ofBody⟩
 
-namespace Std.Http.Request.Builder
+instance : Coe (Response Empty) (Response Any) where
+  coe f := { f with }
+
+instance : Coe (ContextAsync (Response Empty)) (ContextAsync (Response Any)) where
+  coe action := do
+    let response ← action
+    pure (response : Response Any)
+
+instance : Coe (Async (Response Empty)) (ContextAsync (Response Any)) where
+  coe action := do
+    let response ← action
+    pure (response : Response Any)
+
+end Body
+
+namespace Request.Builder
 open Internal.IO.Async
 
 /--
-Builds a request with an empty body.
+Builds a request with no body.
 -/
-def blank (builder : Builder) : Async (Request Body.Empty) :=
+def empty (builder : Builder) : Async (Request Body.Empty) :=
   pure <| builder.body {}
 
-end Std.Http.Request.Builder
+end Request.Builder
 
-namespace Std.Http.Response.Builder
+namespace Response.Builder
 open Internal.IO.Async
 
 /--
-Builds a response with an empty body.
+Builds a response with no body.
 -/
-def blank (builder : Builder) : Async (Response Body.Empty) :=
+def empty (builder : Builder) : Async (Response Body.Empty) :=
   pure <| builder.body {}
 
-end Std.Http.Response.Builder
+end Response.Builder

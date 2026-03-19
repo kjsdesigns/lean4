@@ -1,6 +1,11 @@
 (In the following, use `sysctl -n hw.logicalcpu` instead of `nproc` on macOS)
 
+## Building
+
 To build Lean you should use `make -j$(nproc) -C build/release`.
+
+The build uses `ccache`, and in a sandbox `ccache` may complain about read-only file systems.
+Use `CCACHE_READONLY` and `CCACHE_TEMPDIR` instead of disabling ccache completely.
 
 ## Running Tests
 
@@ -20,8 +25,23 @@ CTEST_PARALLEL_LEVEL="$(nproc)" CTEST_OUTPUT_ON_FAILURE=1 \
 make -C build/release -j "$(nproc)" test ARGS='--rerun-failed'
 
 # Single test from tests/foo/bar/ (quick check during development)
-cd tests/foo/bar && ./run_test example_test.lean
+CTEST_PARALLEL_LEVEL="$(nproc)" CTEST_OUTPUT_ON_FAILURE=1 \
+make -C build/release -j "$(nproc)" test ARGS=-R testname'
 ```
+
+## Testing stage 2
+
+When requested to test stage 2, build it as follows:
+```
+make -C build/release stage2 -j$(nproc)
+```
+Stage 2 is *not* automatically invalidated by changes to `src/` which allows for faster iteration
+when fixing a specific file in the stage 2 build but for invalidating any files that already passed
+the stage 2 build as well as for final validation,
+```
+make -C build/release/stage2 clean-stdlib
+```
+must be run manually before building.
 
 ## New features
 
