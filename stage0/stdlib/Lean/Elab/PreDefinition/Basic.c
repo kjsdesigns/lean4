@@ -1,6 +1,6 @@
 // Lean compiler output
 // Module: Lean.Elab.PreDefinition.Basic
-// Imports: public import Lean.Compiler.NoncomputableAttr public import Lean.Util.NumApps public import Lean.Meta.Eqns public import Lean.Elab.RecAppSyntax public import Lean.Elab.DefView
+// Imports: public import Lean.Compiler.NoncomputableAttr public import Lean.Util.NumApps public import Lean.Meta.Eqns public import Lean.Elab.RecAppSyntax public import Lean.Meta.InstanceNormalForm public import Lean.Elab.DefView
 #include <lean/lean.h>
 #if defined(__clang__)
 #pragma clang diagnostic ignored "-Wunused-parameter"
@@ -22345,6 +22345,7 @@ lean_object* runtime_initialize_Lean_Compiler_NoncomputableAttr(uint8_t builtin)
 lean_object* runtime_initialize_Lean_Util_NumApps(uint8_t builtin);
 lean_object* runtime_initialize_Lean_Meta_Eqns(uint8_t builtin);
 lean_object* runtime_initialize_Lean_Elab_RecAppSyntax(uint8_t builtin);
+lean_object* runtime_initialize_Lean_Meta_InstanceNormalForm(uint8_t builtin);
 lean_object* runtime_initialize_Lean_Elab_DefView(uint8_t builtin);
 static bool _G_runtime_initialized = false;
 LEAN_EXPORT lean_object* runtime_initialize_Lean_Elab_PreDefinition_Basic(uint8_t builtin) {
@@ -22361,6 +22362,9 @@ res = runtime_initialize_Lean_Meta_Eqns(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
 res = runtime_initialize_Lean_Elab_RecAppSyntax(builtin);
+if (lean_io_result_is_error(res)) return res;
+lean_dec_ref(res);
+res = runtime_initialize_Lean_Meta_InstanceNormalForm(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
 res = runtime_initialize_Lean_Elab_DefView(builtin);
@@ -22393,6 +22397,7 @@ lean_object* initialize_Lean_Compiler_NoncomputableAttr(uint8_t builtin);
 lean_object* initialize_Lean_Util_NumApps(uint8_t builtin);
 lean_object* initialize_Lean_Meta_Eqns(uint8_t builtin);
 lean_object* initialize_Lean_Elab_RecAppSyntax(uint8_t builtin);
+lean_object* initialize_Lean_Meta_InstanceNormalForm(uint8_t builtin);
 lean_object* initialize_Lean_Elab_DefView(uint8_t builtin);
 static bool _G_initialized = false;
 LEAN_EXPORT lean_object* initialize_Lean_Elab_PreDefinition_Basic(uint8_t builtin) {
@@ -22409,6 +22414,9 @@ res = initialize_Lean_Meta_Eqns(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
 res = initialize_Lean_Elab_RecAppSyntax(builtin);
+if (lean_io_result_is_error(res)) return res;
+lean_dec_ref(res);
+res = initialize_Lean_Meta_InstanceNormalForm(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
 res = initialize_Lean_Elab_DefView(builtin);
