@@ -8,7 +8,8 @@ def addAdjacent : List Nat → List Nat
   | a::b::as => (a+b) :: addAdjacent as
 
 -- The `_f` helper should exist in the environment
-#check @addAdjacent._f
+/-- info: addAdjacent._f : (x : List Nat) → List.below x → List Nat -/
+#guard_msgs in #check @addAdjacent._f
 
 -- Verify computation still works
 /-- info: [3, 7] -/
@@ -25,7 +26,8 @@ mutual
     | n + 1 => even n
 end
 
-#check @even._f
+/-- info: even._f : (t : Nat) → Nat.below t → Bool ×' Bool -/
+#guard_msgs in #check @even._f
 
 /-- info: true -/
 #guard_msgs in #eval even 4
@@ -38,4 +40,5 @@ def myMap (f : α → β) : List α → List β
   | []    => []
   | x::xs => f x :: myMap f xs
 
-#check @myMap._f
+/-- info: @myMap._f : {α : Type u_1} → {β : Type u_2} → (α → β) → (x : List α) → List.below x → List β -/
+#guard_msgs in #check @myMap._f
