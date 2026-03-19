@@ -693,23 +693,22 @@ theorem IterM.toList_filterMap {α β γ : Type w} {m : Type w → Type w'}
     assumption
   · simp
 
-set_option warn.sorry false in
 @[simp]
 theorem IterM.toList_map {α β β' : Type w} {m : Type w → Type w'} [Monad m] [LawfulMonad m]
     [Iterator α m β] [Finite α m] {f : β → β'}
     (it : IterM (α := α) m β) :
     (it.map f).toList = (fun x => x.map f) <$> it.toList := by
   rw [← List.filterMap_eq_map, ← toList_filterMap]
-  let t := type_of% (it.map f)
-  let t' := type_of% (it.filterMap (some ∘ f))
-  congr
-  · simp [Map]
-  · sorry
-  · simp only [map, mapWithPostcondition, InternalCombinators.map, Function.comp_apply, filterMap,
+  simp only [map, mapWithPostcondition, InternalCombinators.map, filterMap,
     filterMapWithPostcondition, InternalCombinators.filterMap]
+  unfold Map
+  congr
+  · simp
+  · rw [Map.instIterator_eq_filterMapInstIterator]
     congr
-    · simp [Map]
-    · simp
+    simp
+  · simp
+  · simp
 
 @[simp]
 theorem IterM.toList_filter {α : Type w} {m : Type w → Type w'} [Monad m] [LawfulMonad m]
@@ -1299,7 +1298,6 @@ theorem IterM.forIn_filterMap
   rw [filterMap, forIn_filterMapWithPostcondition]
   simp [PostconditionT.run_eq_map]
 
-set_option warn.sorry false in
 theorem IterM.forIn_mapWithPostcondition
     [Monad m] [LawfulMonad m] [Monad n] [LawfulMonad n] [Monad o] [LawfulMonad o]
     [MonadLiftT m n] [LawfulMonadLiftT m n] [MonadLiftT n o] [LawfulMonadLiftT n o]
@@ -1310,10 +1308,10 @@ theorem IterM.forIn_mapWithPostcondition
     haveI : MonadLift n o := ⟨monadLift⟩
     forIn (it.mapWithPostcondition f) init g =
       forIn it init (fun out acc => do g (← (f out).run) acc) := by
-  unfold mapWithPostcondition InternalCombinators.map Map.instIterator Map.instIteratorLoop Map
-  sorry
-  --rw [← InternalCombinators.filterMap, ← filterMapWithPostcondition, forIn_filterMapWithPostcondition]
-  --simp
+  unfold mapWithPostcondition InternalCombinators.map Map.instIteratorLoop Map
+  rw [Map.instIterator_eq_filterMapInstIterator]
+  rw [← InternalCombinators.filterMap, ← filterMapWithPostcondition, forIn_filterMapWithPostcondition]
+  simp
 
 theorem IterM.forIn_mapM
     [Monad m] [LawfulMonad m] [Monad n] [LawfulMonad n] [Monad o] [LawfulMonad o]
