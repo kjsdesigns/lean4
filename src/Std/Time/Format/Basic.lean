@@ -1650,12 +1650,12 @@ def spec! (input : String) (config : FormatConfig := {}) : Format tz :=
   | .error res => panic! res
 
 /--
-?
+Type class for types that can be formatted as a `DateTime`.
 -/
 class FormattableTime (α : Type) where
 
   /--
-  ?
+  Converts a type `α` to a `DateTime` and a `TimeZone`.
   -/
   toDateTime : α → Σ tz, DateTime tz
 
