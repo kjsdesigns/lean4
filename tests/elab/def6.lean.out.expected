@@ -1,2 +1,1 @@
-def map2 : (Bool → Bool → Bool) → {n : Nat} → BV n → BV n → BV n :=
-fun f x x_1 x_2 => BV.brecOn (motive := fun x x_3 => BV x → BV x) x_1 (map2._f f) x_2
+map2 : (Bool → Bool → Bool) → {n : Nat} → BV n → BV n → BV n
