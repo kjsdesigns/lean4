@@ -370,7 +370,7 @@ def fullKnownSizeLifecycle : Async Unit := do
   let full ← Body.Full.ofByteArray data
 
   assert! (← full.getKnownSize) == some (.fixed 4)
-  let chunk ← full.tryRecv
+  let chunk ← full.recv
   assert! chunk.isSome
   assert! chunk.get!.data == data
   assert! (← full.getKnownSize) == some (.fixed 0)
@@ -384,7 +384,7 @@ def fullClose : Async Unit := do
   assert! !(← full.isClosed)
   full.close
   assert! (← full.isClosed)
-  assert! (← full.tryRecv).isNone
+  assert! (← full.recv).isNone
 
 #eval fullClose.block
 
@@ -423,8 +423,8 @@ def fullKnownSizeAfterClose : Async Unit := do
 
 def fullTryRecvIdempotent : Async Unit := do
   let full ← Body.Full.ofString "once"
-  let first ← full.tryRecv
-  let second ← full.tryRecv
+  let first ← full.recv
+  let second ← full.recv
   assert! first.isSome
   assert! first.get!.data == "once".toUTF8
   assert! second.isNone
@@ -587,7 +587,7 @@ def requestBuilderFromBytes : Async Unit := do
 
 def requestBuilderNoBody : Async Unit := do
   let req ← Request.get (.originForm! "/api")
-    |>.noBody
+    |>.empty
 
   assert! req.body == {}
 
@@ -637,7 +637,7 @@ def requestBuilderStream : Async Unit := do
 
 def requestBuilderNoBodyAlwaysClosed : Async Unit := do
   let req ← Request.get (.originForm! "/api")
-    |>.noBody
+    |>.empty
 
   assert! (← req.body.isClosed)
   let result ← req.body.recv
@@ -694,7 +694,7 @@ def responseBuilderFromBytes : Async Unit := do
 
 def responseBuilderNoBody : Async Unit := do
   let res ← Response.ok
-    |>.noBody
+    |>.empty
 
   assert! res.body == {}
 
@@ -744,7 +744,7 @@ def responseBuilderStream : Async Unit := do
 
 def responseBuilderNoBodyAlwaysClosed : Async Unit := do
   let res ← Response.ok
-    |>.noBody
+    |>.empty
 
   assert! (← res.body.isClosed)
   let result ← res.body.recv
