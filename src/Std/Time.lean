@@ -17,8 +17,7 @@ public import Std.Time.Zoned.Database
 
 public section
 
-namespace Std
-namespace Time
+namespace Std.Time
 
 /-!
 # Time
@@ -258,3 +257,5 @@ The `.sssssssss` can be omitted in most cases.
 - **`zoned("uuuu-MM-ddTHH:mm:ss.sssssssss, timezone")`**: Represents an `IO ZonedDateTime`, using a specified `timezone` term and allowing optional nanoseconds.
 
 -/
+
+end Std.Time

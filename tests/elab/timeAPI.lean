@@ -629,9 +629,9 @@ Std.Time.Weekday.friday
   println! repr date.weekOfYear
   println! repr date.weekOfMonth
 
-  println! date.toAmericanDateString
-  println! date.toLeanDateString
-  println! date.toSQLDateString
+  println! (date.format "MM-dd-uuuu")
+  println! (date.format "uuuu-MM-dd")
+  println! (date.format "uuuu-MM-dd")
 
   println! date.toDaysSinceUNIXEpoch
   println! date.toTimestampAssumingUTC

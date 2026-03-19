@@ -1,17 +1,17 @@
 import Std.Time
 open Std.Time
 
-def RFC1123 : GenericFormat .any := datespec("eee, dd MMM uuuu HH:mm:ss ZZZ")
-def ShortDate : GenericFormat .any := datespec("MM/dd/uuuu")
-def LongDate : GenericFormat .any := datespec("MMMM D, uuuu")
-def ShortDateTime : GenericFormat .any := datespec("MM/dd/uuuu HH:mm:ss")
-def LongDateTime : GenericFormat .any := datespec("MMMM D, uuuu h:mm aa")
-def Time24Hour : GenericFormat .any := datespec("HH:mm:ss")
-def Time12Hour : GenericFormat .any := datespec("hh:mm:ss aa")
-def FullDayTimeZone : GenericFormat .any := datespec("EEEE, MMMM dd, uuuu HH:mm:ss ZZZ")
-def CustomDayTime : GenericFormat .any := datespec("EEE dd MMM uuuu HH:mm")
-def EraDate : GenericFormat .any := datespec("MM D, uuuu G")
-def DateSmall : GenericFormat .any := datespec("uu-MM-dd")
+def RFC1123 : Format Awareness.any := datespec("eee, dd MMM uuuu HH:mm:ss ZZZ")
+def ShortDate : Format Awareness.any := datespec("MM/dd/uuuu")
+def LongDate : Format Awareness.any := datespec("MMMM D, uuuu")
+def ShortDateTime : Format Awareness.any := datespec("MM/dd/uuuu HH:mm:ss")
+def LongDateTime : Format Awareness.any := datespec("MMMM D, uuuu h:mm aa")
+def Time24Hour : Format Awareness.any := datespec("HH:mm:ss")
+def Time12Hour : Format Awareness.any := datespec("hh:mm:ss aa")
+def FullDayTimeZone : Format Awareness.any := datespec("EEEE, MMMM dd, uuuu HH:mm:ss ZZZ")
+def CustomDayTime : Format Awareness.any := datespec("EEE dd MMM uuuu HH:mm")
+def EraDate : Format Awareness.any := datespec("MM D, uuuu G")
+def DateSmall : Format Awareness.any := datespec("uu-MM-dd")
 
 -- Dates
 
@@ -27,7 +27,7 @@ def time₂ := time("03:11:01")
 info: "Monday, June 16, 2014 03:03:03 -0300"
 -/
 #guard_msgs in
-#eval FullDayTimeZone.format date₁.toDateTime
+#eval FullDayTimeZone.format date₁
 
 def tm := date₁.toTimestamp
 def date₂ := DateTime.ofTimestamp tm brTZ
@@ -197,13 +197,13 @@ info: "03:11:01 AM"
 info: "2024-08-15T14:03:47-03:00"
 -/
 #guard_msgs in
-#eval dateBR₁.toISO8601String
+#eval Formats.iso8601.format dateBR₁
 
 /--
 info: "2024-08-15T14:03:47Z"
 -/
 #guard_msgs in
-#eval dateUTC₁.toISO8601String
+#eval Formats.iso8601.format dateUTC₁
 
 /--
 info: "06/16/2014"
@@ -441,7 +441,7 @@ info: "+09:00 +09:00 +09:00 +09:00"
 #eval zoned₄.format "z zz zzzz zzzz"
 
 /--
-info: "+00:00 +00:00 +00:00 +00:00"
+info: "UTC UTC Coordinated Universal Time Coordinated Universal Time"
 -/
 #guard_msgs in
 #eval zoned₅.format "z zz zzzz zzzz"
@@ -825,7 +825,7 @@ info: ("19343232432-01-04T01:04:03.000000000",
 #guard_msgs in
 #eval
   let r := PlainDateTime.mk (PlainDate.ofYearMonthDayClip 19343232432 1 4) (PlainTime.mk 25 64 3 0)
-  let s := r.toLeanDateTimeString
+  let s := r.format "uuuu-MM-dd'T'HH:mm:ss.SSSSSSSSS"
   let r := PlainDateTime.parse s
   (s, r, datetime("1932-01-02T05:04:03.000000000"))
 
@@ -840,7 +840,7 @@ def tuple6Mk (a : f) (b : g) (c : h) (d : i) (e : j) (k : z) := some (a, b, c, d
 Parsing Length Tests
 -/
 
-def uFormat : GenericFormat .any := datespec("u uu uuuu uuuuu")
+def uFormat : Format Awareness.any := datespec("u uu uuuu uuuuu")
 
 #eval do assert! (uFormat.parseBuilder tuple4Mk "1 11 1211 12311" |>.isOk)
 #eval do assert! (uFormat.parseBuilder tuple4Mk "12 11 1211 12311" |>.isOk)
@@ -855,7 +855,7 @@ def uFormat : GenericFormat .any := datespec("u uu uuuu uuuuu")
 #eval do assert! (not <| uFormat.parseBuilder tuple4Mk "1 11 1213 111123" |>.isOk)
 #eval do assert! (not <| uFormat.parseBuilder tuple4Mk "1 367 1211 12311" |>.isOk)
 
-def yFormat : GenericFormat .any := datespec("y yy yyyy yyyyy")
+def yFormat : Format Awareness.any := datespec("y yy yyyy yyyyy")
 
 #eval do assert! (yFormat.parseBuilder tuple4Mk "1 11 1211 12311" |>.isOk)
 #eval do assert! (yFormat.parseBuilder tuple4Mk "12 11 1211 12311" |>.isOk)
@@ -870,7 +870,7 @@ def yFormat : GenericFormat .any := datespec("y yy yyyy yyyyy")
 #eval do assert! (not <| yFormat.parseBuilder tuple4Mk "1 11 1213 111123" |>.isOk)
 #eval do assert! (not <| yFormat.parseBuilder tuple4Mk "1 367 1211 12311" |>.isOk)
 
-def dFormat : GenericFormat .any := datespec("D DD DDD")
+def dFormat : Format Awareness.any := datespec("D DD DDD")
 
 #eval do assert! (dFormat.parseBuilder tuple3Mk "1 12 123" |>.isOk)
 #eval do assert! (dFormat.parseBuilder tuple3Mk "323 12 123" |>.isOk)
@@ -879,7 +879,7 @@ def dFormat : GenericFormat .any := datespec("D DD DDD")
 #eval do assert! (not <| dFormat.parseBuilder tuple3Mk "1 123 123" |>.isOk)
 #eval do assert! (not <| dFormat.parseBuilder tuple3Mk "367 12 123" |>.isOk)
 
-def dddFormat : GenericFormat .any := datespec("d dd ddd dddd ddddd")
+def dddFormat : Format Awareness.any := datespec("d dd ddd dddd ddddd")
 
 #eval do assert! (dddFormat.parseBuilder tuple5Mk "1 12 031 0031 00031" |>.isOk)
 #eval do assert! (dddFormat.parseBuilder tuple5Mk "000031 12 031 0031 00031" |>.isOk)
@@ -887,7 +887,7 @@ def dddFormat : GenericFormat .any := datespec("d dd ddd dddd ddddd")
 #eval do assert! (not <| dddFormat.parseBuilder tuple5Mk "1 12 0031 00031" |>.isOk)
 #eval do assert! (not <| dddFormat.parseBuilder tuple5Mk "1 031 0031 000031" |>.isOk)
 
-def wFormat : GenericFormat .any := datespec("w ww www wwww")
+def wFormat : Format Awareness.any := datespec("w ww www wwww")
 
 #eval do assert! (wFormat.parseBuilder tuple4Mk "1 01 031 0031" |>.isOk)
 #eval do assert! (wFormat.parseBuilder tuple4Mk "2 01 031 0031" |>.isOk)
@@ -895,7 +895,7 @@ def wFormat : GenericFormat .any := datespec("w ww www wwww")
 #eval do assert! (not <| wFormat.parseBuilder tuple4Mk "2 01 031 00310" |>.isOk)
 #eval do assert! (not <| wFormat.parseBuilder tuple4Mk "2 01 031 031" |>.isOk)
 
-def qFormat : GenericFormat .any := datespec("q qq")
+def qFormat : Format Awareness.any := datespec("q qq")
 
 #eval do assert! (qFormat.parseBuilder tuple2Mk "1 02" |>.isOk)
 #eval do assert! (qFormat.parseBuilder tuple2Mk "3 03" |>.isOk)
@@ -903,7 +903,7 @@ def qFormat : GenericFormat .any := datespec("q qq")
 #eval do assert! (not <| qFormat.parseBuilder tuple2Mk "12 32" |>.isOk)
 #eval do assert! (not <| qFormat.parseBuilder tuple2Mk "000001 003" |>.isOk)
 
-def WFormat : GenericFormat .any := datespec("W WW")
+def WFormat : Format Awareness.any := datespec("W WW")
 
 #eval do assert! (WFormat.parseBuilder tuple2Mk "1 06" |>.isOk)
 #eval do assert! (WFormat.parseBuilder tuple2Mk "3 03" |>.isOk)
@@ -911,7 +911,7 @@ def WFormat : GenericFormat .any := datespec("W WW")
 #eval do assert! (not <| WFormat.parseBuilder tuple2Mk "12 32" |>.isOk)
 #eval do assert! (not <| WFormat.parseBuilder tuple2Mk "000001 003" |>.isOk)
 
-def eFormat : GenericFormat .any := datespec("e ee")
+def eFormat : Format Awareness.any := datespec("e ee")
 
 #eval do assert! (eFormat.parseBuilder tuple2Mk "1 07" |>.isOk)
 #eval do assert! (eFormat.parseBuilder tuple2Mk "3 03" |>.isOk)
@@ -919,7 +919,7 @@ def eFormat : GenericFormat .any := datespec("e ee")
 #eval do assert! (not <| eFormat.parseBuilder tuple2Mk "12 32" |>.isOk)
 #eval do assert! (not <| eFormat.parseBuilder tuple2Mk "000001 003" |>.isOk)
 
-def FFormat : GenericFormat .any := datespec("F FF")
+def FFormat : Format Awareness.any := datespec("F FF")
 
 #eval do assert! (FFormat.parseBuilder tuple2Mk "1 04" |>.isOk)
 #eval do assert! (FFormat.parseBuilder tuple2Mk "3 03" |>.isOk)
@@ -927,7 +927,7 @@ def FFormat : GenericFormat .any := datespec("F FF")
 #eval do assert! (not <| FFormat.parseBuilder tuple2Mk "12 32" |>.isOk)
 #eval do assert! (not <| FFormat.parseBuilder tuple2Mk "000001 003" |>.isOk)
 
-def hFormat : GenericFormat .any := datespec("h hh")
+def hFormat : Format Awareness.any := datespec("h hh")
 
 #eval do assert! (hFormat.parseBuilder tuple2Mk "1 09" |>.isOk)
 #eval do assert! (hFormat.parseBuilder tuple2Mk "12 12" |>.isOk)
@@ -949,16 +949,16 @@ info: zoned("2002-07-14T14:13:12.000000000+23:59")
 info: Except.error "offset 22: invalid hour offset: 24. Must be between 0 and 23."
 -/
 #guard_msgs in
-#eval ZonedDateTime.fromLeanDateTimeWithZoneString "2002-07-14T14:13:12+24:59"
+#eval Formats.leanDateTimeWithZoneAlt.parse "2002-07-14T14:13:12+24:59"
 
 /--
 info: Except.error "offset 25: invalid minute offset: 60. Must be between 0 and 59."
 -/
 #guard_msgs in
-#eval ZonedDateTime.fromLeanDateTimeWithZoneString "2002-07-14T14:13:12+23:60"
+#eval Formats.leanDateTimeWithZoneAlt.parse "2002-07-14T14:13:12+23:60"
 
 /--
 info: Except.ok (zoned("2002-07-14T14:13:12.000000000Z"))
 -/
 #guard_msgs in
-#eval ZonedDateTime.fromLeanDateTimeWithZoneString "2002-07-14T14:13:12+00:00"
+#eval Formats.leanDateTimeWithZoneAlt.parse "2002-07-14T14:13:12+00:00"

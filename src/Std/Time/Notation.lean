@@ -11,8 +11,7 @@ public meta import Std.Time.Format
 
 public section
 
-namespace Std
-namespace Time
+namespace Std.Time
 open Lean Parser Command Std
 
 set_option linter.all true
@@ -21,7 +20,7 @@ private meta def convertText : Text → MacroM (TSyntax `term)
   | .short  => `(Std.Time.Text.short)
   | .full   => `(Std.Time.Text.full)
   | .narrow => `(Std.Time.Text.narrow)
-  | .short2 => `(Std.Time.Text.short2)
+  | .twoLetterShort => `(Std.Time.Text.short2)
 
 private meta def convertNumber : Number → MacroM (TSyntax `term)
   | ⟨padding⟩ => `(Std.Time.Number.mk $(quote padding))
@@ -92,6 +91,7 @@ private meta def convertModifier : Modifier → MacroM (TSyntax `term)
   | .N p => do `(Std.Time.Modifier.N $(← convertNumber p))
   | .V p => do `(Std.Time.Modifier.V $(← convertNumber p))
   | .z p => do `(Std.Time.Modifier.z $(← convertZoneName p))
+  | .v p => do `(Std.Time.Modifier.v $(← convertZoneName p))
   | .O p => do `(Std.Time.Modifier.O $(← convertOffsetO p))
   | .X p => do `(Std.Time.Modifier.X $(← convertOffsetX p))
   | .x p => do `(Std.Time.Modifier.x $(← convertOffsetX p))
@@ -209,36 +209,40 @@ syntax "timezone(" str ")" : term
 
 macro_rules
   | `(zoned( $date:str )) => do
-      match ZonedDateTime.fromLeanDateTimeWithZoneString date.getString with
+      let s := date.getString
+      match (Formats.leanDateTimeWithZoneAlt.parse s : Except String ZonedDateTime) with
       | .ok res => do return ← convertZonedDateTime res
       | .error _ =>
-        match ZonedDateTime.fromLeanDateTimeWithZoneAndNameString date.getString with
+        match (Formats.leanDateTimeWithZoneAndNameAlt.parse s : Except String ZonedDateTime) with
         | .ok res => do return ← convertZonedDateTime res
         | .error _ =>
-          match ZonedDateTime.fromLeanDateTimeWithIdentifierString date.getString with
+          let identParse : Except String ZonedDateTime :=
+            Formats.leanDateTimeWithIdentifier.parseUnchecked s
+            <|> Formats.leanDateTimeWithIdentifierAndNanos.parseUnchecked s
+          match identParse with
           | .ok res => do return ← convertZonedDateTime res (identifier := true)
           | .error res => Macro.throwErrorAt date s!"error: {res}"
 
   | `(zoned( $date:str, $timezone )) => do
-      match PlainDateTime.fromLeanDateTimeString date.getString with
+      match (Formats.leanDateTime24HourAlt.parse date.getString).map DateTime.toPlainDateTime with
       | .ok res => do
         let plain ← convertPlainDateTime res
         `(Std.Time.ZonedDateTime.ofPlainDateTime $plain $timezone)
       | .error res => Macro.throwErrorAt date s!"error: {res}"
 
   | `(datetime( $date:str )) => do
-      match PlainDateTime.fromLeanDateTimeString date.getString with
+      match (Formats.leanDateTime24HourAlt.parse date.getString).map DateTime.toPlainDateTime with
       | .ok res => do
         return ← convertPlainDateTime res
       | .error res => Macro.throwErrorAt date s!"error: {res}"
 
   | `(date( $date:str )) => do
-      match PlainDate.fromSQLDateString date.getString with
+      match PlainDate.parse date.getString with
       | .ok res => return ← convertPlainDate res
       | .error res => Macro.throwErrorAt date s!"error: {res}"
 
   | `(time( $time:str )) => do
-      match PlainTime.fromLeanTime24Hour time.getString with
+      match PlainTime.parse time.getString with
       | .ok res => return ← convertPlainTime res
       | .error res => Macro.throwErrorAt time s!"error: {res}"
 
@@ -251,3 +255,5 @@ macro_rules
       match TimeZone.fromTimeZone tz.getString with
       | .ok res => return ← convertTimezone res
       | .error res => Macro.throwErrorAt tz s!"error: {res}"
+
+end Std.Time

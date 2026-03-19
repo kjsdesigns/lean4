@@ -15,8 +15,7 @@ public section
 namespace Std
 namespace Time
 
--- TODO (@kim-em): re-enable this once there is a mechanism to exclude `linter.indexVariables`.
--- set_option linter.all true
+set_option linter.all true
 
 /--
 Represents a date and time with timezone information.

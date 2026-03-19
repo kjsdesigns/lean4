@@ -19,7 +19,7 @@ private meta def convertText : Text → MacroM (TSyntax `term)
   | .short => `(Std.Time.Text.short)
   | .full => `(Std.Time.Text.full)
   | .narrow => `(Std.Time.Text.narrow)
-  | .short2 => `(Std.Time.Text.short2)
+  | .twoLetterShort => `(Std.Time.Text.short2)
 
 private meta def convertNumber : Number → MacroM (TSyntax `term)
   | ⟨padding⟩ => `(Std.Time.Number.mk $(quote padding))
@@ -90,6 +90,7 @@ private meta def convertModifier : Modifier → MacroM (TSyntax `term)
   | .N p => do `(Std.Time.Modifier.N $(← convertNumber p))
   | .V p => do `(Std.Time.Modifier.V $(← convertNumber p))
   | .z p => do `(Std.Time.Modifier.z $(← convertZoneName p))
+  | .v p => do `(Std.Time.Modifier.v $(← convertZoneName p))
   | .O p => do `(Std.Time.Modifier.O $(← convertOffsetO p))
   | .X p => do `(Std.Time.Modifier.X $(← convertOffsetX p))
   | .x p => do `(Std.Time.Modifier.x $(← convertOffsetX p))
@@ -111,7 +112,7 @@ syntax "datespec(" str "," term ")" : term
 
 private meta def formatStringToFormat (fmt : TSyntax `str) (config : Option (TSyntax `term)) : MacroM (TSyntax `term) := do
   let input := fmt.getString
-  let format : Except String (GenericFormat .any) := GenericFormat.spec input
+  let format : Except String (Format .any) := Format.spec input
   match format with
   | .ok res =>
     let alts ← res.string.mapM convertFormatPart
