@@ -72,6 +72,9 @@ instance : Http.Body Empty where
   close := Empty.close
   isClosed := Empty.isClosed
   recvSelector := Empty.recvSelector
+  getKnownSize _ := pure (some <| .fixed 0)
+  setKnownSize _ _ := pure ()
+
 
 instance : Coe Empty Any := ⟨Any.ofBody⟩
 

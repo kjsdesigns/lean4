@@ -48,6 +48,15 @@ structure Any where
   -/
   recvSelector : Selector (Option Chunk)
 
+  /--
+  Returns the declared size.
+  -/
+  getKnownSize : Async (Option Body.Length)
+
+  /--
+  Sets the size of the body.
+  -/
+  setKnownSize : Option Body.Length → Async Unit
 namespace Any
 
 /--
@@ -58,6 +67,8 @@ def ofBody [Http.Body α] (body : α) : Any where
   close := Http.Body.close body
   isClosed := Http.Body.isClosed body
   recvSelector := Http.Body.recvSelector body
+  getKnownSize := Http.Body.getKnownSize body
+  setKnownSize := Http.Body.setKnownSize body
 
 end Any
 
@@ -66,5 +77,7 @@ instance : Http.Body Any where
   close := Any.close
   isClosed := Any.isClosed
   recvSelector := Any.recvSelector
+  getKnownSize := Any.getKnownSize
+  setKnownSize := Any.setKnownSize
 
 end Std.Http.Body
