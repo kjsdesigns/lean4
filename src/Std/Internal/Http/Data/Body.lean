@@ -6,12 +6,19 @@ Authors: Sofia Rodrigues
 module
 
 prelude
-public import Std.Internal.Async.ContextAsync
-public import Std.Internal.Http.Data.Headers
 public import Std.Internal.Http.Data.Body.Basic
 public import Std.Internal.Http.Data.Body.Length
-public import Std.Internal.Http.Data.Body.Reader
-public import Std.Internal.Http.Data.Body.Writer
+public import Std.Internal.Http.Data.Body.Any
 public import Std.Internal.Http.Data.Body.Stream
 public import Std.Internal.Http.Data.Body.Empty
 public import Std.Internal.Http.Data.Body.Full
+
+public section
+
+/-!
+# Body
+
+This module re-exports all HTTP body types: `Body.Empty`, `Body.Full`, `Body.Incoming`,
+`Body.Outgoing` (from `Body.Stream`), `Body.Any`, and `Body.Length`, along with the
+`Http.Body` typeclass and conversion utilities (`ToByteArray`, `FromByteArray`).
+-/
