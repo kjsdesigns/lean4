@@ -70,7 +70,7 @@ set_option trace.sym.simp.debug.cache true in
 trace: [sym.simp.debug.cache] persistent cache hit: 2
 [sym.simp.debug.cache] persistent cache hit: n
 [sym.simp.debug.cache] transient cache hit: 2 + n
-[sym.simp.debug.cache] transient cache hit: 2 + n + 7
+[sym.simp.debug.cache] transient cache hit: (2 + n) * 7
 [sym.simp.debug.cache] second traversal
 [sym.simp.debug.cache] persistent cache hit: n
 [sym.simp.debug.cache] persistent cache hit: 2
@@ -79,10 +79,27 @@ trace: [sym.simp.debug.cache] persistent cache hit: 2
 [sym.simp.debug.cache] persistent cache hit: 3 + 4
 [sym.simp.debug.cache] transient cache hit: 2 + n
 [sym.simp.debug.cache] persistent cache hit: 7
-[sym.simp.debug.cache] transient cache hit: 2 + n + 7
+[sym.simp.debug.cache] transient cache hit: (2 + n) * 7
 -/
 #guard_msgs in
-example (n : Nat) (h : 0 < n) : (n + 2) + (3 + 4) = (2 + n) + 7 := by
+example (n : Nat) (h : 0 < n) : (n + 2) * (3 + 4) = (2 + n) * 7 := by
+  sym_simp_twice [Nat.add_comm_of_pos]
+
+-- Similar to previous test, but `Nat.add_comm_of_pos` is not applicable, but discharger must return `cd := true`.
+set_option trace.sym.simp.debug.cache true in
+/--
+trace: [sym.simp.debug.cache] transient cache hit: n + 2
+[sym.simp.debug.cache] transient cache hit: (n + 2) * 7
+[sym.simp.debug.cache] second traversal
+[sym.simp.debug.cache] persistent cache hit: n
+[sym.simp.debug.cache] persistent cache hit: 2
+[sym.simp.debug.cache] persistent cache hit: 3 + 4
+[sym.simp.debug.cache] transient cache hit: n + 2
+[sym.simp.debug.cache] persistent cache hit: 7
+[sym.simp.debug.cache] transient cache hit: (n + 2) * 7
+-/
+#guard_msgs in
+example (n : Nat) : (n + 2) * (3 + 4) = (n + 2) * 7 := by
   sym_simp_twice [Nat.add_comm_of_pos]
 
 -- Test 4: Arrow — cd propagates through implication.
