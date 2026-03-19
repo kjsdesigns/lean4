@@ -9,12 +9,12 @@ prelude
 public import Lean.Compiler.LCNF.CompilerM
 public import Lean.Compiler.LCNF.PassManager
 import Lean.Compiler.ExportAttr
-import Std.Data.Iterators.Producers.Array
-import Std.Data.Iterators.Combinators.Zip
 import Lean.Compiler.LCNF.MonadScope
 import Lean.Compiler.LCNF.FVarUtil
 import Lean.Compiler.LCNF.PhaseExt
 import Lean.Compiler.LCNF.PrettyPrinter
+import Std.Data.Iterators.Producers.Monadic.Array
+import Std.Data.Iterators.Combinators.Monadic.Zip
 
 /-!
 This pass is responsible for inferring borrow annotations to the parameters of functions and join
