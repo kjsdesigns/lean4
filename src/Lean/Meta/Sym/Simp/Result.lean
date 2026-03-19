@@ -9,8 +9,9 @@ public import Lean.Meta.Sym.Simp.SimpM
 public import Lean.Meta.Sym.InferType
 namespace Lean.Meta.Sym.Simp
 
-public abbrev Result.isRfl (result : Result) : Bool :=
-  result matches .rfl
+public abbrev Result.isRfl : Result → Bool
+  | .rfl false _ => true
+  | _ => false
 
 public def mkEqTrans (e₁ : Expr) (e₂ : Expr) (h₁ : Expr) (e₃ : Expr) (h₂ : Expr) : SymM Expr := do
   let α ← Sym.inferType e₁
