@@ -128,6 +128,8 @@ instance : Http.Body Full where
   close := Full.close
   isClosed := Full.isClosed
   recvSelector := Full.recvSelector
+  getKnownSize := Full.getKnownSize
+  setKnownSize _ _ := pure ()
 
 instance : Coe Full Any := ⟨Any.ofBody⟩
 

@@ -12,6 +12,7 @@ public import Std.Internal.Http.Data.Request
 public import Std.Internal.Http.Data.Response
 public import Std.Internal.Http.Data.Chunk
 public import Std.Internal.Http.Data.Body.Basic
+public import Std.Internal.Http.Data.Body.Any
 public import Init.Data.ByteArray
 
 public section
@@ -296,6 +297,7 @@ def setKnownSize (incoming : Incoming) (size : Option Body.Length) : Async Unit 
     modify fun st => { st with knownSize := size }
 
 open Internal.IO.Async in
+
 /--
 Creates a selector that resolves when a producer is waiting (or the channel closes).
 -/
@@ -368,6 +370,12 @@ protected partial def forIn'
       return acc
 
   loop incoming acc
+
+/--
+Converts the `Incoming` channel into a `Outgoing` channel that implements `Body`.
+-/
+def toBody (incoming : Incoming) : Outgoing :=
+  ⟨incoming.state⟩
 
 /--
 Abstracts over how the next chunk is received, allowing `readAll` to work in both `Async`
@@ -656,11 +664,28 @@ instance : ForIn Async Incoming Chunk where
 instance : ForIn ContextAsync Incoming Chunk where
   forIn := Incoming.forIn'
 
-instance : Http.Body Incoming where
-  recv := Incoming.recv
-  close := Incoming.close
-  isClosed := Incoming.isClosed
-  recvSelector := Incoming.recvSelector
+instance : Http.Body Outgoing where
+  recv x := Internal.outgoingToIncoming  x |>.recv
+  close x := Internal.outgoingToIncoming  x |>.close
+  isClosed x := Internal.outgoingToIncoming  x |>.isClosed
+  recvSelector x := Internal.outgoingToIncoming  x |>.recvSelector
+  getKnownSize x := Internal.outgoingToIncoming x |>.getKnownSize
+  setKnownSize x size := Internal.outgoingToIncoming x |>.setKnownSize size
+
+instance : Coe Outgoing Any := ⟨Any.ofBody⟩
+
+instance : Coe (Response Outgoing) (Response Any) where
+  coe f := { f with }
+
+instance : Coe (ContextAsync (Response Outgoing)) (ContextAsync (Response Any)) where
+  coe action := do
+    let response ← action
+    pure (response : Response Any)
+
+instance : Coe (Async (Response Outgoing)) (ContextAsync (Response Any)) where
+  coe action := do
+    let response ← action
+    pure (response : Response Any)
 
 end Body
 

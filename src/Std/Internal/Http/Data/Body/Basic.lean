@@ -50,6 +50,15 @@ class Body (α : Type) where
   -/
   recvSelector : α → Selector (Option Chunk)
 
+  /--
+  Gets the declared size of the body.
+  -/
+  getKnownSize : α → Async (Option Body.Length)
+
+  /--
+  Sets the declared size of a body.
+  -/
+  setKnownSize : α → Option Body.Length → Async Unit
 end Std.Http
 
 namespace Std.Http.Body
