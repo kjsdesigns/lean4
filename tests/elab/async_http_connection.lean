@@ -5,20 +5,20 @@ import Std.Internal.Async.Timer
 open Std.Internal.IO Async
 open Std Http
 
-abbrev TestHandler := Request Body.Incoming → ContextAsync (Response Body.AnyBody)
+abbrev TestHandler := Request Body.Incoming → ContextAsync (Response Body.Any)
 
 instance : Std.Http.Server.Handler TestHandler where
   onRequest handler request := handler request
 
-instance : Coe (ContextAsync (Response Body.Incoming)) (ContextAsync (Response Body.AnyBody)) where
+instance : Coe (ContextAsync (Response Body.Incoming)) (ContextAsync (Response Body.Any)) where
   coe action := do
     let response ← action
-    pure { response with body := Body.Internal.incomingToOutgoing response.body }
+    pure { response with body := response.body.toBody }
 
-instance : Coe (Async (Response Body.Incoming)) (ContextAsync (Response Body.AnyBody)) where
+instance : Coe (Async (Response Body.Incoming)) (ContextAsync (Response Body.Any)) where
   coe action := do
     let response ← action
-    pure { response with body := Body.Internal.incomingToOutgoing response.body }
+    pure { response with body := response.body.toBody }
 
 
 structure TestCase where
@@ -27,7 +27,7 @@ structure TestCase where
   /-- The HTTP request to send -/
   request : Request (Array Chunk)
   /-- Handler function to process the request -/
-  handler : Request Body.Incoming → ContextAsync (Response Body.AnyBody)
+  handler : Request Body.Incoming → ContextAsync (Response Body.Any)
   /-- Expected response string -/
   expected : String
   /-- Whether to use chunked encoding -/
@@ -46,7 +46,7 @@ def toByteArray (req : Request (Array Chunk)) (chunked := false) : IO ByteArray 
 
 /-- Send multiple requests through a mock connection and return the response data. -/
 def sendRequests (client : Mock.Client) (server : Mock.Server) (reqs : Array (Request (Array Chunk)))
-    (onRequest : Request Body.Incoming → ContextAsync (Response Body.AnyBody))
+    (onRequest : Request Body.Incoming → ContextAsync (Response Body.Any))
     (chunked : Bool := false) : IO ByteArray := Async.block do
   let mut data := .empty
   for req in reqs do data := data ++ (← toByteArray req chunked)
@@ -60,7 +60,7 @@ def sendRequests (client : Mock.Client) (server : Mock.Server) (reqs : Array (Re
 
 /-- Run a single test case, comparing actual response against expected response. -/
 def runTest (name : String) (client : Mock.Client) (server : Mock.Server) (req : Request (Array Chunk))
-    (handler : Request Body.Incoming → ContextAsync (Response Body.AnyBody)) (expected : String) (chunked : Bool := false) :
+    (handler : Request Body.Incoming → ContextAsync (Response Body.Any)) (expected : String) (chunked : Bool := false) :
     IO Unit := do
   let response ← sendRequests client server #[req] handler chunked
   let responseData := String.fromUTF8! response
@@ -406,7 +406,7 @@ def hasUri (req : Request Body.Incoming) (uri : String) : Bool :=
   request :=
     Request.new
     |>.method .get
-    |>.uri (.originForm ⟨(.mk #[URI.EncodedString.encode <| String.ofList (List.replicate 2000 'a')] true), none⟩)
+    |>.uri (.originForm (.mk #[URI.EncodedString.encode <| String.ofList (List.replicate 2000 'a')] true) none)
     |>.header! "Host" "api.example.com"
     |>.header! "Connection" "close"
     |>.body #[]
@@ -423,7 +423,7 @@ def hasUri (req : Request Body.Incoming) (uri : String) : Bool :=
   request :=
     Request.new
     |>.method .get
-    |>.uri (.originForm ⟨(.mk #[URI.EncodedString.encode <| String.ofList (List.replicate 200 'a')] true), none⟩)
+    |>.uri (.originForm (.mk #[URI.EncodedString.encode <| String.ofList (List.replicate 200 'a')] true) none)
     |>.header! "Host" (String.ofList (List.replicate 8230 'a'))
     |>.header! "Connection" "close"
     |>.body #[]

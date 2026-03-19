@@ -553,8 +553,8 @@ def anyFromEmpty : Async Unit := do
 -- Test Any wrapping an Incoming channel receives chunks
 
 def anyFromChannel : Async Unit := do
-  let (outgoing, incoming) ← Body.mkChannel
-  let any := Body.Any.ofBody incoming
+  let (outgoing, _) ← Body.mkChannel
+  let any := Body.Any.ofBody outgoing
 
   let sendTask ← async (t := AsyncTask) <| outgoing.send (Chunk.ofByteArray "data".toUTF8)
   let result ← any.recv

@@ -4,17 +4,17 @@ import Std.Internal.Async
 open Std.Internal.IO Async
 open Std Http
 
-abbrev TestHandler := Request Body.Incoming → ContextAsync (Response Body.AnyBody)
+abbrev TestHandler := Request Body.Incoming → ContextAsync (Response Body.Any)
 
 instance : Std.Http.Server.Handler TestHandler where
   onRequest handler request := handler request
 
-instance : Coe (ContextAsync (Response Body.Incoming)) (ContextAsync (Response Body.AnyBody)) where
+instance : Coe (ContextAsync (Response Body.Incoming)) (ContextAsync (Response Body.Any)) where
   coe action := do
     let response ← action
     pure { response with body := Body.Internal.incomingToOutgoing response.body }
 
-instance : Coe (Async (Response Body.Incoming)) (ContextAsync (Response Body.AnyBody)) where
+instance : Coe (Async (Response Body.Incoming)) (ContextAsync (Response Body.Any)) where
   coe action := do
     let response ← action
     pure { response with body := Body.Internal.incomingToOutgoing response.body }

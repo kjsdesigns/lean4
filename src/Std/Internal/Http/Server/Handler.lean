@@ -25,19 +25,14 @@ responds to incoming requests, failures, and `Expect: 100-continue` headers.
 class Handler (σ : Type) where
   /--
   Concrete body type produced by `onRequest`.
-  Defaults to `Body.AnyBody`, but handlers may override it with any reader/writer-compatible body.
+  Defaults to `Body.Any`, but handlers may override it with any reader/writer-compatible body.
   -/
-  ResponseBody : Type := Body.AnyBody
+  ResponseBody : Type := Body.Any
 
   /--
-  Reader instance required by the connection loop for sending response chunks.
+  Body instance required by the connection loop for receiving response chunks.
   -/
-  [responseBodyReader : Body.Reader ResponseBody]
-
-  /--
-  Writer instance used for known-size metadata and protocol integration.
-  -/
-  [responseBodyWriter : Body.Writer ResponseBody]
+  [responseBodyInstance : Body ResponseBody]
 
   /--
   Called for each incoming HTTP request.

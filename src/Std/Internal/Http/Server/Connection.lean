@@ -99,7 +99,7 @@ Computes the socket recv size from `config`, then races all active selectables.
 Calls `Handler.onFailure` and returns `.close` on transport errors.
 -/
 private def pollNextEvent
-    {σ β : Type} [Transport α] [Handler σ] [Body.Reader β]
+    {σ β : Type} [Transport α] [Handler σ] [Body β]
     (config : Config) (handler : σ) (sources : PollSources α β)
     : Async (Recv β) := do
   let expectedBytes := sources.expect
@@ -126,10 +126,10 @@ private def pollNextEvent
       selectables := selectables.push (.case (← Selector.sleep sources.timeout) (fun _ => pure .timeout))
 
   if let some responseBody := sources.responseBody then
-    selectables := selectables.push (.case (Body.Reader.recvSelector responseBody) (Recv.responseBody · |> pure))
+    selectables := selectables.push (.case (Body.recvSelector responseBody) (Recv.responseBody · |> pure))
 
   if let some requestBody := sources.requestBody then
-    selectables := selectables.push (.case (Body.Writer.interestSelector requestBody) (Recv.bodyInterest · |> pure))
+    selectables := selectables.push (.case (requestBody.interestSelector) (Recv.bodyInterest · |> pure))
 
   if let some response := sources.response then
     selectables := selectables.push (.case response.recvSelector (Recv.response · |> pure))
@@ -185,18 +185,18 @@ response head. Returns the updated machine and the body stream to drain, or `non
 when the body should be omitted (e.g., for HEAD requests).
 -/
 private def applyResponse
-    {β : Type} [Body.Reader β] [Body.Writer β]
+    {β : Type} [Body β]
     (config : Config) (machine : H1.Machine .receiving) (res : Response β)
     : Async (H1.Machine .receiving × Option β) := do
-  let size ← Body.Writer.getKnownSize res.body
+  let size ← Body.getKnownSize res.body
   let machineSized :=
     if let some knownSize := size then machine.setKnownSize knownSize
     else machine
   let responseHead ← prepareResponseHead config res.line
   let machineWithHead := machineSized.send responseHead
   if machineWithHead.writer.omitBody then
-    if ¬(← Body.Reader.isClosed res.body) then
-      Body.Reader.close res.body
+    if ¬(← Body.isClosed res.body) then
+      Body.close res.body
     return (machineWithHead, none)
   else
     return (machineWithHead, some res.body)
@@ -225,7 +225,7 @@ Handles keep-alive resets, body-size tracking, `Expect: 100-continue`, and parse
 Returns the updated state; stops early on `.failed`.
 -/
 private def processH1Events
-    {σ β : Type} [Handler σ] [Body.Reader β]
+    {σ β : Type} [Handler σ] [Body β]
     (handler : σ) (config : Config) (connectionContext : CancellationContext)
     (events : Array (H1.Event .receiving))
     (state : ConnectionState β)
@@ -252,7 +252,7 @@ private def processH1Events
 
       if let some length := head.getSize true then
         -- Sets the size of the body that is going out of the connection.
-        Body.Writer.setKnownSize st.requestOutgoing (some length)
+        Body.setKnownSize st.requestOutgoing (some length)
 
     | .«continue» =>
       if let some head := st.pendingHead then
@@ -263,12 +263,12 @@ private def processH1Events
 
     | .next =>
       -- Reset all per-request state for the next pipelined request.
-      if ¬(← Body.Writer.isClosed st.requestOutgoing) then
-        Body.Writer.close st.requestOutgoing
+      if ¬(← Body.isClosed st.requestOutgoing) then
+        Body.close st.requestOutgoing
 
       if let some res := st.respStream then
-        if ¬(← Body.Reader.isClosed res) then
-          Body.Reader.close res
+        if ¬(← Body.isClosed res) then
+          Body.close res
 
       let (newOut, newIn) ← Body.mkChannel
 
@@ -286,15 +286,15 @@ private def processH1Events
     | .failed err =>
       Handler.onFailure handler (toString err)
 
-      if ¬(← Body.Writer.isClosed st.requestOutgoing) then
-        Body.Writer.close st.requestOutgoing
+      if ¬(← Body.isClosed st.requestOutgoing) then
+        Body.close st.requestOutgoing
 
       st := { st with requiresData := false, pendingHead := none }
       break
 
     | .closeBody =>
-      if ¬(← Body.Writer.isClosed st.requestOutgoing) then
-        Body.Writer.close st.requestOutgoing
+      if ¬(← Body.isClosed st.requestOutgoing) then
+        Body.close st.requestOutgoing
 
     | .close => pure ()
 
@@ -325,7 +325,7 @@ Processes a single async I/O event and updates the connection state.
 Returns the updated state and `true` if the connection should be closed immediately.
 -/
 private def handleRecvEvent
-    {σ β : Type} [Handler σ] [Body.Reader β] [Body.Writer β]
+    {σ β : Type} [Handler σ] [Body β]
     (handler : σ) (config : Config)
     (event : Recv β) (state : ConnectionState β)
     : Async (ConnectionState β × Bool) := do
@@ -352,7 +352,7 @@ private def handleRecvEvent
 
   | .responseBody none =>
     if let some res := state.respStream then
-      if ¬(← Body.Reader.isClosed res) then Body.Reader.close res
+      if ¬(← Body.isClosed res) then Body.close res
     return ({ state with machine := state.machine.userClosedBody, respStream := none }, false)
 
   | .bodyInterest interested =>
@@ -361,11 +361,11 @@ private def handleRecvEvent
       let mut st := { state with machine := newMachine }
 
       if let some pulled := pulledChunk then
-        try Body.Writer.send st.requestOutgoing pulled.chunk pulled.incomplete
+        try st.requestOutgoing.send pulled.chunk pulled.incomplete
         catch e => Handler.onFailure handler e
         if pulled.final then
-          if ¬(← Body.Writer.isClosed st.requestOutgoing) then
-            Body.Writer.close st.requestOutgoing
+          if ¬(← Body.isClosed st.requestOutgoing) then
+            Body.close st.requestOutgoing
 
       return (st, false)
     else
@@ -386,7 +386,7 @@ private def handleRecvEvent
 
   | .response (.ok res) =>
     if state.machine.failed then
-      if ¬(← Body.Reader.isClosed res.body) then Body.Reader.close res.body
+      if ¬(← Body.isClosed res.body) then Body.close res.body
       return ({ state with handlerDispatched := false }, false)
     else
       let (newMachine, newRespStream) ← applyResponse config state.machine res
@@ -401,11 +401,11 @@ private def buildPollSources
     (socket : α) (connectionContext : CancellationContext) (state : ConnectionState β)
     : Async (PollSources α β) := do
   let requestBodyOpen ←
-    if state.machine.canPullBody then pure !(← Body.Writer.isClosed state.requestOutgoing)
+    if state.machine.canPullBody then pure !(← Body.isClosed state.requestOutgoing)
     else pure false
 
   let requestBodyInterested ←
-    if state.machine.canPullBody ∧ requestBodyOpen then Body.Writer.hasInterest state.requestOutgoing
+    if state.machine.canPullBody ∧ requestBodyOpen then state.requestOutgoing.hasInterest
     else pure false
 
   let requestBody ←
@@ -441,8 +441,7 @@ private def handle
     (connectionContext : CancellationContext)
     (handler : σ) : Async Unit := do
 
-  let _ : Body.Reader (Handler.ResponseBody σ) := Handler.responseBodyReader
-  let _ : Body.Writer (Handler.ResponseBody σ) := Handler.responseBodyWriter
+  let _ : Body (Handler.ResponseBody σ) := Handler.responseBodyInstance
 
   let socket := connection.socket
   let (initOut, initIn) ← Body.mkChannel
@@ -490,11 +489,11 @@ private def handle
       if shouldClose then break
 
   -- Clean up: close all open streams and the socket.
-  if ¬(← Body.Writer.isClosed state.requestOutgoing) then
-    Body.Writer.close state.requestOutgoing
+  if ¬(← Body.isClosed state.requestOutgoing) then
+    Body.close state.requestOutgoing
 
   if let some res := state.respStream then
-    if ¬(← Body.Reader.isClosed res) then Body.Reader.close res
+    if ¬(← Body.isClosed res) then Body.close res
 
   Transport.close socket
 
