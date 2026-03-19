@@ -1,0 +1,41 @@
+-- Test that structural recursion creates a named `_f` helper definition
+-- for the functional passed to `brecOn`.
+
+-- Simple case: single function
+def addAdjacent : List Nat → List Nat
+  | []       => []
+  | [a]      => [a]
+  | a::b::as => (a+b) :: addAdjacent as
+
+-- The `_f` helper should exist in the environment
+#check @addAdjacent._f
+
+-- Verify computation still works
+/-- info: [3, 7] -/
+#guard_msgs in #eval addAdjacent [1, 2, 3, 4]
+
+-- Mutual recursion: both functions on the same type get a shared `_f`
+mutual
+  def even : Nat → Bool
+    | 0 => true
+    | n + 1 => odd n
+
+  def odd : Nat → Bool
+    | 0 => false
+    | n + 1 => even n
+end
+
+#check @even._f
+
+/-- info: true -/
+#guard_msgs in #eval even 4
+
+/-- info: true -/
+#guard_msgs in #eval odd 3
+
+-- With fixed parameters
+def myMap (f : α → β) : List α → List β
+  | []    => []
+  | x::xs => f x :: myMap f xs
+
+#check @myMap._f
