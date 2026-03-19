@@ -125,9 +125,11 @@ private def inferRecArgPos (preDefs : Array PreDefinition) (termMeasure?s : Arra
     preDefs.forM (addAsAxiom ·)
     preDefs.mapM fun preDef =>
       return { preDef with value := (← preprocess preDef.value fnNames numSectionVars) }
-  -- Function axioms are needed by `getFixedParamPerms` (which calls `isDefEq` on arguments of
-  -- recursive calls), by `getRecArgInfos` (inside `tryAllArgs`), and by `elimMutualRecursion`
-  -- (for `replaceRecApps`). Use `withoutModifyingEnv` to prevent these from leaking out.
+  -- Function axioms are needed by `getFixedParamPerms` (for `isDefEq` on arguments of recursive
+  -- calls), by `findRecArgCandidates` (inside `tryAllArgs`), and by `elimMutualRecursion` (for
+  -- `replaceRecApps`). Use `withoutModifyingEnv` to prevent these from leaking to the caller.
+  -- Within this scope, `tryCandidates` uses `saveState`/`restoreState` to properly backtrack
+  -- environment changes (such as temporary `_f` axioms) across retries.
   withoutModifyingEnv do
   preDefs.forM (addAsAxiom ·)
   -- The syntactically fixed arguments
@@ -162,11 +164,10 @@ private def inferRecArgPos (preDefs : Array PreDefinition) (termMeasure?s : Arra
                     which cannot be fixed as it is an index or depends on an index, and indices \
                     cannot be fixed parameters when using structural recursion."
       withErasedFVars toErase do
-        -- Use `withoutModifyingEnv` so that the `_f` axioms added by `elimMutualRecursion`
-        -- do not leak across `tryAllArgs` retries.
-        -- The returned `fValues` and `preDefsNonRec` are self-contained expressions.
-        let result ← withoutModifyingEnv do
-          elimMutualRecursion preDefs fixedParamPerms' xs' recArgInfos
+        -- `tryCandidates` uses `saveState`/`restoreState`, so environment changes from
+        -- `elimMutualRecursion` (including temporary `_f` axioms) are properly backtracked
+        -- on failure.
+        let result ← elimMutualRecursion preDefs fixedParamPerms' xs' recArgInfos
         return (recArgPoss, result, fixedParamPerms')
 
 def reportTermMeasure (preDef : PreDefinition) (recArgPos : Nat) : MetaM Unit := do
