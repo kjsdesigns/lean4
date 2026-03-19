@@ -120,10 +120,16 @@ private def inferRecArgPos (preDefs : Array PreDefinition) (termMeasure?s : Arra
     M (Array Nat × ElimRecResult × FixedParamPerms) := do
   let fnNames := preDefs.map (·.declName)
   let numSectionVars := preDefs[0]!.numSectionVars
+  -- Only `preprocess` needs the function axioms in the environment
+  let preDefs ← withoutModifyingEnv do
+    preDefs.forM (addAsAxiom ·)
+    preDefs.mapM fun preDef =>
+      return { preDef with value := (← preprocess preDef.value fnNames numSectionVars) }
+  -- Function axioms are needed by `getFixedParamPerms` (which calls `isDefEq` on arguments of
+  -- recursive calls), by `getRecArgInfos` (inside `tryAllArgs`), and by `elimMutualRecursion`
+  -- (for `replaceRecApps`). Use `withoutModifyingEnv` to prevent these from leaking out.
   withoutModifyingEnv do
   preDefs.forM (addAsAxiom ·)
-  let preDefs ← preDefs.mapM fun preDef =>
-    return { preDef with value := (← preprocess preDef.value fnNames numSectionVars) }
   -- The syntactically fixed arguments
   let fixedParamPerms ← getFixedParamPerms preDefs
 
@@ -156,8 +162,8 @@ private def inferRecArgPos (preDefs : Array PreDefinition) (termMeasure?s : Arra
                     which cannot be fixed as it is an index or depends on an index, and indices \
                     cannot be fixed parameters when using structural recursion."
       withErasedFVars toErase do
-        -- Use `withoutModifyingEnv` so that the `_f` definitions added by `elimMutualRecursion`
-        -- do not leak into subsequent attempts by `tryAllArgs`.
+        -- Use `withoutModifyingEnv` so that the `_f` axioms added by `elimMutualRecursion`
+        -- do not leak across `tryAllArgs` retries.
         -- The returned `fValues` and `preDefsNonRec` are self-contained expressions.
         let result ← withoutModifyingEnv do
           elimMutualRecursion preDefs fixedParamPerms' xs' recArgInfos
