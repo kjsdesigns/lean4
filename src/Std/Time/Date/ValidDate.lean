@@ -13,7 +13,6 @@ import Init.Data.Bool
 public section
 
 namespace Std.Time
-
 open Internal Month.Ordinal
 
 set_option linter.all true

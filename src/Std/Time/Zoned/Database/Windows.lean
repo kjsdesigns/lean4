@@ -12,9 +12,7 @@ import Init.While
 
 public section
 
-namespace Std
-namespace Time
-namespace Database
+namespace Std.Time.Database
 
 set_option linter.all true
 
@@ -90,3 +88,5 @@ def default : WindowsDb := {}
 instance : Std.Time.Database WindowsDb where
   getZoneRules _ id := Windows.getZoneRules id
   getLocalZoneRules _ := Windows.getZoneRules =<< Windows.getLocalTimeZoneIdentifierAt (-2147483648)
+
+end Std.Time.Database.WindowsDb

@@ -43,8 +43,7 @@ def ofWeeks (weeks : Week.Offset) : Nanosecond.Offset :=
 
 end Nanosecond.Offset
 
-namespace Millisecond
-namespace Offset
+namespace Millisecond.Offset
 
 /--
 Convert `Millisecond.Offset` into `Day.Offset`.
@@ -105,11 +104,9 @@ Convert `Week.Offset` into `Second.Offset`.
 def ofWeeks (weeks : Week.Offset) : Second.Offset :=
   weeks.mul 604800 |>.cast (by decide +kernel)
 
-end Offset
-end Second
+end Second.Offset
 
-namespace Minute
-namespace Offset
+namespace Minute.Offset
 
 /--
 Convert `Minute.Offset` into `Day.Offset`.
@@ -170,8 +167,7 @@ Convert `Week.Offset` into `Hour.Offset`.
 def ofWeeks (weeks : Week.Offset) : Hour.Offset :=
   weeks.mul 168 |>.cast (by decide +kernel)
 
-end Offset
-end Hour
+end Hour.Offset
 
 instance : HAdd Nanosecond.Offset Nanosecond.Offset Nanosecond.Offset where
   hAdd x y := x.add y

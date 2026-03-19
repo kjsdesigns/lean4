@@ -11,8 +11,7 @@ public import Std.Time.Duration
 
 public section
 
-namespace Std
-namespace Time
+namespace Std.Time
 open Internal
 
 set_option linter.all true
@@ -308,4 +307,4 @@ instance : HSub Timestamp Nanosecond.Offset Timestamp where
 instance : HSub Timestamp Timestamp Duration where
   hSub x y := x.val - y.val
 
-end Timestamp
+end Std.Time.Timestamp

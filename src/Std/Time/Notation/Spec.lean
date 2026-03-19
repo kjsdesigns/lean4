@@ -11,8 +11,7 @@ public meta import Std.Time.Format.Basic
 
 public section
 
-namespace Std
-namespace Time
+namespace Std.Time
 open Lean Parser Command Std
 
 private meta def convertText : Text → MacroM (TSyntax `term)
@@ -125,3 +124,5 @@ private meta def formatStringToFormat (fmt : TSyntax `str) (config : Option (TSy
 macro_rules
   | `(datespec( $fmt:str )) => formatStringToFormat fmt none
   | `(datespec( $fmt:str, $config:term )) => formatStringToFormat fmt (some config)
+
+end Std.Time

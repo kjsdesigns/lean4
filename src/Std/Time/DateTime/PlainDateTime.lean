@@ -10,8 +10,7 @@ public import Std.Time.DateTime.Timestamp
 
 public section
 
-namespace Std
-namespace Time
+namespace Std.Time
 open Internal
 
 set_option linter.all true
@@ -608,6 +607,4 @@ Combines a `PlainTime` and `PlainDate` into a `PlainDateTime`.
 def atDate (time: PlainTime) (date: PlainDate) : PlainDateTime :=
   PlainDateTime.mk date time
 
-end PlainTime
-end Time
-end Std
+end Std.Time.PlainTime

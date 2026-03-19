@@ -10,9 +10,7 @@ public import Std.Time.Time.Unit.Minute
 
 public section
 
-namespace Std
-namespace Time
-namespace Hour
+namespace Std.Time.Hour
 open Internal
 
 set_option linter.all true
@@ -123,7 +121,4 @@ Creates an `Offset` from an integer.
 def ofInt (data : Int) : Offset :=
   UnitVal.ofInt data
 
-end Offset
-end Hour
-end Time
-end Std
+end Std.Time.Hour.Offset

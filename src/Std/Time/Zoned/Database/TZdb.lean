@@ -11,9 +11,7 @@ import Init.Data.String.TakeDrop
 
 public section
 
-namespace Std
-namespace Time
-namespace Database
+namespace Std.Time.Database
 
 set_option linter.all true
 
@@ -100,3 +98,5 @@ instance : Std.Time.Database TZdb where
         return result
 
     throw <| IO.userError s!"cannot find {id} in the local timezone database"
+
+end Std.Time.Database.TZdb

@@ -13,10 +13,7 @@ public section
 
 -- Based on: https://www.rfc-editor.org/rfc/rfc8536.html
 
-namespace Std
-namespace Time
-namespace TimeZone
-namespace TZif
+namespace Std.Time.TimeZone.TZif
 open Std.Internal.Parsec Std.Internal.Parsec.ByteArray
 
 set_option linter.all true
@@ -328,4 +325,4 @@ def parse : Parser TZif := do
   let v2 ← parseTZifV2
   return { v1, v2 }
 
-end TZif
+end Std.Time.TimeZone.TZif

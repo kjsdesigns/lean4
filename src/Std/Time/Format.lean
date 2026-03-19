@@ -233,8 +233,7 @@ def fromOffset (input : String) : Except String Offset := do
   let spec : Format Awareness.any := datespec("xxx")
   spec.parseBuilder some input
 
-end Offset
-end TimeZone
+end TimeZone.Offset
 
 namespace PlainDate
 

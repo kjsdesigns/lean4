@@ -14,9 +14,7 @@ import Init.System.Platform
 
 public section
 
-namespace Std
-namespace Time
-namespace Database
+namespace Std.Time.Database
 open TimeZone.ZoneRules
 
 set_option linter.all true
@@ -40,3 +38,5 @@ def defaultGetLocalZoneRules : IO TimeZone.ZoneRules :=
   if System.Platform.isWindows
     then getLocalZoneRules WindowsDb.default
     else getLocalZoneRules TZdb.default
+
+end Std.Time.Database

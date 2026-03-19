@@ -11,9 +11,7 @@ public import Std.Time.Zoned.TimeZone
 
 public section
 
-namespace Std
-namespace Time
-namespace TimeZone
+namespace Std.Time.TimeZone
 open Internal
 
 set_option linter.all true
@@ -224,4 +222,4 @@ def ofTimeZone (tz : TimeZone) : ZoneRules :=
   let ltt :=  LocalTimeType.mk tz.offset tz.isDST tz.abbreviation .wall .local tz.name
   ZoneRules.mk ltt #[]
 
-end ZoneRules
+end Std.Time.TimeZone.ZoneRules

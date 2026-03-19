@@ -10,8 +10,7 @@ public import Std.Time.Date.Unit.Day
 
 public section
 
-namespace Std
-namespace Time
+namespace Std.Time
 open Internal
 
 set_option linter.all true
@@ -158,6 +157,4 @@ def isWeekend : Weekday → Bool
   | .sunday => true
   | _ => false
 
-end Weekday
-end Time
-end Std
+end Std.Time.Weekday

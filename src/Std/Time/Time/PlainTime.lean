@@ -10,8 +10,7 @@ public import Std.Time.Time.Basic
 
 public section
 
-namespace Std
-namespace Time
+namespace Std.Time
 open Internal
 
 set_option linter.all true
@@ -316,6 +315,4 @@ instance : HAdd PlainTime Hour.Offset PlainTime where
 instance : HSub PlainTime Hour.Offset PlainTime where
   hSub := subHours
 
-end PlainTime
-end Time
-end Std
+end Std.Time.PlainTime

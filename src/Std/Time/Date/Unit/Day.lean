@@ -142,8 +142,7 @@ Converts an `OfYear` ordinal to a `Offset`.
 def toOffset (ofYear : OfYear leap) : Offset :=
   UnitVal.ofInt ofYear.val
 
-end OfYear
-end Ordinal
+end Ordinal.OfYear
 
 namespace Offset
 
@@ -238,7 +237,4 @@ Convert `Hour.Offset` into `Day.Offset`.
 def ofHours (hours : Hour.Offset) : Day.Offset :=
   hours.ediv 24 |>.cast (by decide +kernel)
 
-end Offset
-end Day
-end Time
-end Std
+end Std.Time.Day.Offset
