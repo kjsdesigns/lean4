@@ -287,4 +287,30 @@ def findRecArgCandidates (fnNames : Array Name) (fixedParamPerms : FixedParamPer
         m!"please indicate the recursive argument explicitly using `termination_by structural`).\n"
   return { candidates, report }
 
+/--
+Try each candidate argument combination for structural recursion.
+Uses `saveState`/`restoreState` to properly backtrack on failure.
+-/
+def tryCandidates (fnNames : Array Name) (xs : Array Expr) (values : Array Expr)
+    (candidates : RecArgCandidates) (k : Array RecArgInfo → M α) : M α := do
+  let mut report := candidates.report
+  for candidate in candidates.candidates do
+    let saved ← Meta.saveState
+    try
+      unless (← hasConst (candidate.group.brecOnName 0)) do
+        throwError "the type {candidate.group} does not have a `.brecOn` recursor"
+      let r ← k candidate.comb
+      trace[Elab.definition.structural] "tryCandidates report:\n{report}"
+      return r
+    catch e =>
+      saved.restore
+      let m ← prettyParameterSet fnNames xs values candidate.comb
+      report := report ++ m!"Cannot use {m}:{indentD e.toMessageData}\n"
+  if candidates.candidates.isEmpty then
+    report := m!"failed to infer structural recursion:\n" ++ report
+  else
+    report := m!"failed to infer structural recursion:\n" ++ report
+  trace[Elab.definition.structural] "tryCandidates:\n{report}"
+  throwError report
+
 end Lean.Elab.Structural

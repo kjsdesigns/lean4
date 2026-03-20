@@ -21,13 +21,6 @@ namespace Lean.Elab
 namespace Structural
 open Meta
 
-/-- Like `M` but based on `TermElabM`, so that we can call `addNonRec` etc. in the callback.
-`M` functions lift to `TM` since `MetaM` lifts to `TermElabM`, and the `State` ref is shared. -/
-private abbrev TM := StateRefT State TermElabM
-
-private instance : MonadLift M TM where
-  monadLift x := fun ref => liftM (x ref)
-
 /--
 The result of `elimMutualRecursion`: the individual functional values (one per function,
 to be used for `_f` helper definitions) and the non-recursive PreDefinitions.
@@ -124,40 +117,6 @@ private def elimMutualRecursion (preDefs : Array PreDefinition) (fixedParamPerms
   return { fValues, isIndPred, preDefsNonRec }
 
 /--
-Try each candidate combination from `findRecArgCandidates`.
-Uses `Meta.saveState`/`restore` to properly backtrack meta state, environment, and
-`Structural.State` on failure.
-The callback `k` is responsible for managing its own environment changes (e.g. wrapping
-axiom additions in `withoutModifyingEnv`).
--/
-private def tryCandidates (fnNames : Array Name) (xs : Array Expr) (values : Array Expr)
-    (candidates : RecArgCandidates) (k : Array RecArgInfo → TM α) : TM α := do
-  let mut report := candidates.report
-  for candidate in candidates.candidates do
-    let saved ← Meta.saveState
-    let savedStructState ← getThe State
-    try
-      -- Check that the group actually has a brecOn (we used to check this in getRecArgInfo,
-      -- but in the first phase we do not want to rule-out non-recursive types like `Array`, which
-      -- are ok in a nested group. This logic can maybe simplified)
-      unless (← hasConst (candidate.group.brecOnName 0)) do
-        throwError "the type {candidate.group} does not have a `.brecOn` recursor"
-      let r ← k candidate.comb
-      trace[Elab.definition.structural] "tryCandidates report:\n{report}"
-      return r
-    catch e =>
-      saved.restore
-      modifyThe State fun _ => savedStructState
-      let m ← prettyParameterSet fnNames xs values candidate.comb
-      report := report ++ m!"Cannot use {m}:{indentD e.toMessageData}\n"
-  if candidates.candidates.isEmpty then
-    report := m!"failed to infer structural recursion:\n" ++ report
-  else
-    report := m!"failed to infer structural recursion:\n" ++ report
-  trace[Elab.definition.structural] "tryCandidates:\n{report}"
-  throwError report
-
-/--
 Temporarily adds the recursive functions as axioms to the environment and runs the given action.
 The environment is restored afterwards, so no persistent changes (e.g. auxiliary definitions) can
 be made inside the action.
@@ -172,8 +131,8 @@ private def withRecFunsAsAxioms [Monad n] [MonadLiftT MetaM n] [MonadEnv n] [Mon
     preDefs.forM (liftM <| addAsAxiom ·)
     k
 
-private def inferRecArgPos (preDefs : Array PreDefinition) (termMeasure?s : Array (Option TerminationMeasure))
-    (k : Array Nat → ElimRecResult → FixedParamPerms → TM Unit) : TM Unit := do
+private def inferRecArgPos (preDefs : Array PreDefinition) (termMeasure?s : Array (Option TerminationMeasure)) :
+    M (Array Nat × ElimRecResult × FixedParamPerms) := do
   let fnNames := preDefs.map (·.declName)
   let numSectionVars := preDefs[0]!.numSectionVars
   let preDefs ← withRecFunsAsAxioms preDefs do
@@ -215,11 +174,11 @@ private def inferRecArgPos (preDefs : Array PreDefinition) (termMeasure?s : Arra
                     which cannot be fixed as it is an index or depends on an index, and indices \
                     cannot be fixed parameters when using structural recursion."
       -- `elimMutualRecursion` creates temporary `_f` axioms inside `withRecFunsAsAxioms`;
-      -- real `_f` definitions are added in the callback below.
-      let result ← withErasedFVars toErase do
-        withRecFunsAsAxioms preDefs do
+      -- real `_f` definitions are added by `structuralRecursion`.
+      withErasedFVars toErase do
+        let result ← withRecFunsAsAxioms preDefs do
           elimMutualRecursion preDefs fixedParamPerms' xs' recArgInfos
-      k recArgPoss result fixedParamPerms'
+        return (recArgPoss, result, fixedParamPerms')
 
 def reportTermMeasure (preDef : PreDefinition) (recArgPos : Nat) : MetaM Unit := do
   if let some ref := preDef.termination.terminationBy?? then
@@ -234,49 +193,47 @@ def structuralRecursion
     (termMeasure?s : Array (Option TerminationMeasure)) :
     TermElabM Unit := do
   let names := preDefs.map (·.declName)
-  StateRefT'.run' (s := ({} : State)) do
-    inferRecArgPos preDefs termMeasure?s fun recArgPoss result fixedParamPerms => do
-      -- Replay matchers that were created inside `withoutModifyingEnv` and rolled back
-      (← getThe State).addMatchers.forM fun m => liftM m
-      for recArgPos in recArgPoss, preDef in preDefs do
-        reportTermMeasure preDef recArgPos
-      -- Add `_f` helper definitions (the individual functionals)
-      unless result.isIndPred do
-        for preDef in preDefs, fValue in result.fValues do
-          let fName := preDef.declName ++ `_f
-          let fValue ← eraseRecAppSyntaxExpr fValue
-          let fType ← inferType fValue
-          let fPreDef : PreDefinition := { preDef with
-            declName := fName, type := fType, value := fValue,
-            kind := .abbrev, modifiers := {}, termination := default }
-          addNonRec docCtx fPreDef (applyAttrAfterCompilation := false)
-          setReducibleAttribute fName
-      result.preDefsNonRec.forM fun preDefNonRec => do
-        let preDefNonRec ← eraseRecAppSyntax preDefNonRec
-        prependError m!"structural recursion failed, produced type incorrect term" do
-          -- We create the `_unsafe_rec` before we abstract nested proofs.
-          -- Reason: the nested proofs may be referring to the _unsafe_rec.
-          addNonRec docCtx preDefNonRec (applyAttrAfterCompilation := false) (all := names.toList) (isRecursive := true)
-      let preDefs ← preDefs.mapM (eraseRecAppSyntax ·)
-      addAndCompilePartialRec docCtx preDefs
-      for preDef in preDefs, recArgPos in recArgPoss do
-        let mut preDef := preDef
-        unless preDef.kind.isTheorem do
-          unless (← isProp preDef.type) do
-            preDef ← abstractNestedProofs preDef
-            /-
-            Don't save predefinition info for equation generator
-            for theorems and definitions that are propositions.
-            See issue #2327
-            -/
-            registerEqnsInfo preDef (preDefs.map (·.declName)) recArgPos fixedParamPerms
-        addSmartUnfoldingDef docCtx preDef recArgPos
-      for preDef in preDefs do
-        -- must happen in separate loop so realizations can see eqnInfos of all other preDefs
-        enableRealizationsForConst preDef.declName
-        -- must happen after `enableRealizationsForConst`
-        generateEagerEqns preDef.declName
-      applyAttributesOf result.preDefsNonRec AttributeApplicationTime.afterCompilation
+  let ((recArgPoss, result, fixedParamPerms), state) ← run <| inferRecArgPos preDefs termMeasure?s
+  for recArgPos in recArgPoss, preDef in preDefs do
+    reportTermMeasure preDef recArgPos
+  state.addMatchers.forM liftM
+  -- Add `_f` helper definitions (the individual functionals)
+  unless result.isIndPred do
+    for preDef in preDefs, fValue in result.fValues do
+      let fName := preDef.declName ++ `_f
+      let fValue ← eraseRecAppSyntaxExpr fValue
+      let fType ← inferType fValue
+      let fPreDef : PreDefinition := { preDef with
+        declName := fName, type := fType, value := fValue,
+        kind := .abbrev, modifiers := {}, termination := default }
+      addNonRec docCtx fPreDef (applyAttrAfterCompilation := false)
+      setReducibleAttribute fName
+  result.preDefsNonRec.forM fun preDefNonRec => do
+    let preDefNonRec ← eraseRecAppSyntax preDefNonRec
+    prependError m!"structural recursion failed, produced type incorrect term" do
+      -- We create the `_unsafe_rec` before we abstract nested proofs.
+      -- Reason: the nested proofs may be referring to the _unsafe_rec.
+      addNonRec docCtx preDefNonRec (applyAttrAfterCompilation := false) (all := names.toList) (isRecursive := true)
+  let preDefs ← preDefs.mapM (eraseRecAppSyntax ·)
+  addAndCompilePartialRec docCtx preDefs
+  for preDef in preDefs, recArgPos in recArgPoss do
+    let mut preDef := preDef
+    unless preDef.kind.isTheorem do
+      unless (← isProp preDef.type) do
+        preDef ← abstractNestedProofs preDef
+        /-
+        Don't save predefinition info for equation generator
+        for theorems and definitions that are propositions.
+        See issue #2327
+        -/
+        registerEqnsInfo preDef (preDefs.map (·.declName)) recArgPos fixedParamPerms
+    addSmartUnfoldingDef docCtx preDef recArgPos
+  for preDef in preDefs do
+    -- must happen in separate loop so realizations can see eqnInfos of all other preDefs
+    enableRealizationsForConst preDef.declName
+    -- must happen after `enableRealizationsForConst`
+    generateEagerEqns preDef.declName
+  applyAttributesOf result.preDefsNonRec AttributeApplicationTime.afterCompilation
 
 
 end Structural
