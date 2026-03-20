@@ -93,7 +93,7 @@ private def elimMutualRecursion (preDefs : Array PreDefinition) (fixedParamPerms
   -- Compute `_f` values and types (closed over fixed parameters) for each function,
   -- and add the `_f` definitions to the environment.
   let fValues ← FArgs.mapM (mkLambdaFVars xs ·)
-  let fTypes ← fValues.mapM inferType
+  let fTypes ← FTypes.mapM (mkForallFVars xs ·)
   let us := preDefs[0]!.levelParams.map mkLevelParam
   let packedFArgs ←
     if isIndPred then
