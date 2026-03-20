@@ -1,6 +1,6 @@
 // Lean compiler output
 // Module: Init.System.IO
-// Imports: public import Init.Control.Do public import Init.System.IOError public import Init.System.FilePath import Init.Data.String.TakeDrop import Init.Data.String.Search public import Init.Data.Ord.Basic public import Init.Data.String.Basic import Init.Data.List.MapIdx import Init.Data.Ord.UInt import Init.Data.ToString.Macro import Init.Data.List.Impl
+// Imports: public import Init.Control.Do public import Init.System.IOError public import Init.System.FilePath import Init.Data.String.TakeDrop import Init.Data.String.Search public import Init.Data.Ord.Basic public import Init.Data.String.Basic import Init.Data.List.MapIdx import Init.Data.Ord.UInt import Init.Data.ToString.Macro import Init.Data.List.Impl import Init.Data.Int.Repr
 #include <lean/lean.h>
 #if defined(__clang__)
 #pragma clang diagnostic ignored "-Wunused-parameter"
@@ -12962,17 +12962,17 @@ else
 {
 lean_object* v___x_4254_; lean_object* v___x_4255_; lean_object* v___x_4256_; lean_object* v___x_4257_; 
 v___x_4254_ = lean_string_utf8_byte_size(v___y_4249_);
-lean_inc(v___y_4250_);
+lean_inc(v___y_4248_);
 lean_inc_ref(v___y_4249_);
 v___x_4255_ = lean_alloc_ctor(0, 3, 0);
 lean_ctor_set(v___x_4255_, 0, v___y_4249_);
-lean_ctor_set(v___x_4255_, 1, v___y_4250_);
+lean_ctor_set(v___x_4255_, 1, v___y_4248_);
 lean_ctor_set(v___x_4255_, 2, v___x_4254_);
-v___x_4256_ = l_String_Slice_Pos_prevn(v___x_4255_, v___x_4254_, v___y_4248_);
+v___x_4256_ = l_String_Slice_Pos_prevn(v___x_4255_, v___x_4254_, v___y_4250_);
 lean_dec_ref(v___x_4255_);
-v___x_4257_ = lean_string_utf8_extract(v___y_4249_, v___y_4250_, v___x_4256_);
+v___x_4257_ = lean_string_utf8_extract(v___y_4249_, v___y_4248_, v___x_4256_);
 lean_dec(v___x_4256_);
-lean_dec(v___y_4250_);
+lean_dec(v___y_4248_);
 lean_dec_ref(v___y_4249_);
 v___y_4244_ = v___x_4257_;
 goto v___jp_4243_;
@@ -13036,9 +13036,9 @@ if (lean_obj_tag(v___x_4274_) == 0)
 uint32_t v___x_4275_; 
 lean_dec_ref(v___x_4273_);
 v___x_4275_ = 65;
-v___y_4248_ = v___x_4266_;
+v___y_4248_ = v___x_4267_;
 v___y_4249_ = v___x_4271_;
-v___y_4250_ = v___x_4267_;
+v___y_4250_ = v___x_4266_;
 v___y_4251_ = v___x_4275_;
 goto v___jp_4247_;
 }
@@ -13055,9 +13055,9 @@ if (lean_obj_tag(v___x_4277_) == 0)
 {
 uint32_t v___x_4278_; 
 v___x_4278_ = 65;
-v___y_4248_ = v___x_4266_;
+v___y_4248_ = v___x_4267_;
 v___y_4249_ = v___x_4271_;
-v___y_4250_ = v___x_4267_;
+v___y_4250_ = v___x_4266_;
 v___y_4251_ = v___x_4278_;
 goto v___jp_4247_;
 }
@@ -13069,9 +13069,9 @@ lean_inc(v_val_4279_);
 lean_dec_ref(v___x_4277_);
 v___x_4280_ = lean_unbox_uint32(v_val_4279_);
 lean_dec(v_val_4279_);
-v___y_4248_ = v___x_4266_;
+v___y_4248_ = v___x_4267_;
 v___y_4249_ = v___x_4271_;
-v___y_4250_ = v___x_4267_;
+v___y_4250_ = v___x_4266_;
 v___y_4251_ = v___x_4280_;
 goto v___jp_4247_;
 }
@@ -13698,6 +13698,7 @@ lean_object* runtime_initialize_Init_Data_List_MapIdx(uint8_t builtin);
 lean_object* runtime_initialize_Init_Data_Ord_UInt(uint8_t builtin);
 lean_object* runtime_initialize_Init_Data_ToString_Macro(uint8_t builtin);
 lean_object* runtime_initialize_Init_Data_List_Impl(uint8_t builtin);
+lean_object* runtime_initialize_Init_Data_Int_Repr(uint8_t builtin);
 static bool _G_runtime_initialized = false;
 LEAN_EXPORT lean_object* runtime_initialize_Init_System_IO(uint8_t builtin) {
 lean_object * res;
@@ -13734,6 +13735,9 @@ res = runtime_initialize_Init_Data_ToString_Macro(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
 res = runtime_initialize_Init_Data_List_Impl(builtin);
+if (lean_io_result_is_error(res)) return res;
+lean_dec_ref(res);
+res = runtime_initialize_Init_Data_Int_Repr(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
 l_IO_RealWorld_nonemptyType = _init_l_IO_RealWorld_nonemptyType();
@@ -13777,6 +13781,7 @@ lean_object* initialize_Init_Data_List_MapIdx(uint8_t builtin);
 lean_object* initialize_Init_Data_Ord_UInt(uint8_t builtin);
 lean_object* initialize_Init_Data_ToString_Macro(uint8_t builtin);
 lean_object* initialize_Init_Data_List_Impl(uint8_t builtin);
+lean_object* initialize_Init_Data_Int_Repr(uint8_t builtin);
 static bool _G_initialized = false;
 LEAN_EXPORT lean_object* initialize_Init_System_IO(uint8_t builtin) {
 lean_object * res;
@@ -13813,6 +13818,9 @@ res = initialize_Init_Data_ToString_Macro(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
 res = initialize_Init_Data_List_Impl(builtin);
+if (lean_io_result_is_error(res)) return res;
+lean_dec_ref(res);
+res = initialize_Init_Data_Int_Repr(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
 res = runtime_initialize_Init_System_IO(builtin);

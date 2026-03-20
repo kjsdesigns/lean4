@@ -12244,8 +12244,8 @@ goto v___jp_3749_;
 }
 else
 {
-lean_dec_ref(v_declName_3771_);
 lean_dec(v_pre_3772_);
+lean_dec_ref(v_declName_3771_);
 lean_dec(v_a_3764_);
 lean_dec(v_catName_3736_);
 v___y_3750_ = v_a_3769_;
@@ -14148,8 +14148,8 @@ return v___x_4542_;
 }
 else
 {
-lean_dec(v_tail_4534_);
 lean_dec_ref(v_head_4533_);
+lean_dec(v_tail_4534_);
 lean_dec_ref(v_head_4531_);
 lean_dec(v_ref_4527_);
 goto v___jp_4529_;
@@ -14166,8 +14166,8 @@ goto v___jp_4529_;
 }
 else
 {
-lean_dec_ref(v_head_4531_);
 lean_dec(v_tail_4532_);
+lean_dec_ref(v_head_4531_);
 lean_dec(v_ref_4527_);
 goto v___jp_4529_;
 }
