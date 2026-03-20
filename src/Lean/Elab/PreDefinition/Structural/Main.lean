@@ -22,14 +22,6 @@ namespace Structural
 open Meta
 
 /--
-The result of `elimMutualRecursion`: the individual functional values (one per function,
-to be used for `_f` helper definitions) and the non-recursive PreDefinitions.
--/
-private structure ElimRecResult where
-  /-- The non-recursive PreDefinitions. -/
-  preDefsNonRec : Array PreDefinition
-
-/--
 Temporarily adds the recursive functions as axioms to the environment and runs the given action.
 The environment is restored afterwards, so no persistent changes (e.g. auxiliary definitions) can
 be made inside the action.
@@ -45,7 +37,7 @@ private def withRecFunsAsAxioms [Monad n] [MonadLiftT MetaM n] [MonadEnv n] [Mon
     k
 
 private def elimMutualRecursion (preDefs : Array PreDefinition) (fixedParamPerms : FixedParamPerms)
-    (xs : Array Expr) (recArgInfos : Array RecArgInfo) : MetaM ElimRecResult := do
+    (xs : Array Expr) (recArgInfos : Array RecArgInfo) : MetaM (Array PreDefinition) := do
   let values ← preDefs.mapIdxM (fixedParamPerms.perms[·]!.instantiateLambda ·.value xs)
   let fnTypes ← preDefs.mapIdxM (fixedParamPerms.perms[·]!.instantiateForall ·.type xs)
   let indInfo ← getConstInfoInduct recArgInfos[0]!.indGroupInst.all[0]!
@@ -56,8 +48,8 @@ private def elimMutualRecursion (preDefs : Array PreDefinition) (fixedParamPerms
 
   let isIndPred ← isInductivePredicate indInfo.name
 
-  let withFunTypesAndMotives (k : Array Expr → Array Expr → MetaM ElimRecResult) :
-      MetaM ElimRecResult := do
+  let withFunTypesAndMotives (k : Array Expr → Array Expr → MetaM (Array PreDefinition)) :
+      MetaM (Array PreDefinition) := do
     if isIndPred then
       withFunTypes values fun funTypes => do
         let motives ← recArgInfos.mapIdxM fun idx r =>
@@ -137,10 +129,10 @@ private def elimMutualRecursion (preDefs : Array PreDefinition) (fixedParamPerms
       mkLambdaFVars (fixedParamPerms.perms[i]!.buildArgs xs ys) (valueNew.beta ys)
   let preDefsNonRec := preDefs.zipWith (bs := valuesNew) fun preDef valueNew =>
     { preDef with value := valueNew }
-  return { preDefsNonRec }
+  return preDefsNonRec
 
 private def inferRecArgPos (preDefs : Array PreDefinition) (termMeasure?s : Array (Option TerminationMeasure)) :
-    MetaM (Array Nat × ElimRecResult × FixedParamPerms) := do
+    MetaM (Array Nat × Array PreDefinition × FixedParamPerms) := do
   let fnNames := preDefs.map (·.declName)
   let numSectionVars := preDefs[0]!.numSectionVars
   let preDefs ← withRecFunsAsAxioms preDefs do
@@ -181,11 +173,10 @@ private def inferRecArgPos (preDefs : Array PreDefinition) (termMeasure?s : Arra
                     {indentExpr indParam}\ndepends on the function parameter{indentExpr (mkFVar y)}\n\
                     which cannot be fixed as it is an index or depends on an index, and indices \
                     cannot be fixed parameters when using structural recursion."
-      -- `elimMutualRecursion` creates temporary `_f` axioms inside `withRecFunsAsAxioms`;
-      -- real `_f` definitions are added by `structuralRecursion`.
+      -- `elimMutualRecursion` adds `_f` definitions to the environment.
       withErasedFVars toErase do
-        let result ← elimMutualRecursion preDefs fixedParamPerms' xs' recArgInfos
-        return (recArgPoss, result, fixedParamPerms')
+        let preDefsNonRec ← elimMutualRecursion preDefs fixedParamPerms' xs' recArgInfos
+        return (recArgPoss, preDefsNonRec, fixedParamPerms')
 
 def reportTermMeasure (preDef : PreDefinition) (recArgPos : Nat) : MetaM Unit := do
   if let some ref := preDef.termination.terminationBy?? then
@@ -200,10 +191,10 @@ def structuralRecursion
     (termMeasure?s : Array (Option TerminationMeasure)) :
     TermElabM Unit := do
   let names := preDefs.map (·.declName)
-  let (recArgPoss, result, fixedParamPerms) ← inferRecArgPos preDefs termMeasure?s
+  let (recArgPoss, preDefsNonRec, fixedParamPerms) ← inferRecArgPos preDefs termMeasure?s
   for recArgPos in recArgPoss, preDef in preDefs do
     reportTermMeasure preDef recArgPos
-  result.preDefsNonRec.forM fun preDefNonRec => do
+  preDefsNonRec.forM fun preDefNonRec => do
     let preDefNonRec ← eraseRecAppSyntax preDefNonRec
     prependError m!"structural recursion failed, produced type incorrect term" do
       -- We create the `_unsafe_rec` before we abstract nested proofs.
@@ -228,7 +219,7 @@ def structuralRecursion
     enableRealizationsForConst preDef.declName
     -- must happen after `enableRealizationsForConst`
     generateEagerEqns preDef.declName
-  applyAttributesOf result.preDefsNonRec AttributeApplicationTime.afterCompilation
+  applyAttributesOf preDefsNonRec AttributeApplicationTime.afterCompilation
 
 
 end Structural
