@@ -26,17 +26,26 @@ The result of `elimMutualRecursion`: the individual functional values (one per f
 to be used for `_f` helper definitions) and the non-recursive PreDefinitions.
 -/
 private structure ElimRecResult where
-  /-- Individual functional values, closed over fixed parameters (one per function). -/
-  fValues : Array Expr
-  /-- Types of the individual functional values. -/
-  fTypes : Array Expr
-  /-- Whether the function is an inductive predicate (skip `_f` naming). -/
-  isIndPred : Bool
   /-- The non-recursive PreDefinitions. -/
   preDefsNonRec : Array PreDefinition
 
+/--
+Temporarily adds the recursive functions as axioms to the environment and runs the given action.
+The environment is restored afterwards, so no persistent changes (e.g. auxiliary definitions) can
+be made inside the action.
+
+This is needed around any `MetaM` code that may try to infer the type of, or unfold, expressions
+that still mention the recursive function constants (e.g. `isDefEq`, `inferType`, `whnf` on
+arguments of recursive calls). Without these axioms, the kernel would reject the unknown constants.
+-/
+private def withRecFunsAsAxioms [Monad n] [MonadLiftT MetaM n] [MonadEnv n] [MonadFinally n]
+    (preDefs : Array PreDefinition) (k : n α) : n α :=
+  withoutModifyingEnv do
+    preDefs.forM (liftM <| addAsAxiom ·)
+    k
+
 private def elimMutualRecursion (preDefs : Array PreDefinition) (fixedParamPerms : FixedParamPerms)
-    (xs : Array Expr) (recArgInfos : Array RecArgInfo) : M ElimRecResult := do
+    (xs : Array Expr) (recArgInfos : Array RecArgInfo) : MetaM ElimRecResult := do
   let values ← preDefs.mapIdxM (fixedParamPerms.perms[·]!.instantiateLambda ·.value xs)
   let fnTypes ← preDefs.mapIdxM (fixedParamPerms.perms[·]!.instantiateForall ·.type xs)
   let indInfo ← getConstInfoInduct recArgInfos[0]!.indGroupInst.all[0]!
@@ -47,8 +56,8 @@ private def elimMutualRecursion (preDefs : Array PreDefinition) (fixedParamPerms
 
   let isIndPred ← isInductivePredicate indInfo.name
 
-  let withFunTypesAndMotives (k : Array Expr → Array Expr → M ElimRecResult) :
-      M ElimRecResult := do
+  let withFunTypesAndMotives (k : Array Expr → Array Expr → MetaM ElimRecResult) :
+      MetaM ElimRecResult := do
     if isIndPred then
       withFunTypes values fun funTypes => do
         let motives ← recArgInfos.mapIdxM fun idx r =>
@@ -65,13 +74,21 @@ private def elimMutualRecursion (preDefs : Array PreDefinition) (fixedParamPerms
   let FTypes ← inferBRecOnFTypes recArgInfos positions brecOnConst
   trace[Elab.definition.structural] "FTypes: {FTypes}"
 
-  let FArgs ← recArgInfos.mapIdxM fun idx r =>
-    let v := values[idx]!
-    let t := FTypes[idx]!
+  -- `withRecFunsAsAxioms` is needed for `replaceRecApps`/`replaceIndPredRecApps` which transform
+  -- recursive calls in the function body.
+  -- For inductive predicates, `mkIndPredBRecOnF` additionally creates matchers as side effects
+  -- (inside `withoutModifyingEnv`); these are replayed immediately after.
+  let FArgs ←
     if isIndPred then
-      mkIndPredBRecOnF recArgInfos positions r v t (brecOnConst 0).getAppArgs
+      recArgInfos.mapIdxM fun idx r => do
+        let (fArg, matchers) ← withRecFunsAsAxioms preDefs do
+          mkIndPredBRecOnF recArgInfos positions r values[idx]! FTypes[idx]! (brecOnConst 0).getAppArgs
+        matchers.forM (·)
+        return fArg
     else
-      mkBRecOnF recArgInfos positions r v t
+      withRecFunsAsAxioms preDefs do
+        recArgInfos.mapIdxM fun idx r =>
+          mkBRecOnF recArgInfos positions r values[idx]! FTypes[idx]!
   trace[Elab.definition.structural] "FArgs: {FArgs}"
   let brecOn := brecOnConst 0
   -- the indices and the major premise are not mentioned in the minor premises
@@ -81,13 +98,10 @@ private def elimMutualRecursion (preDefs : Array PreDefinition) (fixedParamPerms
   let packedFArgs ← positions.mapMwith (PProdN.mkLambdas · ·) packedFTypes FArgs
   trace[Elab.definition.structural] "packedFArgs: {packedFArgs}"
 
-  -- Compute `_f` values and types (closed over fixed parameters) for each function
+  -- Compute `_f` values and types (closed over fixed parameters) for each function,
+  -- and add the `_f` definitions to the environment.
   let fValues ← FArgs.mapM (mkLambdaFVars xs ·)
-  let fTypes ← fValues.mapM (liftM <| inferType ·)
-
-  -- For single-function position groups, reference the `_f` constant in the
-  -- packed functional so it shows up in kernel diagnostics.
-  -- Add temporary `_f` axioms to the environment so the brecOn application type-checks.
+  let fTypes ← fValues.mapM inferType
   let us := preDefs[0]!.levelParams.map mkLevelParam
   let packedFArgs ←
     if isIndPred then
@@ -95,9 +109,16 @@ private def elimMutualRecursion (preDefs : Array PreDefinition) (fixedParamPerms
     else
       for idx in [:preDefs.size] do
         let fName := preDefs[idx]!.declName ++ `_f
-        addDecl (.axiomDecl {
+        let fValue ← eraseRecAppSyntaxExpr fValues[idx]!
+        addDecl (.defnDecl {
           name := fName, levelParams := preDefs[idx]!.levelParams,
-          type := fTypes[idx]!, isUnsafe := preDefs[idx]!.modifiers.isUnsafe })
+          type := fTypes[idx]!, value := fValue,
+          hints := .abbrev,
+          safety := if preDefs[idx]!.modifiers.isUnsafe then .unsafe else .safe,
+          all := [fName] })
+        setReducibleAttribute fName
+      -- For single-function position groups, reference the `_f` constant in the
+      -- packed functional so it shows up in kernel diagnostics.
       packedFArgs.mapIdxM fun i packedFArg => do
         let poss := positions[i]!
         if poss.size == 1 then
@@ -116,25 +137,10 @@ private def elimMutualRecursion (preDefs : Array PreDefinition) (fixedParamPerms
       mkLambdaFVars (fixedParamPerms.perms[i]!.buildArgs xs ys) (valueNew.beta ys)
   let preDefsNonRec := preDefs.zipWith (bs := valuesNew) fun preDef valueNew =>
     { preDef with value := valueNew }
-  return { fValues, fTypes, isIndPred, preDefsNonRec }
-
-/--
-Temporarily adds the recursive functions as axioms to the environment and runs the given action.
-The environment is restored afterwards, so no persistent changes (e.g. auxiliary definitions) can
-be made inside the action.
-
-This is needed around any `MetaM` code that may try to infer the type of, or unfold, expressions
-that still mention the recursive function constants (e.g. `isDefEq`, `inferType`, `whnf` on
-arguments of recursive calls). Without these axioms, the kernel would reject the unknown constants.
--/
-private def withRecFunsAsAxioms [Monad n] [MonadLiftT MetaM n] [MonadEnv n] [MonadFinally n]
-    (preDefs : Array PreDefinition) (k : n α) : n α :=
-  withoutModifyingEnv do
-    preDefs.forM (liftM <| addAsAxiom ·)
-    k
+  return { preDefsNonRec }
 
 private def inferRecArgPos (preDefs : Array PreDefinition) (termMeasure?s : Array (Option TerminationMeasure)) :
-    M (Array Nat × ElimRecResult × FixedParamPerms) := do
+    MetaM (Array Nat × ElimRecResult × FixedParamPerms) := do
   let fnNames := preDefs.map (·.declName)
   let numSectionVars := preDefs[0]!.numSectionVars
   let preDefs ← withRecFunsAsAxioms preDefs do
@@ -178,8 +184,7 @@ private def inferRecArgPos (preDefs : Array PreDefinition) (termMeasure?s : Arra
       -- `elimMutualRecursion` creates temporary `_f` axioms inside `withRecFunsAsAxioms`;
       -- real `_f` definitions are added by `structuralRecursion`.
       withErasedFVars toErase do
-        let result ← withRecFunsAsAxioms preDefs do
-          elimMutualRecursion preDefs fixedParamPerms' xs' recArgInfos
+        let result ← elimMutualRecursion preDefs fixedParamPerms' xs' recArgInfos
         return (recArgPoss, result, fixedParamPerms')
 
 def reportTermMeasure (preDef : PreDefinition) (recArgPos : Nat) : MetaM Unit := do
@@ -195,21 +200,9 @@ def structuralRecursion
     (termMeasure?s : Array (Option TerminationMeasure)) :
     TermElabM Unit := do
   let names := preDefs.map (·.declName)
-  let ((recArgPoss, result, fixedParamPerms), state) ← run <| inferRecArgPos preDefs termMeasure?s
+  let (recArgPoss, result, fixedParamPerms) ← inferRecArgPos preDefs termMeasure?s
   for recArgPos in recArgPoss, preDef in preDefs do
     reportTermMeasure preDef recArgPos
-  state.addMatchers.forM liftM
-  -- Add `_f` helper definitions (the individual functionals)
-  unless result.isIndPred do
-    for preDef in preDefs, fValue in result.fValues, fType in result.fTypes do
-      let fName := preDef.declName ++ `_f
-      let fValue ← eraseRecAppSyntaxExpr fValue
-      addDecl (.defnDecl {
-        name := fName, levelParams := preDef.levelParams, type := fType, value := fValue,
-        hints := .abbrev,
-        safety := if preDef.modifiers.isUnsafe then .unsafe else .safe,
-        all := [fName] })
-      setReducibleAttribute fName
   result.preDefsNonRec.forM fun preDefNonRec => do
     let preDefNonRec ← eraseRecAppSyntax preDefNonRec
     prependError m!"structural recursion failed, produced type incorrect term" do

@@ -292,7 +292,7 @@ Try each candidate argument combination for structural recursion.
 Uses `saveState`/`restoreState` to properly backtrack on failure.
 -/
 def tryCandidates (fnNames : Array Name) (xs : Array Expr) (values : Array Expr)
-    (candidates : RecArgCandidates) (k : Array RecArgInfo → M α) : M α := do
+    (candidates : RecArgCandidates) (k : Array RecArgInfo → MetaM α) : MetaM α := do
   let mut report := candidates.report
   for candidate in candidates.candidates do
     let saved ← Meta.saveState
