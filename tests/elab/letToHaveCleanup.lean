@@ -77,19 +77,19 @@ fun n => Nat.brecOn n fnStructRec._f
 /--
 info: @[reducible] def fnStructRec._f : (n : Nat) →
   Nat.below n →
-    let α : Type := Nat;
+    have α : Type := Nat;
     α :=
 fun n f =>
   (match (motive :=
       (n : Nat) →
         Nat.below n →
-          let α : Type := Nat;
+          have α : Type := Nat;
           α)
       n with
     | 0 => fun x => 0
     | n.succ => fun x =>
       id
-        (let m : Nat := n + 1;
+        (have m : Nat := n + 1;
         m * x.1))
     f
 -/
