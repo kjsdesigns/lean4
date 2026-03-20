@@ -100,7 +100,6 @@ private def elimMutualRecursion (preDefs : Array PreDefinition) (fixedParamPerms
       for idx in [:preDefs.size] do
         let fName := preDefs[idx]!.declName ++ `_f
         let fValue ← eraseRecAppSyntaxExpr fValues[idx]!
-        let fValue ← Meta.letToHave fValue
         let fType ← Meta.letToHave fTypes[idx]!
         addDecl (.defnDecl {
           name := fName, levelParams := preDefs[idx]!.levelParams,
