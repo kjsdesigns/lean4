@@ -4,16 +4,16 @@ open Std.Internal.IO Async
 open Std.Http
 open Std.Http.Body
 
-/-! ## Channel tests -/
+/-! ## Stream tests -/
 
--- Test send and recv on channel
+-- Test send and recv on stream
 
 def channelSendRecv : Async Unit := do
-  let (outgoing, incoming) ← Body.mkChannel
+  let stream ← Body.mkStream
   let chunk := Chunk.ofByteArray "hello".toUTF8
 
-  let sendTask ← async (t := AsyncTask) <| outgoing.send chunk
-  let result ← incoming.recv
+  let sendTask ← async (t := AsyncTask) <| stream.send chunk
+  let result ← stream.recv
 
   assert! result.isSome
   assert! result.get!.data == "hello".toUTF8
@@ -22,11 +22,11 @@ def channelSendRecv : Async Unit := do
 #eval channelSendRecv.block
 
 
--- Test tryRecv on empty channel returns none
+-- Test tryRecv on empty stream returns none
 
 def channelTryRecvEmpty : Async Unit := do
-  let (_outgoing, incoming) ← Body.mkChannel
-  let result ← incoming.tryRecv
+  let stream ← Body.mkStream
+  let result ← stream.tryRecv
   assert! result.isNone
 
 #eval channelTryRecvEmpty.block
@@ -34,13 +34,13 @@ def channelTryRecvEmpty : Async Unit := do
 -- Test tryRecv consumes a waiting producer
 
 def channelTryRecvWithPendingSend : Async Unit := do
-  let (outgoing, incoming) ← Body.mkChannel
+  let stream ← Body.mkStream
 
-  let sendTask ← async (t := AsyncTask) <| outgoing.send (Chunk.ofByteArray "data".toUTF8)
+  let sendTask ← async (t := AsyncTask) <| stream.send (Chunk.ofByteArray "data".toUTF8)
   let mut result := none
   let mut fuel := 100
   while result.isNone && fuel > 0 do
-    result ← incoming.tryRecv
+    result ← stream.tryRecv
     if result.isNone then
       let _ ← Selectable.one #[
         .case (← Selector.sleep 1) pure
@@ -56,19 +56,19 @@ def channelTryRecvWithPendingSend : Async Unit := do
 -- Test close sets closed flag
 
 def channelClose : Async Unit := do
-  let (outgoing, incoming) ← Body.mkChannel
-  assert! !(← outgoing.isClosed)
-  outgoing.close
-  assert! (← incoming.isClosed)
+  let stream ← Body.mkStream
+  assert! !(← stream.isClosed)
+  stream.close
+  assert! (← stream.isClosed)
 
 #eval channelClose.block
 
--- Test recv on closed channel returns none
+-- Test recv on closed stream returns none
 
 def channelRecvAfterClose : Async Unit := do
-  let (outgoing, incoming) ← Body.mkChannel
-  outgoing.close
-  let result ← incoming.recv
+  let stream ← Body.mkStream
+  stream.close
+  let result ← stream.recv
   assert! result.isNone
 
 #eval channelRecvAfterClose.block
@@ -76,15 +76,15 @@ def channelRecvAfterClose : Async Unit := do
 -- Test for-in iteration collects chunks until close
 
 def channelForIn : Async Unit := do
-  let (outgoing, incoming) ← Body.mkChannel
+  let stream ← Body.mkStream
 
   let producer ← async (t := AsyncTask) <| do
-    outgoing.send (Chunk.ofByteArray "a".toUTF8)
-    outgoing.send (Chunk.ofByteArray "b".toUTF8)
-    outgoing.close
+    stream.send (Chunk.ofByteArray "a".toUTF8)
+    stream.send (Chunk.ofByteArray "b".toUTF8)
+    stream.close
 
   let mut acc : ByteArray := .empty
-  for chunk in incoming do
+  for chunk in stream do
     acc := acc ++ chunk.data
 
   assert! acc == "ab".toUTF8
@@ -95,11 +95,11 @@ def channelForIn : Async Unit := do
 -- Test chunk extensions are preserved
 
 def channelExtensions : Async Unit := do
-  let (outgoing, incoming) ← Body.mkChannel
+  let stream ← Body.mkStream
   let chunk := { data := "hello".toUTF8, extensions := #[(.mk "key", some (Chunk.ExtensionValue.ofString! "value"))] : Chunk }
 
-  let sendTask ← async (t := AsyncTask) <| outgoing.send chunk
-  let result ← incoming.recv
+  let sendTask ← async (t := AsyncTask) <| stream.send chunk
+  let result ← stream.recv
 
   assert! result.isSome
   assert! result.get!.extensions.size == 1
@@ -111,9 +111,9 @@ def channelExtensions : Async Unit := do
 -- Test known size metadata
 
 def channelKnownSize : Async Unit := do
-  let (outgoing, incoming) ← Body.mkChannel
-  outgoing.setKnownSize (some (.fixed 100))
-  let size ← incoming.getKnownSize
+  let stream ← Body.mkStream
+  stream.setKnownSize (some (.fixed 100))
+  let size ← stream.getKnownSize
   assert! size == some (.fixed 100)
 
 #eval channelKnownSize.block
@@ -121,14 +121,14 @@ def channelKnownSize : Async Unit := do
 -- Test known size decreases when a chunk is consumed
 
 def channelKnownSizeDecreases : Async Unit := do
-  let (outgoing, incoming) ← Body.mkChannel
-  outgoing.setKnownSize (some (.fixed 5))
+  let stream ← Body.mkStream
+  stream.setKnownSize (some (.fixed 5))
 
-  let sendTask ← async (t := AsyncTask) <| outgoing.send (Chunk.ofByteArray "hello".toUTF8)
-  let _ ← incoming.recv
+  let sendTask ← async (t := AsyncTask) <| stream.send (Chunk.ofByteArray "hello".toUTF8)
+  let _ ← stream.recv
   await sendTask
 
-  let size ← incoming.getKnownSize
+  let size ← stream.getKnownSize
   assert! size == some (.fixed 0)
 
 #eval channelKnownSizeDecreases.block
@@ -136,8 +136,8 @@ def channelKnownSizeDecreases : Async Unit := do
 -- Test only one blocked producer is allowed
 
 def channelSingleProducerRule : Async Unit := do
-  let (outgoing, incoming) ← Body.mkChannel
-  let send1 ← async (t := AsyncTask) <| outgoing.send (Chunk.ofByteArray "one".toUTF8)
+  let stream ← Body.mkStream
+  let send1 ← async (t := AsyncTask) <| stream.send (Chunk.ofByteArray "one".toUTF8)
 
   -- Yield so `send1` can occupy the single pending-producer slot.
   let _ ← Selectable.one #[
@@ -146,13 +146,13 @@ def channelSingleProducerRule : Async Unit := do
 
   let send2Failed ←
     try
-      outgoing.send (Chunk.ofByteArray "two".toUTF8)
+      stream.send (Chunk.ofByteArray "two".toUTF8)
       pure false
     catch _ =>
       pure true
   assert! send2Failed
 
-  let first ← incoming.recv
+  let first ← stream.recv
   assert! first.isSome
   assert! first.get!.data == "one".toUTF8
 
@@ -163,25 +163,25 @@ def channelSingleProducerRule : Async Unit := do
 -- Test only one blocked consumer is allowed
 
 def channelSingleConsumerRule : Async Unit := do
-  let (outgoing, incoming) ← Body.mkChannel
+  let stream ← Body.mkStream
 
-  let recv1 ← async (t := AsyncTask) <| incoming.recv
+  let recv1 ← async (t := AsyncTask) <| stream.recv
 
   let hasInterest ← Selectable.one #[
-    .case outgoing.interestSelector pure
+    .case stream.interestSelector pure
   ]
   assert! hasInterest
 
   let recv2Failed ←
     try
-      let _ ← incoming.recv
+      let _ ← stream.recv
       pure false
     catch _ =>
       pure true
 
   assert! recv2Failed
 
-  let sendTask ← async (t := AsyncTask) <| outgoing.send (Chunk.ofByteArray "ok".toUTF8)
+  let sendTask ← async (t := AsyncTask) <| stream.send (Chunk.ofByteArray "ok".toUTF8)
   let r1 ← await recv1
 
   assert! r1.isSome
@@ -193,36 +193,36 @@ def channelSingleConsumerRule : Async Unit := do
 -- Test hasInterest reflects blocked receiver state
 
 def channelHasInterest : Async Unit := do
-  let (outgoing, incoming) ← Body.mkChannel
-  assert! !(← outgoing.hasInterest)
+  let stream ← Body.mkStream
+  assert! !(← stream.hasInterest)
 
-  let recvTask ← async (t := AsyncTask) <| incoming.recv
+  let recvTask ← async (t := AsyncTask) <| stream.recv
 
   let hasInterest ← Selectable.one #[
-    .case outgoing.interestSelector pure
+    .case stream.interestSelector pure
   ]
   assert! hasInterest
-  assert! (← outgoing.hasInterest)
+  assert! (← stream.hasInterest)
 
-  let sendTask ← async (t := AsyncTask) <| outgoing.send (Chunk.ofByteArray "x".toUTF8)
+  let sendTask ← async (t := AsyncTask) <| stream.send (Chunk.ofByteArray "x".toUTF8)
   let _ ← await recvTask
   await sendTask
 
-  assert! !(← outgoing.hasInterest)
+  assert! !(← stream.hasInterest)
 
 #eval channelHasInterest.block
 
--- Test interestSelector resolves false when channel closes first
+-- Test interestSelector resolves false when stream closes first
 
 def channelInterestSelectorClose : Async Unit := do
-  let (outgoing, _incoming) ← Body.mkChannel
+  let stream ← Body.mkStream
 
   let waitInterest ← async (t := AsyncTask) <|
     Selectable.one #[
-      .case outgoing.interestSelector pure
+      .case stream.interestSelector pure
     ]
 
-  outgoing.close
+  stream.close
   let interested ← await waitInterest
   assert! interested == false
 
@@ -231,13 +231,13 @@ def channelInterestSelectorClose : Async Unit := do
 -- Test incomplete sends are buffered and merged into one chunk on the final send
 
 def channelIncompleteChunks : Async Unit := do
-  let (outgoing, incoming) ← Body.mkChannel
+  let stream ← Body.mkStream
 
   let sendTask ← async (t := AsyncTask) <| do
-    outgoing.send (Chunk.ofByteArray "hel".toUTF8) (incomplete := true)
-    outgoing.send (Chunk.ofByteArray "lo".toUTF8)
+    stream.send (Chunk.ofByteArray "hel".toUTF8) (incomplete := true)
+    stream.send (Chunk.ofByteArray "lo".toUTF8)
 
-  let result ← incoming.recv
+  let result ← stream.recv
 
   assert! result.isSome
   assert! result.get!.data == "hello".toUTF8
@@ -245,15 +245,15 @@ def channelIncompleteChunks : Async Unit := do
 
 #eval channelIncompleteChunks.block
 
--- Test sending to a closed channel raises an error
+-- Test sending to a closed stream raises an error
 
 def channelSendAfterClose : Async Unit := do
-  let (outgoing, _incoming) ← Body.mkChannel
-  outgoing.close
+  let stream ← Body.mkStream
+  stream.close
 
   let failed ←
     try
-      outgoing.send (Chunk.ofByteArray "test".toUTF8)
+      stream.send (Chunk.ofByteArray "test".toUTF8)
       pure false
     catch _ =>
       pure true
@@ -261,74 +261,74 @@ def channelSendAfterClose : Async Unit := do
 
 #eval channelSendAfterClose.block
 
--- Test Body.stream runs producer and returns the receive handle
+-- Test Body.stream runs producer and returns the stream handle
 
 def channelStreamHelper : Async Unit := do
-  let incoming ← Body.stream fun outgoing => do
-    outgoing.send (Chunk.ofByteArray "hello".toUTF8)
+  let stream ← Body.stream fun s => do
+    s.send (Chunk.ofByteArray "hello".toUTF8)
 
-  let result ← incoming.recv
+  let result ← stream.recv
   assert! result.isSome
   assert! result.get!.data == "hello".toUTF8
 
-  let eof ← incoming.recv
+  let eof ← stream.recv
   assert! eof.isNone
 
 #eval channelStreamHelper.block
 
--- Test Body.fromBytes creates an Incoming with correct known-size metadata
+-- Test Body.fromBytes creates a Stream with correct known-size metadata
 
 def channelFromBytesHelper : Async Unit := do
-  let incoming ← Body.fromBytes "world".toUTF8
+  let stream ← Body.fromBytes "world".toUTF8
 
-  let size ← incoming.getKnownSize
+  let size ← stream.getKnownSize
   assert! size == some (.fixed 5)
 
-  let result ← incoming.recv
+  let result ← stream.recv
   assert! result.isSome
   assert! result.get!.data == "world".toUTF8
 
 #eval channelFromBytesHelper.block
 
--- Test Body.empty creates an already-closed Incoming
+-- Test Body.empty creates an already-closed Stream
 
 def channelEmptyHelper : Async Unit := do
-  let incoming ← Body.empty
-  assert! (← incoming.isClosed)
+  let stream ← Body.empty
+  assert! (← stream.isClosed)
 
-  let result ← incoming.recv
+  let result ← stream.recv
   assert! result.isNone
 
 #eval channelEmptyHelper.block
 
--- Test Incoming.readAll concatenates all chunks
+-- Test Stream.readAll concatenates all chunks
 
 def channelReadAll : Async Unit := do
-  let (outgoing, incoming) ← Body.mkChannel
+  let stream ← Body.mkStream
 
   let sendTask ← async (t := AsyncTask) <| do
-    outgoing.send (Chunk.ofByteArray "foo".toUTF8)
-    outgoing.send (Chunk.ofByteArray "bar".toUTF8)
-    outgoing.close
+    stream.send (Chunk.ofByteArray "foo".toUTF8)
+    stream.send (Chunk.ofByteArray "bar".toUTF8)
+    stream.close
 
-  let result : ByteArray ← incoming.readAll
+  let result : ByteArray ← stream.readAll
   assert! result == "foobar".toUTF8
   await sendTask
 
 #eval channelReadAll.block
 
--- Test Incoming.readAll enforces a maximum size limit
+-- Test Stream.readAll enforces a maximum size limit
 
 def channelReadAllMaxSize : Async Unit := do
-  let (outgoing, incoming) ← Body.mkChannel
+  let stream ← Body.mkStream
 
   let sendTask ← async (t := AsyncTask) <| do
-    outgoing.send (Chunk.ofByteArray "abcdefgh".toUTF8)
-    outgoing.close
+    stream.send (Chunk.ofByteArray "abcdefgh".toUTF8)
+    stream.close
 
   let failed ←
     try
-      let _ : ByteArray ← incoming.readAll (maximumSize := some 4)
+      let _ : ByteArray ← stream.readAll (maximumSize := some 4)
       pure false
     catch _ =>
       pure true
@@ -337,16 +337,16 @@ def channelReadAllMaxSize : Async Unit := do
 
 #eval channelReadAllMaxSize.block
 
--- Test Outgoing.getKnownSize reflects the value set via setKnownSize
+-- Test Stream.getKnownSize reflects the value set via setKnownSize
 
-def channelOutgoingKnownSize : Async Unit := do
-  let (outgoing, _incoming) ← Body.mkChannel
-  outgoing.setKnownSize (some (.fixed 42))
+def channelKnownSizeRoundtrip : Async Unit := do
+  let stream ← Body.mkStream
+  stream.setKnownSize (some (.fixed 42))
 
-  let size ← outgoing.getKnownSize
+  let size ← stream.getKnownSize
   assert! size == some (.fixed 42)
 
-#eval channelOutgoingKnownSize.block
+#eval channelKnownSizeRoundtrip.block
 
 /-! ## Full tests -/
 
@@ -610,8 +610,8 @@ def requestBuilderHtml : Async Unit := do
 
 def requestBuilderStream : Async Unit := do
   let req ← Request.post (.originForm! "/api")
-    |>.stream fun outgoing => do
-      outgoing.send (Chunk.ofByteArray "streamed".toUTF8)
+    |>.stream fun s => do
+      s.send (Chunk.ofByteArray "streamed".toUTF8)
 
   let result ← req.body.recv
   assert! result.isSome
@@ -717,8 +717,8 @@ def responseBuilderHtml : Async Unit := do
 
 def responseBuilderStream : Async Unit := do
   let res ← Response.ok
-    |>.stream fun outgoing => do
-      outgoing.send (Chunk.ofByteArray "streamed".toUTF8)
+    |>.stream fun s => do
+      s.send (Chunk.ofByteArray "streamed".toUTF8)
 
   let result ← res.body.recv
   assert! result.isSome
