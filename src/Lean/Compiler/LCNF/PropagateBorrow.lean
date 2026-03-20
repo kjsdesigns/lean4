@@ -10,6 +10,12 @@ public import Lean.Compiler.LCNF.CompilerM
 public import Lean.Compiler.LCNF.PassManager
 import Lean.Compiler.LCNF.PhaseExt
 
+/-!
+This module contains a pass for propagating user provided borrows as far forward in the function as
+possible. This analysis is used to inform the reset-reuse insertion as to avoid inserting
+reset-reuse on values that the user explicitly requested to be borrowed.
+-/
+
 namespace Lean.Compiler.LCNF
 
 public inductive Ownedness where
@@ -32,7 +38,7 @@ structure State where
 
 abbrev InferM := StateRefT State CompilerM
 
-public partial def propagateBorrows (decl : Decl .impure) :
+public partial def Decl.analyzePropagatedBorrows (decl : Decl .impure) :
     CompilerM (Std.HashMap FVarId Ownedness) := do
   let (_, { values, .. }) ← go |>.run { values := {}, modified := false }
   return values
@@ -112,7 +118,7 @@ def Ownedness.toBorrow : Ownedness → Option Bool
   | .borrow => some true
   | .own | .top => some false
 
-public partial def applyOwnedness (decl : Decl .impure) (values : Std.HashMap FVarId Ownedness) :
+public partial def Decl.applyOwnedness (decl : Decl .impure) (values : Std.HashMap FVarId Ownedness) :
     CompilerM (Decl .impure) := do
   match decl.value with
   | .code code =>

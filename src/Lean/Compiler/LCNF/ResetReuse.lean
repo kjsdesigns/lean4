@@ -316,8 +316,8 @@ def Decl.insertResetReuse (decl : Decl .impure) : CompilerM (Decl .impure) := do
   The second pass addresses issue #4089.
   -/
   if (← getConfig).resetReuse then
-    let ownedness ← propagateBorrows decl
-    let decl ← applyOwnedness decl ownedness
+    let ownedness ← decl.analyzePropagatedBorrows
+    let decl ← decl.applyOwnedness ownedness
     let decl ← decl.insertResetReuseCore |>.run { relaxedReuse := false, ownedness }
     let decl ← decl.insertResetReuseCore |>.run { relaxedReuse := true, ownedness }
     return decl
