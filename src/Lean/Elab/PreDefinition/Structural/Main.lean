@@ -97,9 +97,8 @@ private def elimMutualRecursion (preDefs : Array PreDefinition) (fixedParamPerms
       -- NB: Do not eta-contract here, other code (e.g. FunInd) expects this to have the
       -- same number of head lambdas as the original definition
       mkLambdaFVars (fixedParamPerms.perms[i]!.buildArgs xs ys) (valueNew.beta ys)
-  let preDefsNonRec := preDefs.zipWith (bs := valuesNew) fun preDef valueNew =>
+  return preDefs.zipWith (bs := valuesNew) fun preDef valueNew =>
     { preDef with value := valueNew }
-  return preDefsNonRec
 
 private def inferRecArgPos (preDefs : Array PreDefinition) (termMeasure?s : Array (Option TerminationMeasure)) :
     MetaM (Array Nat × Array PreDefinition × FixedParamPerms) := do
