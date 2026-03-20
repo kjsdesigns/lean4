@@ -36,6 +36,7 @@ namespace Lean.Meta
 /-! # Smart unfolding support -/
 -- ===========================
 
+set_option compiler.ignoreBorrowAnnotation true in
 /--
 Forward declaration. It is defined in the module `src/Lean/Elab/PreDefinition/Structural/Eqns.lean`.
 It is possible to avoid this hack if we move `Structural.EqnInfo` and `Structural.eqnInfoExt`
@@ -169,7 +170,7 @@ def mkProjFn (ctorVal : ConstructorVal) (us : List Level) (params : Array Expr) 
     | some projFn => return mkApp (mkAppN (mkConst projFn us) params) major
 
 /--
-  If `major` is not a constructor application, and its type is a structure `C ...`, then return `C.mk major.1 ... major.n`
+  If `major` is not a constructor application, and its type is a non-recursive structure `C ...`, then return `C.mk major.1 ... major.n`
 
   \pre `inductName` is `C`.
 
@@ -178,7 +179,7 @@ private def toCtorWhenStructure (inductName : Name) (major : Expr) : MetaM Expr 
   unless (← useEtaStruct inductName) do
     return major
   let env ← getEnv
-  if !isStructureLike env inductName then
+  if !isNonRecStructure env inductName then
     return major
   else if let some _ ← isConstructorApp? major then
     return major

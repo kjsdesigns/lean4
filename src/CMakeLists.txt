@@ -87,6 +87,8 @@ option(USE_GITHASH "GIT_HASH" ON)
 option(INSTALL_LICENSE "INSTALL_LICENSE" ON)
 # When ON we install a copy of cadical
 option(INSTALL_CADICAL "Install a copy of cadical" ON)
+# When ON we install a copy of leantar
+option(INSTALL_LEANTAR "Install a copy of leantar" ON)
 
 # FLAGS for disabling optimizations and debugging
 option(FREE_VAR_RANGE_OPT "FREE_VAR_RANGE_OPT" ON)
@@ -115,6 +117,9 @@ option(USE_LAKE_CACHE "Use the Lake artifact cache for stage 1 builds (requires 
 
 set(LEAN_EXTRA_MAKE_OPTS "" CACHE STRING "extra options to lean --make")
 set(LEANC_CC ${CMAKE_C_COMPILER} CACHE STRING "C compiler to use in `leanc`")
+
+# Temporary, core-only flags. Must be synced with stdlib_flags.h.
+string(APPEND LEAN_EXTRA_MAKE_OPTS " -Dbackward.do.legacy=false")
 
 if(LAZY_RC MATCHES "ON")
   set(LEAN_LAZY_RC "#define LEAN_LAZY_RC")
@@ -786,6 +791,14 @@ if(STAGE GREATER 0 AND CADICAL AND INSTALL_CADICAL)
   add_dependencies(leancpp copy-cadical)
 endif()
 
+if(LEANTAR AND INSTALL_LEANTAR)
+  add_custom_target(
+    copy-leantar
+    COMMAND cmake -E copy_if_different "${LEANTAR}" "${CMAKE_BINARY_DIR}/bin/leantar${CMAKE_EXECUTABLE_SUFFIX}"
+  )
+  add_dependencies(leancpp copy-leantar)
+endif()
+
 # MSYS2 bash usually handles Windows paths relatively well, but not when putting them in the PATH
 string(REGEX REPLACE "^([a-zA-Z]):" "/\\1" LEAN_BIN "${CMAKE_BINARY_DIR}/bin")
 
@@ -942,6 +955,10 @@ if(STAGE GREATER 0 AND CADICAL AND INSTALL_CADICAL)
   install(PROGRAMS "${CADICAL}" DESTINATION bin)
 endif()
 
+if(LEANTAR AND INSTALL_LEANTAR)
+  install(PROGRAMS "${LEANTAR}" DESTINATION bin)
+endif()
+
 add_custom_target(
   clean-stdlib
   COMMAND rm -rf "${CMAKE_BINARY_DIR}/lib" || true
@@ -957,6 +974,7 @@ install(
   PATTERN "*.hash" EXCLUDE
   PATTERN "*.trace" EXCLUDE
   PATTERN "*.rsp" EXCLUDE
+  PATTERN "*.filelist" EXCLUDE
 )
 
 # symlink source into expected installation location for go-to-definition, if file system allows it

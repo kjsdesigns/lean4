@@ -1286,7 +1286,7 @@ export Max (max)
 Constructs a `Max` instance from a decidable `≤` operation.
 -/
 -- Marked inline so that `min x y + max x y` can be optimized to a single branch.
-@[inline]
+@[inline, implicit_reducible]
 def maxOfLe [LE α] [DecidableRel (  @LE.le α _)] : Max α where
   max x y := ite (  LE.le x y)y x
 
@@ -1303,7 +1303,7 @@ export Min (min)
 Constructs a `Min` instance from a decidable `≤` operation.
 -/
 -- Marked inline so that `min x y + max x y` can be optimized to a single branch.
-@[inline]
+@[inline, implicit_reducible]
 def minOfLe [LE α] [DecidableRel (  @LE.le α _)] : Min α where
   min x y := ite (  LE.le x y)x y
 
@@ -2983,7 +2983,7 @@ Examples:
  * `([] : List String).length = 0`
  * `["green", "brown"].length = 2`
 -/
-def List.length : List α → Nat
+@[implicit_reducible] def List.length : List α → Nat
   | nil       => 0
   | cons _ as => HAdd.hAdd (  length as)1
 
@@ -4620,7 +4620,7 @@ inductive Name where
   /-- The "anonymous" name. -/
   | anonymous : Name
   /--
-  A string name. The name `Lean.Meta.run` is represented at
+  A string name. The name `Lean.Meta.run` is represented as
   ```lean
   .str (.str (.str .anonymous "Lean") "Meta") "run"
   ```

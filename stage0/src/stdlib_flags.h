@@ -1,7 +1,5 @@
 #include "util/options.h"
 
-// Dear CI, please build stage 2 first
-
 namespace lean {
 options get_default_options() {
     options opts;
@@ -24,6 +22,10 @@ options get_default_options() {
     opts = opts.update({"quotPrecheck"}, true);
 
     opts = opts.update({"pp", "rawOnError"}, true);
+
+    // Temporary, core-only flags for editing (i.e. must be part of stage0/bin/lean). Must be synced
+    // with `LEAN_EXTRA_MAKE_OPTS` build flags in src/CMakeLists.txt.
+    opts = opts.update({"backward", "do", "legacy"}, false);
 #endif
     return opts;
 }
