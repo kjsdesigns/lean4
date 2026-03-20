@@ -70,17 +70,15 @@ private def elimMutualRecursion (preDefs : Array PreDefinition) (fixedParamPerms
   -- recursive calls in the function body.
   -- For inductive predicates, `mkIndPredBRecOnF` additionally creates matchers as side effects
   -- (inside `withoutModifyingEnv`); these are replayed immediately after.
-  let FArgs ←
-    if isIndPred then
-      recArgInfos.mapIdxM fun idx r => do
-        let (fArg, matchers) ← withRecFunsAsAxioms preDefs do
-          mkIndPredBRecOnF recArgInfos positions r values[idx]! FTypes[idx]! (brecOnConst 0).getAppArgs
-        matchers.forM (·)
-        return fArg
+  let FArgs ← recArgInfos.mapIdxM fun idx r =>
+    if isIndPred then do
+      let (fArg, matchers) ← withRecFunsAsAxioms preDefs do
+        mkIndPredBRecOnF recArgInfos positions r values[idx]! FTypes[idx]! (brecOnConst 0).getAppArgs
+      matchers.forM (·)
+      return fArg
     else
       withRecFunsAsAxioms preDefs do
-        recArgInfos.mapIdxM fun idx r =>
-          mkBRecOnF recArgInfos positions r values[idx]! FTypes[idx]!
+        mkBRecOnF recArgInfos positions r values[idx]! FTypes[idx]!
   trace[Elab.definition.structural] "FArgs: {FArgs}"
   let brecOn := brecOnConst 0
   -- the indices and the major premise are not mentioned in the minor premises
