@@ -77,7 +77,7 @@ fun n => Nat.brecOn n fnStructRec._f
 /--
 info: @[reducible] def fnStructRec._f : (n : Nat) →
   Nat.below n →
-    have α : Type := Nat;
+    let α : Type := Nat;
     α :=
 fun n f =>
   (match (motive :=
