@@ -83,13 +83,13 @@ fun n f =>
   (match (motive :=
       (n : Nat) →
         Nat.below n →
-          have α : Type := Nat;
+          let α : Type := Nat;
           α)
       n with
     | 0 => fun x => 0
     | n.succ => fun x =>
       id
-        (have m : Nat := n + 1;
+        (let m : Nat := n + 1;
         m * x.1))
     f
 -/

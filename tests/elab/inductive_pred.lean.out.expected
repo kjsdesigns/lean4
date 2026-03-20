@@ -308,10 +308,3 @@
              (@HMul.hMul Nat Nat Nat (@instHMul Nat instMulNat)
                (@OfNat.ofNat Nat (nat_lit 2) (instOfNatNat (nat_lit 2))) n_1))
            (mul_left_comm (@OfNat.ofNat Nat (nat_lit 2) (instOfNatNat (nat_lit 2))) n n_1)]
-[Elab.definition.structural] tryCandidates report:
-    Not considering parameter n of Ex.Power2.mul':
-      it is unchanged in the recursive calls
-    Cannot use parameter #3:
-      failed to eliminate recursive application
-        @mul' n n✝ h1 h2
-    
