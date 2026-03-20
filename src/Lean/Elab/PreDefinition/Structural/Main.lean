@@ -157,26 +157,35 @@ private def tryCandidates (fnNames : Array Name) (xs : Array Expr) (values : Arr
   trace[Elab.definition.structural] "tryCandidates:\n{report}"
   throwError report
 
+/--
+Temporarily adds the recursive functions as axioms to the environment and runs the given action.
+The environment is restored afterwards, so no persistent changes (e.g. auxiliary definitions) can
+be made inside the action.
+
+This is needed around any `MetaM` code that may try to infer the type of, or unfold, expressions
+that still mention the recursive function constants (e.g. `isDefEq`, `inferType`, `whnf` on
+arguments of recursive calls). Without these axioms, the kernel would reject the unknown constants.
+-/
+private def withRecFunsAsAxioms [Monad n] [MonadLiftT MetaM n] [MonadEnv n] [MonadFinally n]
+    (preDefs : Array PreDefinition) (k : n α) : n α :=
+  withoutModifyingEnv do
+    preDefs.forM (liftM <| addAsAxiom ·)
+    k
+
 private def inferRecArgPos (preDefs : Array PreDefinition) (termMeasure?s : Array (Option TerminationMeasure))
     (k : Array Nat → ElimRecResult → FixedParamPerms → TM Unit) : TM Unit := do
   let fnNames := preDefs.map (·.declName)
   let numSectionVars := preDefs[0]!.numSectionVars
-  -- Only `preprocess` needs the function axioms in the environment
-  let preDefs ← withoutModifyingEnv do
-    preDefs.forM (addAsAxiom ·)
+  let preDefs ← withRecFunsAsAxioms preDefs do
     preDefs.mapM fun preDef =>
       return { preDef with value := (← preprocess preDef.value fnNames numSectionVars) }
-  -- `getFixedParamPerms` needs function axioms (for `isDefEq` on arguments of recursive calls).
-  let fixedParamPerms ← withoutModifyingEnv do
-    preDefs.forM (addAsAxiom ·)
+  let fixedParamPerms ← withRecFunsAsAxioms preDefs do
     getFixedParamPerms preDefs
 
   fixedParamPerms.perms[0]!.forallTelescope preDefs[0]!.type fun xs => do
     let values ← preDefs.mapIdxM (fixedParamPerms.perms[·]!.instantiateLambda ·.value xs)
 
-    -- `findRecArgCandidates` needs function axioms (for `isDefEq`, `inferType`).
-    let candidates ← withoutModifyingEnv do
-      preDefs.forM (addAsAxiom ·)
+    let candidates ← withRecFunsAsAxioms preDefs do
       findRecArgCandidates fnNames fixedParamPerms xs values termMeasure?s
 
     -- `tryCandidates` uses `saveState`/`restoreState` to properly backtrack on failure.
@@ -205,11 +214,10 @@ private def inferRecArgPos (preDefs : Array PreDefinition) (termMeasure?s : Arra
                     {indentExpr indParam}\ndepends on the function parameter{indentExpr (mkFVar y)}\n\
                     which cannot be fixed as it is an index or depends on an index, and indices \
                     cannot be fixed parameters when using structural recursion."
-      -- `elimMutualRecursion` needs function axioms and creates temporary `_f` axioms.
-      -- `withoutModifyingEnv` cleans up both; real `_f` definitions are added below.
+      -- `elimMutualRecursion` creates temporary `_f` axioms inside `withRecFunsAsAxioms`;
+      -- real `_f` definitions are added in the callback below.
       let result ← withErasedFVars toErase do
-        withoutModifyingEnv do
-          preDefs.forM (addAsAxiom ·)
+        withRecFunsAsAxioms preDefs do
           elimMutualRecursion preDefs fixedParamPerms' xs' recArgInfos
       k recArgPoss result fixedParamPerms'
 
