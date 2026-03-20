@@ -4,9 +4,6 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: Sofia Rodrigues
 */
 #include "runtime/openssl.h"
-#include "runtime/io.h"
-
-#include <mutex>
 
 #ifndef LEAN_EMSCRIPTEN
 #include <openssl/opensslv.h>
@@ -15,16 +12,10 @@ Author: Sofia Rodrigues
 
 namespace lean {
 
-static std::once_flag g_openssl_init_once;
-
-static void initialize_openssl_once() {
+void initialize_openssl() {
     if (OPENSSL_init_ssl(0, nullptr) != 1) {
         lean_internal_panic("failed to initialize OpenSSL");
     }
-}
-
-void initialize_openssl() {
-    std::call_once(g_openssl_init_once, initialize_openssl_once);
 }
 
 void finalize_openssl() {}
