@@ -28,6 +28,8 @@ to be used for `_f` helper definitions) and the non-recursive PreDefinitions.
 private structure ElimRecResult where
   /-- Individual functional values, closed over fixed parameters (one per function). -/
   fValues : Array Expr
+  /-- Types of the individual functional values. -/
+  fTypes : Array Expr
   /-- Whether the function is an inductive predicate (skip `_f` naming). -/
   isIndPred : Bool
   /-- The non-recursive PreDefinitions. -/
@@ -79,8 +81,9 @@ private def elimMutualRecursion (preDefs : Array PreDefinition) (fixedParamPerms
   let packedFArgs ← positions.mapMwith (PProdN.mkLambdas · ·) packedFTypes FArgs
   trace[Elab.definition.structural] "packedFArgs: {packedFArgs}"
 
-  -- Compute `_f` values (closed over fixed parameters) for each function
+  -- Compute `_f` values and types (closed over fixed parameters) for each function
   let fValues ← FArgs.mapM (mkLambdaFVars xs ·)
+  let fTypes ← fValues.mapM (liftM <| inferType ·)
 
   -- For single-function position groups, reference the `_f` constant in the
   -- packed functional so it shows up in kernel diagnostics.
@@ -92,10 +95,9 @@ private def elimMutualRecursion (preDefs : Array PreDefinition) (fixedParamPerms
     else
       for idx in [:preDefs.size] do
         let fName := preDefs[idx]!.declName ++ `_f
-        let fType ← inferType fValues[idx]!
         addDecl (.axiomDecl {
           name := fName, levelParams := preDefs[idx]!.levelParams,
-          type := fType, isUnsafe := preDefs[idx]!.modifiers.isUnsafe })
+          type := fTypes[idx]!, isUnsafe := preDefs[idx]!.modifiers.isUnsafe })
       packedFArgs.mapIdxM fun i packedFArg => do
         let poss := positions[i]!
         if poss.size == 1 then
@@ -114,7 +116,7 @@ private def elimMutualRecursion (preDefs : Array PreDefinition) (fixedParamPerms
       mkLambdaFVars (fixedParamPerms.perms[i]!.buildArgs xs ys) (valueNew.beta ys)
   let preDefsNonRec := preDefs.zipWith (bs := valuesNew) fun preDef valueNew =>
     { preDef with value := valueNew }
-  return { fValues, isIndPred, preDefsNonRec }
+  return { fValues, fTypes, isIndPred, preDefsNonRec }
 
 /--
 Temporarily adds the recursive functions as axioms to the environment and runs the given action.
@@ -199,14 +201,14 @@ def structuralRecursion
   state.addMatchers.forM liftM
   -- Add `_f` helper definitions (the individual functionals)
   unless result.isIndPred do
-    for preDef in preDefs, fValue in result.fValues do
+    for preDef in preDefs, fValue in result.fValues, fType in result.fTypes do
       let fName := preDef.declName ++ `_f
       let fValue ← eraseRecAppSyntaxExpr fValue
-      let fType ← inferType fValue
-      let fPreDef : PreDefinition := { preDef with
-        declName := fName, type := fType, value := fValue,
-        kind := .abbrev, modifiers := {}, termination := default }
-      addNonRec docCtx fPreDef (applyAttrAfterCompilation := false)
+      addDecl (.defnDecl {
+        name := fName, levelParams := preDef.levelParams, type := fType, value := fValue,
+        hints := .abbrev,
+        safety := if preDef.modifiers.isUnsafe then .unsafe else .safe,
+        all := [fName] })
       setReducibleAttribute fName
   result.preDefsNonRec.forM fun preDefNonRec => do
     let preDefNonRec ← eraseRecAppSyntax preDefNonRec
