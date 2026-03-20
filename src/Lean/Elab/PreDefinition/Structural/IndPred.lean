@@ -43,6 +43,7 @@ def replaceIndPredRecApp (recArgInfo : RecArgInfo) (ctx : RecursionContext) (fid
   let recApp := andProj pos positions[motiveIdx]!.size recApp
   return mkAppN recApp ys
 
+/-- Monad for inductive predicate recursion that accumulates matcher creation side-effects. -/
 private abbrev IndPredM := StateRefT (Array (MetaM Unit)) MetaM
 
 partial def replaceIndPredRecApps (recArgInfos : Array RecArgInfo) (positions : Positions)
