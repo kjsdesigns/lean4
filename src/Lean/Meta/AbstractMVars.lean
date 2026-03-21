@@ -176,13 +176,13 @@ partial def abstractExprMVars (e : Expr) : M Expr := do
         return fvar
 
 /-- Marks all metavariables appearing in fvars reachable from `e` as fixed. -/
-partial def markLCtxMVars (e : Expr) : M Unit := do
+partial def markLCtxMVars (e : Expr) (levelsNotFixed : Bool) : M Unit := do
   let fvars ← collectFVarDeps e
   fvars.forM fun fvar => do
-    let (mvars, lmvars) ← collectMVarDeps fvar (lctx := (← get).lctx)
+    let (mvars, lmvars) ← collectMVarDeps fvar (lctx := (← get).lctx) (collectLMVars := !levelsNotFixed)
     modify fun s =>
       { s with
-        lfixed := s.lfixed.insertMany lmvars
+        lfixed := if levelsNotFixed then s.lfixed else s.lfixed.insertMany lmvars
         efixed := s.efixed.insertMany mvars }
 
 /--
@@ -206,8 +206,8 @@ public section
 Abstracts metavariables occurring in `e`, creating a lambda expression.
 Only metavariables at the current metavariable context depth are abstracted.
 
-Furthermore, for type correctness, only metavariables that do not appear in the types or values of
-fvars appearing in `e` (or otherwise reachable from `e`) are abstracted.
+Furthermore, for type correctness, the only metavariables that are abstracted are those
+that aren't depended upon by the free variables that `e` depends on.
 One can compare `abstractMVars` to generalization in the Hindley-Milner type system.
 
 Options:
@@ -215,6 +215,9 @@ Options:
 - If `isLambda := false`, then rather than abstract with lambdas, abstracts with foralls.
 - If `inferNames := true`, then infers names for anonymous metavariables, like in `mkForallFVars'`.
 - `binderInfo` sets the binder info to use for the abstracted metavariables.
+- If `levelsNotFixed := true`, then level metavariables are abstracted even if they appear in the local context.
+  This is *not correct* to enable, however instance synthesis uses this. It instantiates the level parameters
+  with fresh level metavariables and solves for them itself by typechecking.
 
 The result contains
 - `lmvars`: An array of the universe level metavariables that were abstracted from `e`.
@@ -251,12 +254,13 @@ The actual level parameter name `u` will be different.
 Currently this procedure does not correctly process delayed assignments.
 -/
 public def abstractMVars (e : Expr)
-    (levels : Bool := true) (isLambda : Bool := true) (inferNames : Bool := false) (binderInfo : BinderInfo := .default) :
+    (levels : Bool := true) (isLambda : Bool := true) (inferNames : Bool := false) (binderInfo : BinderInfo := .default)
+    (levelsNotFixed : Bool := false) :
     MetaM AbstractMVarsResult := do
   let e ← instantiateMVars e
   let toReset ← if inferNames then setMVarUserNamesAt e (fun _ => true) else pure #[]
   let (e, s) ← AbstractMVars.runM (abstractLevels := levels) (binderInfo := binderInfo) do
-    AbstractMVars.markLCtxMVars e
+    AbstractMVars.markLCtxMVars e (levelsNotFixed := levelsNotFixed)
     AbstractMVars.abstractExprMVars e
   resetMVarUserNames toReset
   let e := if isLambda then s.lctx.mkLambda s.fvars e else s.lctx.mkForall s.fvars e
@@ -290,8 +294,8 @@ def abstractMVarsWithType (ty : Expr) (e : Expr)
   let e  ← instantiateMVars e
   let toReset ← if inferNames then setMVarUserNamesAt e (fun _ => true) else pure #[]
   let ((ty, e), s) ← AbstractMVars.runM (abstractLevels := levels) (binderInfo := binderInfo)  do
-    AbstractMVars.markLCtxMVars ty
-    AbstractMVars.markLCtxMVars e
+    AbstractMVars.markLCtxMVars ty (levelsNotFixed := false)
+    AbstractMVars.markLCtxMVars e (levelsNotFixed := false)
     let ty ← AbstractMVars.abstractExprMVars ty
     let e ← AbstractMVars.abstractExprMVars e
     return (ty, e)

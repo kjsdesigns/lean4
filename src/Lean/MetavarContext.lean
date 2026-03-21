@@ -979,11 +979,11 @@ If `lctx` is provided, this is used for following types of fvars as well.
 See also `findExprDependsOnMVar`.
 -/
 def collectMVarDeps [Monad m] [MonadMCtx m] (e : Expr)
-    (lctx : LocalContext := {})
+    (lctx : LocalContext := {}) (collectLMVars : Bool := true)
     (generalizeNondepLet := true) : m (ExprSet × LevelSet) := do
   let (_, { mctx, visited, visitedLevels }) :=
     -- Using a constant-`false` function ensures we visit every mvar.
-    DependsOn.mainMVar (fun _ => false) (shouldVisitLMVars := true) (plm := fun _ => false) e
+    DependsOn.mainMVar (fun _ => false) (shouldVisitLMVars := collectLMVars) (plm := fun _ => false) e
       |>.run { lctx, generalizeNondepLet }
       |>.run { mctx := (← getMCtx) }
   setMCtx mctx
