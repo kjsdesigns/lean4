@@ -329,10 +329,29 @@ def get?Internal : (as : List α) → (i : Nat) → Option α
 
 /-- Internal implementation of `as[i]!`. Do not use directly. -/
 -- We still keep it public for reduction purposes
-def get!Internal [Inhabited α] : (as : List α) → (i : Nat) → α
+noncomputable def get!Internal [Inhabited α] : (as : List α) → (i : Nat) → α :=
+  List.rec
+    (panic! "invalid index")
+    (fun a _as r i => (Nat.beq i 0).rec (r (Nat.sub i 1)) a)
+
+def get!Internal_impl [Inhabited α] : (as : List α) → (i : Nat) → α
   | a::_,  0   => a
-  | _::as, n+1 => get!Internal as n
-  | _,     _   => panic! "invalid index"
+  | _::as, n+1 => get!Internal_impl as n
+  | _,     _   => (panic! "invalid index")
+
+@[csimp] theorem get!Internal_eq_get!Internal_impl : @get!Internal = @get!Internal_impl := by
+  apply funext; intro α
+  apply funext; intro inst
+  apply funext; intro as
+  apply funext; intro i
+  induction as generalizing i
+  next => rfl
+  next ih =>
+    unfold get!Internal get!Internal_impl
+    cases h : i
+    next => simp
+    next => simp; apply ih
+
 
 /-- This instance overrides the default implementation of `a[i]?` via `decidableGetElem?`,
 giving better definitional equalities. -/
