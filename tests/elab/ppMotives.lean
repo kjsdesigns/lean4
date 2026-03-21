@@ -1,10 +1,10 @@
 set_option pp.motives.pi false
 
-#print Nat.add
+#print Nat.add._f
 
 set_option pp.motives.pi true
 
-#print Nat.add
+#print Nat.add._f
 
 theorem ex : ∀ {α β : Sort u} (h : α = β) (a : α), cast h a ≍ a
   | α, _, rfl, a => HEq.refl a
