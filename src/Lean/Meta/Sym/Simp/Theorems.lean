@@ -62,6 +62,10 @@ def mkSymSimpExt (name : Name := by exact decl_name%) : IO SymSimpExtension :=
     name     := name
     initial  := {}
     addEntry := fun thms thm => thms.insert thm
+    exportEntry? := fun lvl thm => do
+      let .const declName _ := thm.expr | return thm
+      guard (lvl == .private || !isPrivateName declName)
+      return thm
   }
 
 abbrev SymSimpExtensionMap := Std.HashMap Name SymSimpExtension

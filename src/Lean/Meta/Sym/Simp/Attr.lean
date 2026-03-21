@@ -35,7 +35,7 @@ def mkSymSimpAttr (attrName : Name) (attrDescr : String) (ext : SymSimpExtension
         let info ← getAsyncConstInfo declName
         if (← isProp info.sig.get.type) then
           addSymSimpTheorem ext declName attrKind
-        else if (← getConstInfo declName).isDefinition then
+        else if info.kind matches .defn then
           if (← Simp.ignoreEquations declName) then
             throwError "Cannot add `{attrName}` attribute to `{.ofConstName declName}`: \
               It is a reducible definition or projection. `Sym.simp` does not support unfolding."
