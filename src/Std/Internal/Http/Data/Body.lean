@@ -18,7 +18,7 @@ public section
 /-!
 # Body
 
-This module re-exports all HTTP body types: `Body.Empty`, `Body.Full`, `Body.Incoming`,
-`Body.Outgoing` (from `Body.Stream`), `Body.Any`, and `Body.Length`, along with the
-`Http.Body` typeclass and conversion utilities (`ToByteArray`, `FromByteArray`).
+This module re-exports all HTTP body types: `Body.Empty`, `Body.Full`, `Body.Stream`,
+`Body.Any`, and `Body.Length`, along with the `Http.Body` typeclass and conversion
+utilities (`ToByteArray`, `FromByteArray`).
 -/

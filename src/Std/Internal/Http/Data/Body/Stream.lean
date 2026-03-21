@@ -20,10 +20,8 @@ public section
 /-!
 # Body.Stream
 
-This module defines a zero-buffer rendezvous body channel split into two faces:
-
-- `Body.Outgoing`: producer side (send chunks)
-- `Body.Incoming`: consumer side (receive chunks)
+This module defines a zero-buffer rendezvous body channel (`Body.Stream`) that supports
+both sending and receiving chunks.
 
 There is no queue and no capacity. A send waits for a receiver and a receive waits for a sender.
 At most one blocked producer and one blocked consumer are supported.
@@ -84,7 +82,7 @@ private structure State where
   pendingConsumer : Option Consumer
 
   /--
-  A waiter for `Outgoing.interestSelector`.
+  A waiter for `Stream.interestSelector`.
   -/
   interestWaiter : Option (Internal.IO.Async.Waiter Bool)
 
@@ -99,7 +97,7 @@ private structure State where
   knownSize : Option Body.Length
 
   /--
-  Buffered partial chunk data accumulated from `Outgoing.send ... (incomplete := true)`.
+  Buffered partial chunk data accumulated from `Stream.send ... (incomplete := true)`.
   These partial pieces are collapsed and emitted as a single chunk on the next complete send.
   -/
   pendingIncompleteChunk : Option Chunk := none
@@ -108,25 +106,17 @@ deriving Nonempty
 end Channel
 
 /--
-Receive-side face of a body channel.
+A zero-buffer rendezvous body channel that supports both sending and receiving chunks.
 -/
-structure Incoming where
+structure Stream where
   private mk ::
   private state : Mutex Channel.State
 deriving Nonempty, TypeName
 
 /--
-Send-side face of a body channel.
+Creates a rendezvous body stream.
 -/
-structure Outgoing where
-  private mk ::
-  private state : Mutex Channel.State
-deriving Nonempty, TypeName
-
-/--
-Creates a rendezvous body channel.
--/
-def mkChannel : Async (Outgoing × Incoming) := do
+def mkStream : Async Stream := do
   let state ← Mutex.new {
     pendingProducer := none
     pendingConsumer := none
@@ -134,7 +124,7 @@ def mkChannel : Async (Outgoing × Incoming) := do
     closed := false
     knownSize := none
   }
-  return ({ state }, { state })
+  return { state }
 
 namespace Channel
 
@@ -226,19 +216,19 @@ private def close' [Monad m] [MonadLiftT (ST IO.RealWorld) m] [MonadLiftT BaseIO
 
 end Channel
 
-namespace Incoming
+namespace Stream
 
 /--
 Attempts to receive a chunk from the channel without blocking.
 Returns `some chunk` only when a producer is already waiting.
 -/
-def tryRecv (incoming : Incoming) : Async (Option Chunk) :=
-  incoming.state.atomically do
+def tryRecv (stream : Stream) : Async (Option Chunk) :=
+  stream.state.atomically do
     Channel.pruneFinishedWaiters
     Channel.tryRecv'
 
-private def recv' (incoming : Incoming) : BaseIO (AsyncTask (Option Chunk)) := do
-  incoming.state.atomically do
+private def recv' (stream : Stream) : BaseIO (AsyncTask (Option Chunk)) := do
+  stream.state.atomically do
     Channel.pruneFinishedWaiters
 
     if let some chunk ← Channel.tryRecv' then
@@ -262,38 +252,38 @@ private def recv' (incoming : Incoming) : BaseIO (AsyncTask (Option Chunk)) := d
 Receives a chunk from the channel. Blocks until a producer sends one.
 Returns `none` if the channel is closed and no producer is waiting.
 -/
-def recv (incoming : Incoming) : Async (Option Chunk) := do
-  Async.ofAsyncTask (← recv' incoming)
+def recv (stream : Stream) : Async (Option Chunk) := do
+  Async.ofAsyncTask (← recv' stream)
 
 /--
 Closes the channel.
 -/
-def close (incoming : Incoming) : Async Unit :=
-  incoming.state.atomically do
+def close (stream : Stream) : Async Unit :=
+  stream.state.atomically do
     Channel.close'
 
 /--
 Checks whether the channel is closed.
 -/
 @[always_inline, inline]
-def isClosed (incoming : Incoming) : Async Bool :=
-  incoming.state.atomically do
+def isClosed (stream : Stream) : Async Bool :=
+  stream.state.atomically do
     return (← get).closed
 
 /--
 Gets the known size if available.
 -/
 @[always_inline, inline]
-def getKnownSize (incoming : Incoming) : Async (Option Body.Length) :=
-  incoming.state.atomically do
+def getKnownSize (stream : Stream) : Async (Option Body.Length) :=
+  stream.state.atomically do
     return (← get).knownSize
 
 /--
 Sets known size metadata.
 -/
 @[always_inline, inline]
-def setKnownSize (incoming : Incoming) (size : Option Body.Length) : Async Unit :=
-  incoming.state.atomically do
+def setKnownSize (stream : Stream) (size : Option Body.Length) : Async Unit :=
+  stream.state.atomically do
     modify fun st => { st with knownSize := size }
 
 open Internal.IO.Async in
@@ -301,9 +291,9 @@ open Internal.IO.Async in
 /--
 Creates a selector that resolves when a producer is waiting (or the channel closes).
 -/
-def recvSelector (incoming : Incoming) : Selector (Option Chunk) where
+def recvSelector (stream : Stream) : Selector (Option Chunk) where
   tryFn := do
-    incoming.state.atomically do
+    stream.state.atomically do
       Channel.pruneFinishedWaiters
       if ← Channel.recvReady' then
         return some (← Channel.tryRecv')
@@ -311,7 +301,7 @@ def recvSelector (incoming : Incoming) : Selector (Option Chunk) where
         return none
 
   registerFn waiter := do
-    incoming.state.atomically do
+    stream.state.atomically do
       Channel.pruneFinishedWaiters
       if ← Channel.recvReady' then
         let lose := return ()
@@ -327,7 +317,7 @@ def recvSelector (incoming : Incoming) : Selector (Option Chunk) where
         Channel.signalInterest
 
   unregisterFn := do
-    incoming.state.atomically do
+    stream.state.atomically do
       Channel.pruneFinishedWaiters
 
 /--
@@ -335,47 +325,41 @@ Iterates over chunks until the channel closes.
 -/
 @[inline]
 protected partial def forIn
-    {β : Type} (incoming : Incoming) (acc : β)
+    {β : Type} (stream : Stream) (acc : β)
     (step : Chunk → β → Async (ForInStep β)) : Async β := do
 
-  let rec @[specialize] loop (incoming : Incoming) (acc : β) : Async β := do
-    if let some chunk ← incoming.recv then
+  let rec @[specialize] loop (stream : Stream) (acc : β) : Async β := do
+    if let some chunk ← stream.recv then
       match ← step chunk acc with
       | .done res => return res
-      | .yield res => loop incoming res
+      | .yield res => loop stream res
     else
       return acc
 
-  loop incoming acc
+  loop stream acc
 
 /--
 Context-aware iteration over chunks until the channel closes.
 -/
 @[inline]
 protected partial def forIn'
-    {β : Type} (incoming : Incoming) (acc : β)
+    {β : Type} (stream : Stream) (acc : β)
     (step : Chunk → β → ContextAsync (ForInStep β)) : ContextAsync β := do
 
-  let rec @[specialize] loop (incoming : Incoming) (acc : β) : ContextAsync β := do
+  let rec @[specialize] loop (stream : Stream) (acc : β) : ContextAsync β := do
     let data ← Selectable.one #[
-      .case incoming.recvSelector pure,
+      .case stream.recvSelector pure,
       .case (← ContextAsync.doneSelector) (fun _ => pure none),
     ]
 
     if let some chunk := data then
       match ← step chunk acc with
       | .done res => return res
-      | .yield res => loop incoming res
+      | .yield res => loop stream res
     else
       return acc
 
-  loop incoming acc
-
-/--
-Converts the `Incoming` channel into a `Outgoing` channel that implements `Body`.
--/
-def toBody (incoming : Incoming) : Outgoing :=
-  ⟨incoming.state⟩
+  loop stream acc
 
 /--
 Abstracts over how the next chunk is received, allowing `readAll` to work in both `Async`
@@ -385,15 +369,15 @@ class NextChunk (m : Type → Type) where
   /--
   Receives the next chunk, stopping at EOF or (in `ContextAsync`) when the context is cancelled.
   -/
-  nextChunk : Incoming → m (Option Chunk)
+  nextChunk : Stream → m (Option Chunk)
 
 instance : NextChunk Async where
-  nextChunk := Incoming.recv
+  nextChunk := Stream.recv
 
 instance : NextChunk ContextAsync where
-  nextChunk incoming := do
+  nextChunk stream := do
     Selectable.one #[
-      .case incoming.recvSelector pure,
+      .case stream.recvSelector pure,
       .case (← ContextAsync.doneSelector) (fun _ => pure none),
     ]
 
@@ -406,12 +390,12 @@ context is cancelled).
 partial def readAll
     [FromByteArray α]
     [Monad m] [MonadExceptOf IO.Error m] [NextChunk m]
-    (incoming : Incoming)
+    (stream : Stream)
     (maximumSize : Option UInt64 := none) :
     m α := do
 
   let rec loop (result : ByteArray) : m ByteArray := do
-    match ← NextChunk.nextChunk incoming with
+    match ← NextChunk.nextChunk stream with
     | none => return result
     | some chunk =>
       let result := result ++ chunk.data
@@ -426,16 +410,12 @@ partial def readAll
   | .ok a => return a
   | .error msg => throw (.userError msg)
 
-end Incoming
-
-namespace Outgoing
-
 private def collapseForSend
-    (outgoing : Outgoing)
+    (stream : Stream)
     (chunk : Chunk)
     (incomplete : Bool) : BaseIO (Except IO.Error (Option Chunk)) := do
 
-  outgoing.state.atomically do
+  stream.state.atomically do
     Channel.pruneFinishedWaiters
     let st ← get
 
@@ -461,48 +441,46 @@ private def collapseForSend
 Sends a chunk, retrying if a select-mode consumer races and loses. If no consumer is ready,
 installs the chunk as a pending producer and awaits acknowledgement from the receiver.
 -/
-private partial def send' (outgoing : Outgoing) (chunk : Chunk) : Async Unit := do
+private partial def send' (stream : Stream) (chunk : Chunk) : Async Unit := do
   let done ← IO.Promise.new
+  let result : Except IO.Error (Option Bool) ← stream.state.atomically do
+    Channel.pruneFinishedWaiters
+    let st ← get
 
-  while true do
-    let result : Except IO.Error (Option Bool) ← outgoing.state.atomically do
-      Channel.pruneFinishedWaiters
-      let st ← get
+    if st.closed then
+      return .error (IO.Error.userError "channel closed")
 
-      if st.closed then
-        return .error (IO.Error.userError "channel closed")
+    if let some consumer := st.pendingConsumer then
+      let success ← consumer.resolve (some chunk)
 
-      if let some consumer := st.pendingConsumer then
-        let success ← consumer.resolve (some chunk)
-
-        if success then
-          set {
-            st with
-            pendingConsumer := none
-            knownSize := Channel.decreaseKnownSize st.knownSize chunk
-          }
-          return .ok (some true)
-        else
-          set { st with pendingConsumer := none }
-          return .ok (some false)
-      else if st.pendingProducer.isSome then
-        return .error (IO.Error.userError "only one blocked producer is allowed")
+      if success then
+        set {
+          st with
+          pendingConsumer := none
+          knownSize := Channel.decreaseKnownSize st.knownSize chunk
+        }
+        return .ok (some true)
       else
-        set { st with pendingProducer := some { chunk, done } }
-        return .ok none
+        set { st with pendingConsumer := none }
+        return .ok (some false)
+    else if st.pendingProducer.isSome then
+      return .error (IO.Error.userError "only one blocked producer is allowed")
+    else
+      set { st with pendingProducer := some { chunk, done } }
+      return .ok none
 
-    match result with
-    | .error err =>
-      throw err
-    | .ok (some true) =>
-      return ()
-    | .ok (some false) =>
-      -- The select-mode consumer raced and lost; recurse to allocate a fresh `done` promise.
-      return (← send' outgoing chunk)
-    | .ok none =>
-      match ← await done.result? with
-      | some true => return ()
-      | _ => throw (IO.Error.userError "channel closed")
+  match result with
+  | .error err =>
+    throw err
+  | .ok (some true) =>
+    return ()
+  | .ok (some false) =>
+    -- The select-mode consumer raced and lost; recurse to allocate a fresh `done` promise.
+    send' stream chunk
+  | .ok none =>
+    match ← await done.result? with
+    | some true => return ()
+    | _ => throw (IO.Error.userError "channel closed")
 
 /--
 Sends a chunk.
@@ -512,63 +490,32 @@ delivered to the receiver yet.
 If `incomplete := false`, any buffered incomplete pieces are collapsed with this chunk and the
 single merged chunk is sent.
 -/
-def send (outgoing : Outgoing) (chunk : Chunk) (incomplete : Bool := false) : Async Unit := do
-  match (← collapseForSend outgoing chunk incomplete) with
+def send (stream : Stream) (chunk : Chunk) (incomplete : Bool := false) : Async Unit := do
+  match (← collapseForSend stream chunk incomplete) with
   | .error err => throw err
   | .ok none => pure ()
   | .ok (some toSend) =>
     if toSend.data.isEmpty ∧ toSend.extensions.isEmpty then
       return ()
 
-    send' outgoing toSend
-
-/--
-Closes the channel.
--/
-def close (outgoing : Outgoing) : Async Unit :=
-  outgoing.state.atomically do
-    Channel.close'
-
-/--
-Checks whether the channel is closed.
--/
-@[always_inline, inline]
-def isClosed (outgoing : Outgoing) : Async Bool :=
-  outgoing.state.atomically do
-    return (← get).closed
+    send' stream toSend
 
 /--
 Returns `true` when a consumer is currently blocked waiting for data.
 -/
-def hasInterest (outgoing : Outgoing) : Async Bool :=
-  outgoing.state.atomically do
+def hasInterest (stream : Stream) : Async Bool :=
+  stream.state.atomically do
     Channel.pruneFinishedWaiters
     Channel.hasInterest'
-
-/--
-Gets the known size if available.
--/
-@[always_inline, inline]
-def getKnownSize (outgoing : Outgoing) : Async (Option Body.Length) :=
-  outgoing.state.atomically do
-    return (← get).knownSize
-
-/--
-Sets known size metadata.
--/
-@[always_inline, inline]
-def setKnownSize (outgoing : Outgoing) (size : Option Body.Length) : Async Unit :=
-  outgoing.state.atomically do
-    modify fun st => { st with knownSize := size }
 
 open Internal.IO.Async in
 /--
 Creates a selector that resolves when consumer interest is present.
 Returns `true` when a consumer is waiting, `false` when the channel closes first.
 -/
-def interestSelector (outgoing : Outgoing) : Selector Bool where
+def interestSelector (stream : Stream) : Selector Bool where
   tryFn := do
-    outgoing.state.atomically do
+    stream.state.atomically do
       Channel.pruneFinishedWaiters
       let st ← get
       if st.pendingConsumer.isSome then
@@ -579,7 +526,7 @@ def interestSelector (outgoing : Outgoing) : Selector Bool where
         return none
 
   registerFn waiter := do
-    outgoing.state.atomically do
+    stream.state.atomically do
       Channel.pruneFinishedWaiters
       let st ← get
 
@@ -599,90 +546,72 @@ def interestSelector (outgoing : Outgoing) : Selector Bool where
         set { st with interestWaiter := some waiter }
 
   unregisterFn := do
-    outgoing.state.atomically do
+    stream.state.atomically do
       Channel.pruneFinishedWaiters
 
-end Outgoing
-
-namespace Internal
-
-/--
-Reinterprets the receive-side handle as a send-side handle over the same channel.
--/
-@[always_inline, inline]
-def incomingToOutgoing (incoming : Incoming) : Outgoing :=
-  { state := incoming.state }
-
-/--
-Reinterprets the send-side handle as a receive-side handle over the same channel.
--/
-@[always_inline, inline]
-def outgoingToIncoming (outgoing : Outgoing) : Incoming :=
-  { state := outgoing.state }
-
-end Internal
+end Stream
 
 /--
 Creates a body from a producer function.
-Returns the receive-side handle immediately and runs `gen` in a detached task.
+Returns the stream immediately and runs `gen` in a detached task.
 The channel is always closed when `gen` returns or throws.
 Errors from `gen` are not rethrown here; consumers observe end-of-stream via `recv = none`.
 -/
-def stream (gen : Outgoing → Async Unit) : Async Incoming := do
-  let (outgoing, incoming) ← mkChannel
+def stream (gen : Stream → Async Unit) : Async Stream := do
+  let s ← mkStream
   background <| do
     try
-      gen outgoing
+      gen s
     finally
-      outgoing.close
-  return incoming
+      s.close
+  return s
 
 /--
 Creates a body from a fixed byte array.
 -/
-def fromBytes (content : ByteArray) : Async Incoming := do
-  stream fun outgoing => do
-    outgoing.setKnownSize (some (.fixed content.size))
+def fromBytes (content : ByteArray) : Async Stream := do
+  stream fun s => do
+    s.setKnownSize (some (.fixed content.size))
     if content.size > 0 then
-      outgoing.send (Chunk.ofByteArray content)
+      s.send (Chunk.ofByteArray content)
 
 /--
-Creates an empty `Incoming` body channel (already closed, no data).
+Creates an empty `Stream` body channel (already closed, no data).
 
 Prefer `Body.Empty` when you need a concrete zero-cost type. Use this when the calling
-context requires an `Incoming` specifically.
+context requires a `Stream` specifically.
 -/
-def empty : Async Incoming := do
-  let (outgoing, incoming) ← mkChannel
-  outgoing.setKnownSize (some (.fixed 0))
-  outgoing.close
-  return incoming
+def empty : Async Stream := do
+  let s ← mkStream
+  s.setKnownSize (some (.fixed 0))
+  s.close
+  return s
 
-instance : ForIn Async Incoming Chunk where
-  forIn := Incoming.forIn
+instance : ForIn Async Stream Chunk where
+  forIn := Stream.forIn
 
-instance : ForIn ContextAsync Incoming Chunk where
-  forIn := Incoming.forIn'
+instance : ForIn ContextAsync Stream Chunk where
+  forIn := Stream.forIn'
 
-instance : Http.Body Outgoing where
-  recv x := Internal.outgoingToIncoming  x |>.recv
-  close x := Internal.outgoingToIncoming  x |>.close
-  isClosed x := Internal.outgoingToIncoming  x |>.isClosed
-  recvSelector x := Internal.outgoingToIncoming  x |>.recvSelector
-  getKnownSize x := Internal.outgoingToIncoming x |>.getKnownSize
-  setKnownSize x size := Internal.outgoingToIncoming x |>.setKnownSize size
+instance : Http.Body Stream where
+  recv := Stream.recv
+  close := Stream.close
+  isClosed := Stream.isClosed
+  recvSelector := Stream.recvSelector
+  getKnownSize := Stream.getKnownSize
+  setKnownSize := Stream.setKnownSize
 
-instance : Coe Outgoing Any := ⟨Any.ofBody⟩
+instance : Coe Stream Any := ⟨Any.ofBody⟩
 
-instance : Coe (Response Outgoing) (Response Any) where
+instance : Coe (Response Stream) (Response Any) where
   coe f := { f with }
 
-instance : Coe (ContextAsync (Response Outgoing)) (ContextAsync (Response Any)) where
+instance : Coe (ContextAsync (Response Stream)) (ContextAsync (Response Any)) where
   coe action := do
     let response ← action
     pure (response : Response Any)
 
-instance : Coe (Async (Response Outgoing)) (ContextAsync (Response Any)) where
+instance : Coe (Async (Response Stream)) (ContextAsync (Response Any)) where
   coe action := do
     let response ← action
     pure (response : Response Any)
@@ -698,10 +627,10 @@ Builds a request with a streaming body generator.
 -/
 def stream
     (builder : Builder)
-    (gen : Body.Outgoing → Async Unit) :
-    Async (Request Body.Incoming) := do
-  let incoming ← Body.stream gen
-  return Request.Builder.body builder incoming
+    (gen : Body.Stream → Async Unit) :
+    Async (Request Body.Stream) := do
+  let s ← Body.stream gen
+  return Request.Builder.body builder s
 
 end Request.Builder
 
@@ -713,9 +642,9 @@ Builds a response with a streaming body generator.
 -/
 def stream
     (builder : Builder)
-    (gen : Body.Outgoing → Async Unit) :
-    Async (Response Body.Incoming) := do
-  let incoming ← Body.stream gen
-  return Response.Builder.body builder incoming
+    (gen : Body.Stream → Async Unit) :
+    Async (Response Body.Stream) := do
+  let s ← Body.stream gen
+  return Response.Builder.body builder s
 
 end Response.Builder
