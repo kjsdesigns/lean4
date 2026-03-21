@@ -137,20 +137,20 @@ def channelExtensions : Async Unit := do
 -- Test incomplete sends are collapsed before delivery
 
 def channelCollapseIncompleteChunks : Async Unit := do
-  let (outgoing, incoming) ← Body.mkChannel
+  let stream ← Body.mkStream
 
   let first : Chunk := { data := "aaaaaaaaaa".toUTF8, extensions := #[(.mk "part", some <| .ofString! "first")] }
   let second : Chunk := { data := "bbbbbbbbbb".toUTF8, extensions := #[(.mk "part", some <| .ofString! "second")] }
   let last : Chunk := { data := "cccccccccccccccccccc".toUTF8, extensions := #[(.mk "part", some <| .ofString! "last")] }
 
-  outgoing.send first (incomplete := true)
-  outgoing.send second (incomplete := true)
+  stream.send first (incomplete := true)
+  stream.send second (incomplete := true)
 
-  let noChunkYet ← incoming.tryRecv
+  let noChunkYet ← stream.tryRecv
   assert! noChunkYet.isNone
 
-  let sendFinal ← async (t := AsyncTask) <| outgoing.send last
-  let result ← incoming.recv
+  let sendFinal ← async (t := AsyncTask) <| stream.send last
+  let result ← stream.recv
 
   assert! result.isSome
   let merged := result.get!
@@ -553,7 +553,7 @@ def anyFromEmpty : Async Unit := do
 -- Test Any wrapping an Incoming channel receives chunks
 
 def anyFromChannel : Async Unit := do
-  let (outgoing, _) ← Body.mkChannel
+  let outgoing ← Body.mkStream
   let any := Body.Any.ofBody outgoing
 
   let sendTask ← async (t := AsyncTask) <| outgoing.send (Chunk.ofByteArray "data".toUTF8)

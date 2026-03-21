@@ -58,7 +58,7 @@ def main : IO Unit := Async.block do
 
 ## Working with Requests
 
-Incoming requests are represented by `Request Body.Incoming`, which bundles the request
+Incoming requests are represented by `Request Body.Stream`, which bundles the request
 line, parsed headers, and a lazily-consumed body. Headers are available immediately,
 while the body can be streamed or collected on demand, allowing handlers to process both
 small and large payloads efficiently.
@@ -66,7 +66,7 @@ small and large payloads efficiently.
 ### Reading Headers
 
 ```lean
-def handler (req : Request Body.Incoming) : ContextAsync (Response Body.Outgoing) := do
+def handler (req : Request Body.Stream) : ContextAsync (Response Body.Stream) := do
   -- Access request method and URI
   let method := req.head.method      -- Method.get, Method.post, etc.
   let uri := req.head.uri            -- RequestTarget
@@ -86,12 +86,12 @@ space in query components. If you need RFC 3986 opaque query handling, use the r
 
 ### Reading the Request Body
 
-The request body is exposed as `Body.Incoming`, which can be consumed incrementally or
+The request body is exposed as `Body.Stream`, which can be consumed incrementally or
 collected into memory. The `readAll` method reads the entire body, with an optional size
 limit to protect against unbounded payloads.
 
 ```lean
-def handler (req : Request Body.Incoming) : ContextAsync (Response Body.Outgoing) := do
+def handler (req : Request Body.Stream) : ContextAsync (Response Body.Stream) := do
   -- Collect entire body as a String
   let bodyStr : String ← req.body.readAll
 
@@ -107,7 +107,7 @@ Responses are constructed using a builder API that starts from a status code and
 headers and a body. Common helpers exist for text, HTML, JSON, and binary responses, while
 still allowing full control over status codes and header values.
 
-Response builders produce `Async (Response Body.Outgoing)`.
+Response builders produce `Async (Response Body.Stream)`.
 
 ```lean
 -- Text response
@@ -137,7 +137,7 @@ Response.ok
 For large responses or server-sent events, use streaming:
 
 ```lean
-def handler (req : Request Body.Incoming) : ContextAsync (Response Body.Outgoing) := do
+def handler (req : Request Body.Stream) : ContextAsync (Response Body.Stream) := do
   Response.ok
     |>.header! "Content-Type" "text/plain"
     |>.stream fun stream => do

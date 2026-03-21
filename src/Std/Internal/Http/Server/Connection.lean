@@ -87,7 +87,7 @@ private structure PollSources (α β : Type) where
   expect : Option Nat
   response : Option (Std.Channel (Except Error (Response β)))
   responseBody : Option β
-  requestBody : Option Body.Outgoing
+  requestBody : Option Body.Stream
   timeout : Millisecond.Offset
   keepAliveTimeout : Option Millisecond.Offset
   headerTimeout : Option Timestamp
@@ -207,8 +207,7 @@ Bundled into a struct so it can be passed to and returned from helper functions.
 -/
 private structure ConnectionState (β : Type) where
   machine : H1.Machine .receiving
-  requestOutgoing : Body.Outgoing
-  requestIncoming : Body.Incoming
+  requestStream : Body.Stream
   keepAliveTimeout : Option Millisecond.Offset
   currentTimeout : Millisecond.Offset
   headerTimeout : Option Timestamp
@@ -252,7 +251,7 @@ private def processH1Events
 
       if let some length := head.getSize true then
         -- Sets the size of the body that is going out of the connection.
-        Body.setKnownSize st.requestOutgoing (some length)
+        Body.setKnownSize st.requestStream (some length)
 
     | .«continue» =>
       if let some head := st.pendingHead then
@@ -263,18 +262,17 @@ private def processH1Events
 
     | .next =>
       -- Reset all per-request state for the next pipelined request.
-      if ¬(← Body.isClosed st.requestOutgoing) then
-        Body.close st.requestOutgoing
+      if ¬(← Body.isClosed st.requestStream) then
+        Body.close st.requestStream
 
       if let some res := st.respStream then
         if ¬(← Body.isClosed res) then
           Body.close res
 
-      let (newOut, newIn) ← Body.mkChannel
+      let newStream ← Body.mkStream
 
       st := { st with
-        requestOutgoing := newOut
-        requestIncoming := newIn
+        requestStream := newStream
         response := ← Std.Channel.new
         respStream := none
         keepAliveTimeout := some config.keepAliveTimeout.val
@@ -286,15 +284,15 @@ private def processH1Events
     | .failed err =>
       Handler.onFailure handler (toString err)
 
-      if ¬(← Body.isClosed st.requestOutgoing) then
-        Body.close st.requestOutgoing
+      if ¬(← Body.isClosed st.requestStream) then
+        Body.close st.requestStream
 
       st := { st with requiresData := false, pendingHead := none }
       break
 
     | .closeBody =>
-      if ¬(← Body.isClosed st.requestOutgoing) then
-        Body.close st.requestOutgoing
+      if ¬(← Body.isClosed st.requestStream) then
+        Body.close st.requestStream
 
     | .close => pure ()
 
@@ -312,7 +310,7 @@ private def dispatchPendingRequest
     : Async (ConnectionState (Handler.ResponseBody σ)) := do
   if let some line := state.pendingHead then
 
-    let task ← Handler.onRequest handler { line, body := state.requestIncoming, extensions } connectionContext
+    let task ← Handler.onRequest handler { line, body := state.requestStream, extensions } connectionContext
       |>.asTask
 
     BaseIO.chainTask task (discard ∘ state.response.send)
@@ -361,11 +359,11 @@ private def handleRecvEvent
       let mut st := { state with machine := newMachine }
 
       if let some pulled := pulledChunk then
-        try st.requestOutgoing.send pulled.chunk pulled.incomplete
+        try st.requestStream.send pulled.chunk pulled.incomplete
         catch e => Handler.onFailure handler e
         if pulled.final then
-          if ¬(← Body.isClosed st.requestOutgoing) then
-            Body.close st.requestOutgoing
+          if ¬(← Body.isClosed st.requestStream) then
+            Body.close st.requestStream
 
       return (st, false)
     else
@@ -401,15 +399,15 @@ private def buildPollSources
     (socket : α) (connectionContext : CancellationContext) (state : ConnectionState β)
     : Async (PollSources α β) := do
   let requestBodyOpen ←
-    if state.machine.canPullBody then pure !(← Body.isClosed state.requestOutgoing)
+    if state.machine.canPullBody then pure !(← Body.isClosed state.requestStream)
     else pure false
 
   let requestBodyInterested ←
-    if state.machine.canPullBody ∧ requestBodyOpen then state.requestOutgoing.hasInterest
+    if state.machine.canPullBody ∧ requestBodyOpen then state.requestStream.hasInterest
     else pure false
 
   let requestBody ←
-    if state.machine.canPullBodyNow ∧ requestBodyOpen then pure (some state.requestOutgoing)
+    if state.machine.canPullBodyNow ∧ requestBodyOpen then pure (some state.requestStream)
     else pure none
 
   -- Include the socket only when there is more to do than waiting for the handler alone.
@@ -444,12 +442,11 @@ private def handle
   let _ : Body (Handler.ResponseBody σ) := Handler.responseBodyInstance
 
   let socket := connection.socket
-  let (initOut, initIn) ← Body.mkChannel
+  let initStream ← Body.mkStream
 
   let mut state : ConnectionState (Handler.ResponseBody σ) := {
     machine := connection.machine
-    requestOutgoing := initOut
-    requestIncoming := initIn
+    requestStream := initStream
     keepAliveTimeout := some config.keepAliveTimeout.val
     currentTimeout := config.keepAliveTimeout.val
     headerTimeout := none
@@ -489,8 +486,8 @@ private def handle
       if shouldClose then break
 
   -- Clean up: close all open streams and the socket.
-  if ¬(← Body.isClosed state.requestOutgoing) then
-    Body.close state.requestOutgoing
+  if ¬(← Body.isClosed state.requestStream) then
+    Body.close state.requestStream
 
   if let some res := state.respStream then
     if ¬(← Body.isClosed res) then Body.close res

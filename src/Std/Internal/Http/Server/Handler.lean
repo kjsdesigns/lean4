@@ -37,7 +37,7 @@ class Handler (σ : Type) where
   /--
   Called for each incoming HTTP request.
   -/
-  onRequest (self : σ) (request : Request Body.Incoming) : ContextAsync (Response ResponseBody)
+  onRequest (self : σ) (request : Request Body.Stream) : ContextAsync (Response ResponseBody)
 
   /--
   Called when an I/O or transport error occurs while processing a request (e.g. broken socket,

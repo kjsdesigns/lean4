@@ -5,20 +5,10 @@ import Std.Internal.Async.Timer
 open Std.Internal.IO Async
 open Std Http
 
-abbrev TestHandler := Request Body.Incoming → ContextAsync (Response Body.Any)
+abbrev TestHandler := Request Body.Stream → ContextAsync (Response Body.Any)
 
 instance : Std.Http.Server.Handler TestHandler where
   onRequest handler request := handler request
-
-instance : Coe (ContextAsync (Response Body.Incoming)) (ContextAsync (Response Body.Any)) where
-  coe action := do
-    let response ← action
-    pure { response with body := Body.Internal.incomingToOutgoing response.body }
-
-instance : Coe (Async (Response Body.Incoming)) (ContextAsync (Response Body.Any)) where
-  coe action := do
-    let response ← action
-    pure { response with body := Body.Internal.incomingToOutgoing response.body }
 
 def defaultConfig : Config :=
   { lingeringTimeout := 500, generateDate := false }
@@ -121,7 +111,7 @@ def firstChunkHandler : TestHandler := fun req => do
   Response.ok |>.text text
 
 def streamPiecesHandler (n : Nat) : TestHandler := fun _ => do
-  let (outgoing, _incoming) ← Body.mkChannel
+  let outgoing ← Body.mkStream
   background do
     for i in [0:n] do
       outgoing.send <| Chunk.ofByteArray s!"piece-{i};".toUTF8
@@ -130,7 +120,7 @@ def streamPiecesHandler (n : Nat) : TestHandler := fun _ => do
     |>.body outgoing
 
 def stressResponseHandler (n : Nat) : TestHandler := fun _ => do
-  let (outgoing, _incoming) ← Body.mkChannel
+  let outgoing ← Body.mkStream
   background do
     for i in [0:n] do
       outgoing.send <| Chunk.ofByteArray s!"x{i},".toUTF8
@@ -182,7 +172,7 @@ def stressResponseHandler (n : Nat) : TestHandler := fun _ => do
 #eval runWithTimeout "07_stream_known_size" 2000 do
   let raw := "GET /known HTTP/1.1\x0d\nHost: example.com\x0d\nConnection: close\x0d\n\x0d\n".toUTF8
   let response ← sendRawTimed "07_stream_known_size/send" raw (fun _ => do
-    let (outgoing, _incoming) ← Body.mkChannel
+    let outgoing ← Body.mkStream
     outgoing.setKnownSize (some (.fixed 8))
     background do
       outgoing.send <| Chunk.ofByteArray "abcd".toUTF8
@@ -198,7 +188,7 @@ def stressResponseHandler (n : Nat) : TestHandler := fun _ => do
 #eval runWithTimeout "08_interest_selector_gating" 2000 do
   let raw := "GET /interest HTTP/1.1\x0d\nHost: example.com\x0d\nConnection: close\x0d\n\x0d\n".toUTF8
   let response ← sendRawTimed "08_interest_selector_gating/send" raw (fun _ => do
-    let (outgoing, _incoming) ← Body.mkChannel
+    let outgoing ← Body.mkStream
     background do
       let interested ← Selectable.one #[
         .case outgoing.interestSelector pure
@@ -215,7 +205,7 @@ def stressResponseHandler (n : Nat) : TestHandler := fun _ => do
 #eval runWithTimeout "09_incomplete_send_collapse" 2000 do
   let raw := "GET /collapse HTTP/1.1\x0d\nHost: example.com\x0d\nConnection: close\x0d\n\x0d\n".toUTF8
   let response ← sendRawTimed "09_incomplete_send_collapse/send" raw (fun _ => do
-    let (outgoing, _incoming) ← Body.mkChannel
+    let outgoing ← Body.mkStream
     background do
       outgoing.send ({ data := "hello ".toUTF8, extensions := #[] } : Chunk) (incomplete := true)
       outgoing.send ({ data := "wor".toUTF8, extensions := #[] } : Chunk) (incomplete := true)
@@ -335,7 +325,7 @@ def stressResponseHandler (n : Nat) : TestHandler := fun _ => do
   Async.block do
     let (client, server) ← Mock.new
     let handler : TestHandler := fun _ => do
-      let (outgoing, _incoming) ← Body.mkChannel
+      let outgoing ← Body.mkStream
       background do
         outgoing.send <| Chunk.ofByteArray "aaa".toUTF8
         let sleep ← Sleep.mk 300
