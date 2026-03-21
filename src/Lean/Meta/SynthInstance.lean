@@ -867,7 +867,7 @@ private def cacheResult (cacheKey : SynthInstanceCacheKey) (kind : PreprocessKin
       | some result =>
         -- See `applyCachedAbstractResult?` If new metavariables have **not** been introduced,
         -- we don't need to perform extra checks again when reusing result.
-        modify fun s => { s with cache.synthInstance := s.cache.synthInstance.insert cacheKey (some { expr := result, paramNames := #[], mvars := #[] }) }
+        modify fun s => { s with cache.synthInstance := s.cache.synthInstance.insert cacheKey (some { expr := result, paramNames := #[], lmvars := #[], exprArgs := #[] }) }
     else
       modify fun s => { s with cache.synthInstance := s.cache.synthInstance.insert cacheKey (some abstResult) }
 
