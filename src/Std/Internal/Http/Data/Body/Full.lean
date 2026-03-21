@@ -153,31 +153,37 @@ namespace Request.Builder
 open Internal.IO.Async
 
 /--
-Builds a request from raw bytes.
+Builds a request body from raw bytes without setting any headers.
+Use `bytes` instead if you want `Content-Type: application/octet-stream` set automatically.
 -/
 def fromBytes (builder : Builder) (content : ByteArray) : Async (Request Body.Full) := do
   return builder.body (← Body.Full.ofByteArray content)
 
 /--
 Builds a request with a binary body.
+Sets `Content-Type: application/octet-stream`.
+Use `fromBytes` instead if you need to set a different `Content-Type` or none at all.
 -/
 def bytes (builder : Builder) (content : ByteArray) : Async (Request Body.Full) :=
   fromBytes (builder.header Header.Name.contentType (Header.Value.ofString! "application/octet-stream")) content
 
 /--
 Builds a request with a text body.
+Sets `Content-Type: text/plain; charset=utf-8`.
 -/
 def text (builder : Builder) (content : String) : Async (Request Body.Full) :=
   fromBytes (builder.header Header.Name.contentType (Header.Value.ofString! "text/plain; charset=utf-8")) content.toUTF8
 
 /--
 Builds a request with a JSON body.
+Sets `Content-Type: application/json`.
 -/
 def json (builder : Builder) (content : String) : Async (Request Body.Full) :=
   fromBytes (builder.header Header.Name.contentType (Header.Value.ofString! "application/json")) content.toUTF8
 
 /--
 Builds a request with an HTML body.
+Sets `Content-Type: text/html; charset=utf-8`.
 -/
 def html (builder : Builder) (content : String) : Async (Request Body.Full) :=
   fromBytes (builder.header Header.Name.contentType (Header.Value.ofString! "text/html; charset=utf-8")) content.toUTF8
@@ -188,31 +194,37 @@ namespace Response.Builder
 open Internal.IO.Async
 
 /--
-Builds a response from raw bytes.
+Builds a response body from raw bytes without setting any headers.
+Use `bytes` instead if you want `Content-Type: application/octet-stream` set automatically.
 -/
 def fromBytes (builder : Builder) (content : ByteArray) : Async (Response Body.Full) := do
   return builder.body (← Body.Full.ofByteArray content)
 
 /--
 Builds a response with a binary body.
+Sets `Content-Type: application/octet-stream`.
+Use `fromBytes` instead if you need to set a different `Content-Type` or none at all.
 -/
 def bytes (builder : Builder) (content : ByteArray) : Async (Response Body.Full) :=
   fromBytes (builder.header Header.Name.contentType (Header.Value.ofString! "application/octet-stream")) content
 
 /--
 Builds a response with a text body.
+Sets `Content-Type: text/plain; charset=utf-8`.
 -/
 def text (builder : Builder) (content : String) : Async (Response Body.Full) :=
   fromBytes (builder.header Header.Name.contentType (Header.Value.ofString! "text/plain; charset=utf-8")) content.toUTF8
 
 /--
 Builds a response with a JSON body.
+Sets `Content-Type: application/json`.
 -/
 def json (builder : Builder) (content : String) : Async (Response Body.Full) :=
   fromBytes (builder.header Header.Name.contentType (Header.Value.ofString! "application/json")) content.toUTF8
 
 /--
 Builds a response with an HTML body.
+Sets `Content-Type: text/html; charset=utf-8`.
 -/
 def html (builder : Builder) (content : String) : Async (Response Body.Full) :=
   fromBytes (builder.header Header.Name.contentType (Header.Value.ofString! "text/html; charset=utf-8")) content.toUTF8
