@@ -309,7 +309,8 @@ structure MetavarDecl where
   kind           : MetavarKind
   /-- See comment at `CheckAssignment` `Meta/ExprDefEq.lean` -/
   numScopeArgs   : Nat := 0
-  /-- We use this field to track how old a metavariable is. It is set using a counter at `MetavarContext` -/
+  /-- We use this field to track how old a metavariable is. It is set using a counter at `MetavarContext`.
+  We also use it for pretty printing anonymous metavariables. -/
   index          : Nat
   deriving Inhabited
 
@@ -342,7 +343,11 @@ structure MetavarContext where
   levelAssignDepth : Nat := 0
   /-- Counter for setting the field `index` at `MetavarDecl` -/
   mvarCounter    : Nat := 0
+  /-- Counter for setting `lIndex` for new level metavariables. -/
+  lmvarCounter   : Nat := 0
   lDepth         : PersistentHashMap LMVarId Nat := {}
+  /-- We use the index of a level metavariable for pretty printing. -/
+  lIndex         : PersistentHashMap LMVarId Nat := {}
   /-- Metavariable declarations. -/
   decls          : PersistentHashMap MVarId MetavarDecl := {}
   /-- Index mapping user-friendly names to ids. -/
@@ -796,7 +801,10 @@ def addExprMVarDeclExp (mctx : MetavarContext) (mvarId : MVarId) (userName : Nam
    It is used to implement actions in the monads `MetaM`, `ElabM` and `TacticM`.
    It should not be used directly since the argument `(mvarId : MVarId)` is assumed to be "unique". -/
 def addLevelMVarDecl (mctx : MetavarContext) (mvarId : LMVarId) : MetavarContext :=
-  { mctx with lDepth := mctx.lDepth.insert mvarId mctx.depth }
+  { mctx with
+    lmvarCounter := mctx.lmvarCounter + 1
+    lDepth := mctx.lDepth.insert mvarId mctx.depth
+    lIndex := mctx.lIndex.insert mvarId mctx.lmvarCounter }
 
 def findDecl? (mctx : MetavarContext) (mvarId : MVarId) : Option MetavarDecl :=
   mctx.decls.find? mvarId
@@ -885,6 +893,9 @@ def getLevelDepth (mctx : MetavarContext) (mvarId : LMVarId) : Nat :=
   match mctx.findLevelDepth? mvarId with
   | some d => d
   | none   => panic! "unknown metavariable"
+
+def findLevelIndex? (mctx : MetavarContext) (mvarId : LMVarId) : Option Nat :=
+  mctx.lIndex.find? mvarId
 
 def isAnonymousMVar (mctx : MetavarContext) (mvarId : MVarId) : Bool :=
   match mctx.findDecl? mvarId with
