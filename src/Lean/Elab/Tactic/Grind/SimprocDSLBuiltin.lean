@@ -59,11 +59,10 @@ def elabSimprocAndThen : SymSimprocElab := fun stx => do
   let right ← elabSymSimproc right
   return left >> right
 
-@[builtin_sym_simproc orElse]
+@[builtin_sym_simproc Lean.Parser.Sym.Simp.orElse]
 def elabSimprocOrElse : SymSimprocElab := fun stx => do
-  let `(sym_simproc| $left <|> $right) := stx | throwUnsupportedSyntax
-  let left ← elabSymSimproc left
-  let right ← elabSymSimproc right
+  let left ← elabSymSimproc stx[0]
+  let right ← elabSymSimproc stx[2]
   return left <|> right
 
 @[builtin_sym_simproc simprocParen]
