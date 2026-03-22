@@ -87,7 +87,7 @@ extern lean_object* l_Lean_Elab_unsupportedSyntaxExceptionId;
 lean_object* l_Lean_Syntax_getKind(lean_object*);
 lean_object* l_Lean_MessageData_ofSyntax(lean_object*);
 lean_object* l_Lean_indentD(lean_object*);
-lean_object* l_Lean_KeyedDeclsAttribute_Def___private__1(lean_object*, lean_object*, lean_object*);
+lean_object* l_Lean_KeyedDeclsAttribute_evalIdentKey(lean_object*, lean_object*, lean_object*);
 lean_object* l_Lean_Name_mkStr5(lean_object*, lean_object*, lean_object*, lean_object*, lean_object*);
 lean_object* l_Lean_KeyedDeclsAttribute_init___redArg(lean_object*, lean_object*);
 lean_object* l_Lean_KeyedDeclsAttribute_getValues___redArg(lean_object*, lean_object*, lean_object*);
@@ -1118,7 +1118,7 @@ LEAN_EXPORT lean_object* l_Lean_Elab_Term_Quotation_initFn___lam__0_00___x40_Lea
 _start:
 {
 lean_object* v___x_215_; 
-v___x_215_ = l_Lean_KeyedDeclsAttribute_Def___private__1(v_stx_211_, v___y_212_, v___y_213_);
+v___x_215_ = l_Lean_KeyedDeclsAttribute_evalIdentKey(v_stx_211_, v___y_212_, v___y_213_);
 return v___x_215_;
 }
 }
@@ -4961,8 +4961,8 @@ v___x_1800_ = l_List_isEmpty___redArg(v_preresolved_1751_);
 if (v___x_1800_ == 0)
 {
 lean_object* v___x_1801_; lean_object* v___x_1802_; 
-lean_dec(v_val_1750_);
 lean_dec_ref(v_stx_1741_);
+lean_dec(v_val_1750_);
 lean_dec(v_a_1748_);
 lean_dec_ref(v_a_1747_);
 lean_dec(v_a_1746_);
@@ -5006,8 +5006,8 @@ if (lean_obj_tag(v_a_1804_) == 1)
 {
 lean_object* v___x_1808_; lean_object* v___x_1810_; 
 lean_dec_ref(v_a_1804_);
-lean_dec_ref(v_stx_1741_);
 lean_dec(v_val_1750_);
+lean_dec_ref(v_stx_1741_);
 lean_dec(v_a_1748_);
 lean_dec_ref(v_a_1747_);
 lean_dec(v_a_1746_);
@@ -5094,8 +5094,8 @@ goto v___jp_1789_;
 else
 {
 lean_object* v___x_1821_; lean_object* v___x_1823_; 
-lean_dec(v_val_1750_);
 lean_dec_ref(v_stx_1741_);
+lean_dec(v_val_1750_);
 lean_dec(v_a_1748_);
 lean_dec_ref(v_a_1747_);
 lean_dec(v_a_1746_);
@@ -5127,8 +5127,8 @@ return v___x_1823_;
 else
 {
 lean_object* v_a_1826_; lean_object* v___x_1828_; uint8_t v_isShared_1829_; uint8_t v_isSharedCheck_1833_; 
-lean_dec(v_val_1750_);
 lean_dec_ref(v_stx_1741_);
+lean_dec(v_val_1750_);
 lean_dec(v_a_1748_);
 lean_dec_ref(v_a_1747_);
 lean_dec(v_a_1746_);

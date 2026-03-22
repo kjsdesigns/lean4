@@ -2019,8 +2019,8 @@ if (v___x_742_ == 0)
 lean_dec_ref(v___x_741_);
 lean_dec(v_head_727_);
 lean_del_object(v___x_725_);
-lean_dec(v_head_723_);
 lean_dec_ref(v_tail_717_);
+lean_dec(v_head_723_);
 lean_dec_ref(v_alt_710_);
 lean_dec_ref(v_codomain_709_);
 lean_dec(v_u_708_);
@@ -2250,8 +2250,8 @@ else
 lean_dec(v_a_729_);
 lean_dec(v_head_727_);
 lean_del_object(v___x_725_);
-lean_dec(v_head_723_);
 lean_dec_ref(v_tail_717_);
+lean_dec(v_head_723_);
 lean_dec(v_a_714_);
 lean_dec_ref(v_a_713_);
 lean_dec(v_a_712_);
@@ -2267,8 +2267,8 @@ else
 {
 lean_dec(v_head_727_);
 lean_del_object(v___x_725_);
-lean_dec_ref(v_tail_717_);
 lean_dec(v_head_723_);
+lean_dec_ref(v_tail_717_);
 lean_dec(v_a_714_);
 lean_dec_ref(v_a_713_);
 lean_dec(v_a_712_);
@@ -9612,7 +9612,7 @@ v___jp_3623_:
 lean_object* v___x_3630_; lean_object* v___x_3631_; 
 v___x_3630_ = l_Lean_Expr_bindingName_x21(v_type_3616_);
 lean_dec_ref(v_type_3616_);
-v___x_3631_ = l___private_Lean_Meta_ArgsPacker_0__Lean_Meta_ArgsPacker_withCurriedDecl___redArg(v_argsPacker_3614_, v___x_3630_, v___y_3625_, v___y_3624_, v___y_3626_, v___y_3627_, v___y_3628_, v___y_3629_);
+v___x_3631_ = l___private_Lean_Meta_ArgsPacker_0__Lean_Meta_ArgsPacker_withCurriedDecl___redArg(v_argsPacker_3614_, v___x_3630_, v___y_3624_, v___y_3625_, v___y_3626_, v___y_3627_, v___y_3628_, v___y_3629_);
 return v___x_3631_;
 }
 v___jp_3632_:
@@ -9685,8 +9685,8 @@ return v___x_3649_;
 }
 else
 {
-v___y_3624_ = v___f_3638_;
-v___y_3625_ = v_packedMotiveType_3637_;
+v___y_3624_ = v_packedMotiveType_3637_;
+v___y_3625_ = v___f_3638_;
 v___y_3626_ = v___y_3633_;
 v___y_3627_ = v___y_3634_;
 v___y_3628_ = v___y_3635_;

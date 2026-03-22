@@ -1,6 +1,6 @@
 // Lean compiler output
 // Module: Lean.Parser.Command
-// Imports: public import Lean.Parser.Do import Lean.DocString.Parser
+// Imports: public import Lean.Parser.Do import Lean.DocString.Parser meta import Lean.Parser.Do meta import Lean.DocString.Parser
 #include <lean/lean.h>
 #if defined(__clang__)
 #pragma clang diagnostic ignored "-Wunused-parameter"
@@ -11569,11 +11569,11 @@ return v___x_1178_;
 LEAN_EXPORT lean_object* l_Lean_Parser_Command_declId___lam__0___boxed(lean_object* v___x_1196_, lean_object* v_c_1197_){
 _start:
 {
-uint8_t v___x_244__boxed_1198_; uint32_t v_c_boxed_1199_; uint8_t v_res_1200_; lean_object* v_r_1201_; 
-v___x_244__boxed_1198_ = lean_unbox(v___x_1196_);
+uint8_t v___x_245__boxed_1198_; uint32_t v_c_boxed_1199_; uint8_t v_res_1200_; lean_object* v_r_1201_; 
+v___x_245__boxed_1198_ = lean_unbox(v___x_1196_);
 v_c_boxed_1199_ = lean_unbox_uint32(v_c_1197_);
 lean_dec(v_c_1197_);
-v_res_1200_ = l_Lean_Parser_Command_declId___lam__0(v___x_244__boxed_1198_, v_c_boxed_1199_);
+v_res_1200_ = l_Lean_Parser_Command_declId___lam__0(v___x_245__boxed_1198_, v_c_boxed_1199_);
 v_r_1201_ = lean_box(v_res_1200_);
 return v_r_1201_;
 }
@@ -38900,13 +38900,23 @@ if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
 return lean_io_result_mk_ok(lean_box(0));
 }
+lean_object* runtime_initialize_Lean_Parser_Do(uint8_t builtin);
+lean_object* runtime_initialize_Lean_DocString_Parser(uint8_t builtin);
 static bool _G_meta_initialized = false;
 LEAN_EXPORT lean_object* meta_initialize_Lean_Parser_Command(uint8_t builtin) {
 lean_object * res;
 if (_G_meta_initialized) return lean_io_result_mk_ok(lean_box(0));
 _G_meta_initialized = true;
+res = runtime_initialize_Lean_Parser_Do(builtin);
+if (lean_io_result_is_error(res)) return res;
+lean_dec_ref(res);
+res = runtime_initialize_Lean_DocString_Parser(builtin);
+if (lean_io_result_is_error(res)) return res;
+lean_dec_ref(res);
 return lean_io_result_mk_ok(lean_box(0));
 }
+lean_object* initialize_Lean_Parser_Do(uint8_t builtin);
+lean_object* initialize_Lean_DocString_Parser(uint8_t builtin);
 lean_object* initialize_Lean_Parser_Do(uint8_t builtin);
 lean_object* initialize_Lean_DocString_Parser(uint8_t builtin);
 static bool _G_initialized = false;
@@ -38914,6 +38924,12 @@ LEAN_EXPORT lean_object* initialize_Lean_Parser_Command(uint8_t builtin) {
 lean_object * res;
 if (_G_initialized) return lean_io_result_mk_ok(lean_box(0));
 _G_initialized = true;
+res = initialize_Lean_Parser_Do(builtin);
+if (lean_io_result_is_error(res)) return res;
+lean_dec_ref(res);
+res = initialize_Lean_DocString_Parser(builtin);
+if (lean_io_result_is_error(res)) return res;
+lean_dec_ref(res);
 res = initialize_Lean_Parser_Do(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);

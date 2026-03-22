@@ -9133,7 +9133,7 @@ return v___x_2705_;
 LEAN_EXPORT lean_object* l_Lean_Server_FileWorker_handleResolveImportAllUnknownIdentifiersCodeAction_x3f(lean_object* v_id_2708_, lean_object* v_action_2709_, lean_object* v_unknownIdentifierRanges_2710_, lean_object* v_a_2711_){
 _start:
 {
-lean_object* v_doc_2713_; size_t v___y_2715_; size_t v___y_2716_; lean_object* v___y_2717_; lean_object* v___y_2718_; lean_object* v___y_2719_; lean_object* v___y_2720_; lean_object* v_toEditableDocumentCore_2776_; lean_object* v_meta_2777_; lean_object* v_initSnap_2778_; lean_object* v_text_2779_; lean_object* v_a_2781_; lean_object* v___y_2821_; lean_object* v___x_2831_; lean_object* v___x_2832_; lean_object* v___x_2833_; uint8_t v___x_2834_; 
+lean_object* v_doc_2713_; lean_object* v___y_2715_; size_t v___y_2716_; lean_object* v___y_2717_; lean_object* v___y_2718_; size_t v___y_2719_; lean_object* v___y_2720_; lean_object* v_toEditableDocumentCore_2776_; lean_object* v_meta_2777_; lean_object* v_initSnap_2778_; lean_object* v_text_2779_; lean_object* v_a_2781_; lean_object* v___y_2821_; lean_object* v___x_2831_; lean_object* v___x_2832_; lean_object* v___x_2833_; uint8_t v___x_2834_; 
 v_doc_2713_ = lean_ctor_get(v_a_2711_, 1);
 lean_inc_ref(v_doc_2713_);
 v_toEditableDocumentCore_2776_ = lean_ctor_get(v_doc_2713_, 0);
@@ -9189,21 +9189,21 @@ lean_inc_ref(v___y_2720_);
 v___x_2721_ = lean_alloc_ctor(0, 2, 0);
 lean_ctor_set(v___x_2721_, 0, v___y_2720_);
 lean_ctor_set(v___x_2721_, 1, v___y_2720_);
-v___x_2722_ = lean_mk_empty_array_with_capacity(v___y_2718_);
+v___x_2722_ = lean_mk_empty_array_with_capacity(v___y_2715_);
 v___x_2723_ = lean_obj_once(&l_Lean_Server_FileWorker_handleResolveImportAllUnknownIdentifiersCodeAction_x3f___closed__0, &l_Lean_Server_FileWorker_handleResolveImportAllUnknownIdentifiersCodeAction_x3f___closed__0_once, _init_l_Lean_Server_FileWorker_handleResolveImportAllUnknownIdentifiersCodeAction_x3f___closed__0);
-lean_inc(v___y_2718_);
+lean_inc(v___y_2715_);
 v___x_2724_ = lean_alloc_ctor(0, 2, 0);
-lean_ctor_set(v___x_2724_, 0, v___y_2718_);
+lean_ctor_set(v___x_2724_, 0, v___y_2715_);
 lean_ctor_set(v___x_2724_, 1, v___x_2723_);
-v___x_2725_ = lean_array_get_size(v___y_2719_);
-v___x_2726_ = l_Array_toSubarray___redArg(v___y_2719_, v___y_2718_, v___x_2725_);
+v___x_2725_ = lean_array_get_size(v___y_2718_);
+v___x_2726_ = l_Array_toSubarray___redArg(v___y_2718_, v___y_2715_, v___x_2725_);
 v___x_2727_ = lean_alloc_ctor(0, 2, 0);
 lean_ctor_set(v___x_2727_, 0, v___x_2724_);
 lean_ctor_set(v___x_2727_, 1, v___x_2726_);
 v___x_2728_ = lean_alloc_ctor(0, 2, 0);
 lean_ctor_set(v___x_2728_, 0, v___x_2722_);
 lean_ctor_set(v___x_2728_, 1, v___x_2727_);
-v___x_2729_ = l___private_Init_Data_Array_Basic_0__Array_forIn_x27Unsafe_loop___at___00Lean_Server_FileWorker_handleResolveImportAllUnknownIdentifiersCodeAction_x3f_spec__3___redArg(v___x_2721_, v___y_2717_, v___y_2716_, v___y_2715_, v___x_2728_);
+v___x_2729_ = l___private_Init_Data_Array_Basic_0__Array_forIn_x27Unsafe_loop___at___00Lean_Server_FileWorker_handleResolveImportAllUnknownIdentifiersCodeAction_x3f_spec__3___redArg(v___x_2721_, v___y_2717_, v___y_2716_, v___y_2719_, v___x_2728_);
 lean_dec_ref(v___y_2717_);
 if (lean_obj_tag(v___x_2729_) == 0)
 {
@@ -9457,11 +9457,11 @@ if (lean_obj_tag(v___x_2798_) == 0)
 {
 lean_object* v___x_2799_; 
 v___x_2799_ = ((lean_object*)(l_Lean_Server_FileWorker_handleUnknownIdentifierCodeAction___closed__5));
-v___y_2715_ = v___x_2787_;
+v___y_2715_ = v___x_2783_;
 v___y_2716_ = v_sz_2786_;
 v___y_2717_ = v_a_2781_;
-v___y_2718_ = v___x_2783_;
-v___y_2719_ = v_response_2796_;
+v___y_2718_ = v_response_2796_;
+v___y_2719_ = v___x_2787_;
 v___y_2720_ = v___x_2799_;
 goto v___jp_2714_;
 }
@@ -9517,11 +9517,11 @@ goto v_reusejp_2808_;
 }
 v_reusejp_2808_:
 {
-v___y_2715_ = v___x_2787_;
+v___y_2715_ = v___x_2783_;
 v___y_2716_ = v_sz_2786_;
 v___y_2717_ = v_a_2781_;
-v___y_2718_ = v___x_2783_;
-v___y_2719_ = v_response_2796_;
+v___y_2718_ = v_response_2796_;
+v___y_2719_ = v___x_2787_;
 v___y_2720_ = v___x_2809_;
 goto v___jp_2714_;
 }
