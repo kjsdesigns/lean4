@@ -67,7 +67,7 @@ builtin_initialize ppFnsRef : IO.Ref PPFns ←
     ppExprWithInfos := fun _ e => return format (toString e)
     ppConstNameWithInfos := fun _ n => return format n
     ppTerm := fun ctx stx => return formatRawTerm ctx stx
-    ppLevel := fun ctx l => return l.format true ctx.mctx.lIndex
+    ppLevel := fun ctx l => return l.format true ctx.mctx.findLevelIndex?
     ppGoal := fun _ mvarId => return formatRawGoal mvarId
   }
 
@@ -113,7 +113,7 @@ def ppLevel (ctx : PPContext) (l : Level) : BaseIO Format := do
   | .ok fmt => return fmt
   | .error ex =>
     if pp.rawOnError.get ctx.opts then
-      pure f!"[Error pretty printing level: {ex}. Falling back to raw printer.]{Format.line}{l.format true {}}"
+      pure f!"[Error pretty printing level: {ex}. Falling back to raw printer.]{Format.line}{l.format true ctx.mctx.findLevelIndex?}"
     else
       pure f!"failed to pretty print level (use 'set_option pp.rawOnError true' for raw representation)"
 

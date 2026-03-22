@@ -443,7 +443,7 @@ def Result.imax : Result → Result → Result
 
 structure Context where
   mvars : Bool
-  lIndex : PersistentHashMap LMVarId Nat
+  lIndex? : LMVarId → Option Nat
 
 abbrev M := ReaderM Context
 
@@ -457,7 +457,7 @@ def toResult (l : Level) : M Result := do
   | mvar n     =>
     if !(← read).mvars then
       return Result.leaf `_
-    else if let some i := (← read).lIndex[n] then
+    else if let some i := (← read).lIndex? n then
       return Result.leaf <| Name.num (Name.mkSimple "?u") (i + 1)
     else
       -- Undefined mvar, use internal name
@@ -496,17 +496,17 @@ protected partial def Result.quote (r : Result) (prec : Nat) : Syntax.Level :=
 
 end PP
 
-protected def format (u : Level) (mvars : Bool) (lIndex : PersistentHashMap LMVarId Nat) : Format :=
-  (PP.toResult u) |>.run { mvars, lIndex } |>.format true
+protected def format (u : Level) (mvars : Bool) (lIndex? : LMVarId → Option Nat) : Format :=
+  (PP.toResult u) |>.run { mvars, lIndex? } |>.format true
 
 instance : ToFormat Level where
-  format u := Level.format u (mvars := true) (lIndex := {})
+  format u := Level.format u (mvars := true) (lIndex? := fun _ => none)
 
 instance : ToString Level where
   toString u := Format.pretty (format u)
 
-protected def quote (u : Level) (prec : Nat := 0) (mvars : Bool := true) (lIndex : PersistentHashMap LMVarId Nat) : Syntax.Level :=
-  (PP.toResult u) |>.run { mvars, lIndex } |>.quote prec
+protected def quote (u : Level) (prec : Nat := 0) (mvars : Bool := true) (lIndex? : LMVarId → Option Nat) : Syntax.Level :=
+  (PP.toResult u) |>.run { mvars, lIndex? } |>.quote prec
 
 /- Instance unimplemented since for proper quoting the level indices are required. -/
 -- instance : Quote Level `level where
