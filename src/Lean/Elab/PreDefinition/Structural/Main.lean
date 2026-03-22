@@ -92,6 +92,7 @@ private def elimMutualRecursion (preDefs : Array PreDefinition) (fixedParamPerms
   -- and add the `_f` definitions to the environment.
   let fValues ← FArgs.mapM (mkLambdaFVars xs ·)
   let fTypes ← fValues.mapM inferType
+  let us := preDefs[0]!.levelParams.map mkLevelParam
   let packedFArgs ←
     if isIndPred then
       pure packedFArgs
@@ -103,11 +104,14 @@ private def elimMutualRecursion (preDefs : Array PreDefinition) (fixedParamPerms
         addDecl (.defnDecl {
           name := fName, levelParams := preDefs[idx]!.levelParams,
           type := fType, value := fValue,
-          hints := .regular (getMaxHeight (← getEnv) fValue + 1),
+          hints := .abbrev,
           safety := if preDefs[idx]!.modifiers.isUnsafe then .unsafe else .safe,
           all := [fName] })
         setReducibleAttribute fName
-      pure packedFArgs
+      -- Reference the `_f` constants in the packed functionals so they show up in
+      -- kernel diagnostics.
+      let fConsts := preDefs.map fun preDef => mkAppN (mkConst (preDef.declName ++ `_f) us) xs
+      positions.mapMwith (PProdN.mkLambdas · ·) packedFTypes fConsts
 
   -- Assemble the individual `.brecOn` applications
   let valuesNew ← (Array.zip recArgInfos values).mapIdxM fun i (r, v) => do
