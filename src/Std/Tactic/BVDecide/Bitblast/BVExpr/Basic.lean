@@ -420,19 +420,6 @@ Get the value of a `BVExpr.var` from an `Assignment`.
 def Assignment.get (assign : Assignment) (idx : Nat) : PackedBitVec :=
   Lean.RArray.get assign idx
 
-noncomputable def irredId (x : α): α :=
-  Classical.choose (⟨x, rfl⟩ : ∃ y, y = x)
-
-theorem irredId_eq (x : α) : irredId x = x :=
-  Classical.choose_spec (p := fun y => y = x) _
-
-def irredId_impl (x : α) : α := x
-
-@[csimp]
-theorem irredId_impl_eq : @irredId = @irredId_impl := by
-  funext _ x
-  exact irredId_eq x
-
 /--
 The semantics for `BVExpr`.
 -/
@@ -446,7 +433,7 @@ def eval (assign : Assignment) : BVExpr w → BitVec w
     if h : packedBv.w = w then
       h ▸ packedBv.bv
     else
-      irredId (packedBv.bv.truncate w)
+      packedBv.bv.truncate w
   | .const val => val
   | .extract start len expr => BitVec.extractLsb' start len (eval assign expr)
   | .bin lhs op rhs => op.eval (eval assign lhs) (eval assign rhs)
@@ -464,7 +451,7 @@ theorem eval_var : eval assign ((.var idx) : BVExpr w) = (assign.get idx).bv.tru
   next h =>
     subst h
     simp
-  · rw [irredId_eq]
+  · rfl
 
 @[simp]
 theorem eval_const : eval assign (.const val) = val := by rfl
