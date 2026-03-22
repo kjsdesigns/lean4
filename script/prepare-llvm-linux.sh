@@ -59,6 +59,7 @@ for f in $GLIBC/lib/{ld,lib{c,dl,m,rt,pthread}}-*; do b=$(basename $f); cp $f st
 OPTIONS=()
 # We build cadical using the custom toolchain on Linux to avoid glibc versioning issues
 echo -n " -DLEAN_STANDALONE=ON -DCADICAL_USE_CUSTOM_CXX=ON"
+echo -n " -DOPENSSL_INCLUDE_DIR=$OPENSSL_DEV/include -DOPENSSL_SSL_LIBRARY=$OPENSSL/lib/libssl.so -DOPENSSL_CRYPTO_LIBRARY=$OPENSSL/lib/libcrypto.so"
 echo -n " -DCMAKE_CXX_COMPILER=$PWD/llvm-host/bin/clang++ -DLEAN_CXX_STDLIB='-Wl,-Bstatic -lc++ -lc++abi -Wl,-Bdynamic'"
 # these should also be used for cadical, so do not use `LEAN_EXTRA_CXX_FLAGS` here
 echo -n " -DCMAKE_CXX_FLAGS='--sysroot $PWD/llvm -idirafter $GLIBC_DEV/include ${EXTRA_FLAGS:-}'"
@@ -78,6 +79,6 @@ echo -n " -DLEANC_INTERNAL_FLAGS='--sysroot ROOT -nostdinc -isystem ROOT/include
 # linker script so that no libc symbols are bound to it instead.
 echo -n " -DLEANC_INTERNAL_LINKER_FLAGS='--sysroot ROOT -L ROOT/lib -L ROOT/lib/glibc -lc -lc_nonshared -Wl,--as-needed -l:ld.so -Wl,--no-as-needed -lpthread_nonshared -Wl,--as-needed -Wl,-Bstatic -lgmp -lunwind -luv -Wl,-Bdynamic -lssl -lcrypto -Wl,--no-as-needed -fuse-ld=lld'"
 # when not using the above flags, link GMP/libuv/OpenSSL dynamically/as usual
-echo -n " -DLEAN_EXTRA_LINKER_FLAGS='-Wl,--as-needed -lgmp -luv -lssl -lcrypto -lpthread -ldl -lrt -Wl,--no-as-needed'"
+echo -n " -DLEAN_EXTRA_LINKER_FLAGS='-Wl,--as-needed -L$OPENSSL/lib -lgmp -luv -lssl -lcrypto -lpthread -ldl -lrt -Wl,--no-as-needed'"
 # do not set `LEAN_CC` for tests
 echo -n " -DLEAN_TEST_VARS=''"

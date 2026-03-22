@@ -54,6 +54,7 @@
             doCheck = false;
           });
           OPENSSL = pkgsDist.openssl.out;
+          OPENSSL_DEV = pkgsDist.openssl.dev;
           GLIBC = pkgsDist.glibc;
           GLIBC_DEV = pkgsDist.glibc.dev;
           GCC_LIB = pkgsDist.gcc.cc.lib;
