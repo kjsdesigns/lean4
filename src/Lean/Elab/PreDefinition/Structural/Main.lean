@@ -104,7 +104,7 @@ private def elimMutualRecursion (preDefs : Array PreDefinition) (fixedParamPerms
         addDecl (.defnDecl {
           name := fName, levelParams := preDefs[idx]!.levelParams,
           type := fType, value := fValue,
-          hints := .abbrev,
+          hints := .regular (getMaxHeight (← getEnv) fValue + 1),
           safety := if preDefs[idx]!.modifiers.isUnsafe then .unsafe else .safe,
           all := [fName] })
         setReducibleAttribute fName
