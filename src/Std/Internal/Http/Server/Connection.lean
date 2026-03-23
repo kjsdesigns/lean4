@@ -75,6 +75,7 @@ private inductive Recv (β : Type)
   | bodyInterest (x : Bool)
   | response (x : (Except Error (Response β)))
   | timeout
+  | keepAliveTimeout
   | shutdown
   | close
 
@@ -119,7 +120,7 @@ private def pollNextEvent
     selectables := selectables.push (.case (Transport.recvSelector socket expectedBytes) (Recv.bytes · |> pure))
 
     if let some keepAliveTimeout := sources.keepAliveTimeout then
-      selectables := selectables.push (.case (← Selector.sleep keepAliveTimeout) (fun _ => pure .timeout))
+      selectables := selectables.push (.case (← Selector.sleep keepAliveTimeout) (fun _ => pure .keepAliveTimeout))
     else if let some timeout := sources.headerTimeout then
       selectables := selectables.push (.case (← Selector.sleep (timeout - (← Timestamp.now)).toMilliseconds) (fun _ => pure .timeout))
     else
@@ -373,6 +374,9 @@ private def handleRecvEvent
 
   | .timeout =>
     Handler.onFailure handler "request header timeout"
+    return ({ state with machine := state.machine.closeWithError .requestTimeout, handlerDispatched := false }, false)
+
+  | .keepAliveTimeout =>
     return ({ state with machine := state.machine.closeWithError .requestTimeout, handlerDispatched := false }, false)
 
   | .shutdown =>
