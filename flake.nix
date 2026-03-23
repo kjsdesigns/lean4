@@ -37,7 +37,7 @@
         } // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux (let
           # Rebuild OpenSSL 3 from current nixpkgs using pkgsDist's old-glibc stdenv,
           # so the bundled .so files don't require newer glibc symbols.
-          opensslForDist = pkgs.openssl.override { stdenv = pkgsDist.stdenv; };
+          opensslForDist = pkgs.openssl_3.override { stdenv = pkgsDist.stdenv; };
         in {
           GMP = (pkgsDist.gmp.override { withStatic = true; }).overrideAttrs (attrs:
             pkgs.lib.optionalAttrs (pkgs.stdenv.system == "aarch64-linux") {
