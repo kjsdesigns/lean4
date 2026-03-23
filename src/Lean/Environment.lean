@@ -2755,12 +2755,28 @@ def mkThmOrUnsafeDef [Monad m] [MonadEnv m] (thm : TheoremVal) : m Declaration :
   else
     return .thmDecl thm
 
+/-- Environment extension for storing height hints for `.abbrev` definitions.
+When an `.abbrev` definition is registered here, `getMaxHeight` will use the stored height
+instead of ignoring it. This is used by structural recursion to ensure that parent definitions
+get the correct height even though the `_f` helper definitions are marked as `.abbrev`. -/
+builtin_initialize abbrevHeightHintExt : EnvExtension (NameMap UInt32) ←
+  registerEnvExtension (pure {}) (asyncMode := .local)
+
+/-- Register a height hint for an `.abbrev` definition so that `getMaxHeight` accounts for it. -/
+def setAbbrevHeightHint (env : Environment) (declName : Name) (height : UInt32) : Environment :=
+  abbrevHeightHintExt.modifyState env fun m => m.insert declName height
+
 def getMaxHeight (env : Environment) (e : Expr) : UInt32 :=
+  let abbrevHints := abbrevHeightHintExt.getState env
   e.foldConsts 0 fun constName max =>
     match env.findAsync? constName with
     | some { kind := .defn, constInfo := info, .. } =>
       match info.get.hints with
       | ReducibilityHints.regular h => if h > max then h else max
+      | ReducibilityHints.abbrev =>
+        match abbrevHints.find? constName with
+        | some h => if h > max then h else max
+        | none   => max
       | _                           => max
     | _ => max
 

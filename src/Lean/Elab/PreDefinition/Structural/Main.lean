@@ -101,12 +101,16 @@ private def elimMutualRecursion (preDefs : Array PreDefinition) (fixedParamPerms
         let fName := preDefs[idx]!.declName ++ `_f
         let fValue ← eraseRecAppSyntaxExpr fValues[idx]!
         let fType ← Meta.letToHave fTypes[idx]!
+        let fHeight := getMaxHeight (← getEnv) fValue
         addDecl (.defnDecl {
           name := fName, levelParams := preDefs[idx]!.levelParams,
           type := fType, value := fValue,
           hints := .abbrev,
           safety := if preDefs[idx]!.modifiers.isUnsafe then .unsafe else .safe,
           all := [fName] })
+        -- Register the height of this `.abbrev` definition so that `getMaxHeight` accounts for it
+        -- when computing the parent definition's height.
+        modifyEnv (setAbbrevHeightHint · fName fHeight)
         setReducibleAttribute fName
       -- Reference the `_f` constants in the packed functionals so they show up in
       -- kernel diagnostics.
