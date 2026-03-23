@@ -24,8 +24,9 @@ where `f` and `g` are definitions, it must decide which side to unfold. The rule
 
 * If `f` and `g` have the **same hint kind**:
   - Both `.opaque` or both `.abbrev`: unfold both.
-  - Both `.regular`: unfold the one with the **greater** height first. If their heights are equal,
-    unfold both.
+  - Both `.regular`: unfold the one with the **greater** height first. If their heights are equal
+    (in particular, if `f` and `g` are the same definition), first try to compare their arguments
+    for definitional equality (short-circuiting the unfolding if they match), then unfold both.
 * If `f` and `g` have **different hint kinds**: unfold the one that is *not* `.opaque`, preferring to
   unfold `.abbrev` over `.regular`.
 
