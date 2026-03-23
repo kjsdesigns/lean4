@@ -42,7 +42,7 @@ $CP $GLIBC/lib/*crt* stage1/lib/
 # runtime
 (cd llvm; $CP --parents lib/clang/*/lib/*/{clang_rt.*.o,libclang_rt.builtins*} ../stage1)
 $CP llvm/lib/*/lib{c++,c++abi,unwind}.* $GMP/lib/libgmp.a $LIBUV/lib/libuv.a stage1/lib/
-# bundle OpenSSL shared libs (no static .a available in old nixpkgs)
+# bundle OpenSSL shared libs so the lean distribution is self-contained
 $CP $OPENSSL/lib/libssl.so* $OPENSSL/lib/libcrypto.so* stage1/lib/
 # LLVM 19 appears to ship the dependencies in 'llvm/lib/<target-triple>/' and 'llvm/include/<target-triple>/'
 # but clang-19 that we use to compile is linked against 'llvm/lib/' and 'llvm/include'
@@ -77,7 +77,7 @@ fi
 echo -n " -DLEANC_INTERNAL_FLAGS='--sysroot ROOT -nostdinc -isystem ROOT/include/clang' -DLEANC_CC=ROOT/bin/clang"
 # ld.so is usually included by the libc.so linker script but we discard those. Make sure it is linked to only after `libc.so` like in the original
 # linker script so that no libc symbols are bound to it instead.
-echo -n " -DLEANC_INTERNAL_LINKER_FLAGS='--sysroot ROOT -L ROOT/lib -L ROOT/lib/glibc -lc -lc_nonshared -Wl,--as-needed -l:ld.so -Wl,--no-as-needed -lpthread_nonshared -Wl,--as-needed -Wl,-Bstatic -lgmp -lunwind -luv -Wl,-Bdynamic -lssl -lcrypto -Wl,--no-as-needed -fuse-ld=lld'"
+echo -n " -DLEANC_INTERNAL_LINKER_FLAGS='--sysroot ROOT -L ROOT/lib -L ROOT/lib/glibc -lc -lc_nonshared -Wl,--as-needed -l:ld.so -Wl,--no-as-needed -lpthread_nonshared -Wl,--as-needed -Wl,-Bstatic -lgmp -lunwind -luv -Wl,-Bdynamic -lssl -lcrypto -Wl,--no-as-needed -Wl,--disable-new-dtags,-rpath,ROOT/lib -fuse-ld=lld'"
 # when not using the above flags, link GMP/libuv/OpenSSL dynamically/as usual
 echo -n " -DLEAN_EXTRA_LINKER_FLAGS='-Wl,--as-needed -L$OPENSSL/lib -lgmp -luv -lssl -lcrypto -lpthread -ldl -lrt -Wl,--no-as-needed'"
 # do not set `LEAN_CC` for tests

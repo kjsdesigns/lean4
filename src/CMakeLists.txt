@@ -386,15 +386,13 @@ string(APPEND LEANSHARED_LINKER_FLAGS " ${OPENSSL_LIBRARIES_STR}")
 if(NOT LEAN_STANDALONE)
   string(APPEND LEAN_EXTRA_LINKER_FLAGS " ${OPENSSL_LIBRARIES_STR}")
 endif()
-# On Linux, add the OpenSSL lib dir as DT_RPATH (not RUNPATH) so that:
-# (1) libleanshared.so can find the OpenSSL shared libs at runtime, and
-# (2) GNU ld can find them as transitive dependencies when linking against libleanshared.so.
-# DT_RPATH (unlike DT_RUNPATH) is followed transitively by both the dynamic linker and GNU ld.
+# On Linux, libleanshared.so dynamically links OpenSSL. Embed $ORIGIN as DT_RPATH so the dynamic
+# linker finds the bundled libssl/libcrypto in the same directory as libleanshared.so at runtime.
+# ($$ORIGIN in the CMake string becomes $$ORIGIN in stdlib.make, which make expands to $ORIGIN.)
 if(CMAKE_SYSTEM_NAME MATCHES "Linux")
-  get_filename_component(OPENSSL_LIB_DIR "${OPENSSL_SSL_LIBRARY}" DIRECTORY)
-  string(APPEND LEANSHARED_LINKER_FLAGS " -Wl,--disable-new-dtags,-rpath,${OPENSSL_LIB_DIR}")
+  string(APPEND LEANSHARED_LINKER_FLAGS " -Wl,--disable-new-dtags,-rpath,$$ORIGIN")
   if(NOT LEAN_STANDALONE)
-    string(APPEND LEAN_EXTRA_LINKER_FLAGS " -Wl,--disable-new-dtags,-rpath,${OPENSSL_LIB_DIR}")
+    string(APPEND LEAN_EXTRA_LINKER_FLAGS " -Wl,--disable-new-dtags,-rpath,$$ORIGIN")
   endif()
 endif()
 # On Windows, static OpenSSL pulls in the Windows certificate store provider which requires crypt32

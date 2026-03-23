@@ -34,7 +34,11 @@
           hardeningDisable = [ "all" ];
           # more convenient `ctest` output
           CTEST_OUTPUT_ON_FAILURE = 1;
-        } // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
+        } // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux (let
+          # Rebuild OpenSSL 3 from current nixpkgs using pkgsDist's old-glibc stdenv,
+          # so the bundled .so files don't require newer glibc symbols.
+          opensslForDist = pkgs.openssl.override { stdenv = pkgsDist.stdenv; };
+        in {
           GMP = (pkgsDist.gmp.override { withStatic = true; }).overrideAttrs (attrs:
             pkgs.lib.optionalAttrs (pkgs.stdenv.system == "aarch64-linux") {
               # would need additional linking setup on Linux aarch64, we don't use it anywhere else either
@@ -53,15 +57,15 @@
             };
             doCheck = false;
           });
-          OPENSSL = pkgsDist.openssl.out;
-          OPENSSL_DEV = pkgsDist.openssl.dev;
+          OPENSSL = opensslForDist.out;
+          OPENSSL_DEV = opensslForDist.dev;
           GLIBC = pkgsDist.glibc;
           GLIBC_DEV = pkgsDist.glibc.dev;
           GCC_LIB = pkgsDist.gcc.cc.lib;
           ZLIB = pkgsDist.zlib;
           # for CI coredumps
           GDB = pkgsDist.gdb;
-        });
+        }));
     in {
       devShells.${system} = {
         # The default development shell for working on lean itself
