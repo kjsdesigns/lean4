@@ -80,27 +80,21 @@ private def elimMutualRecursion (preDefs : Array PreDefinition) (fixedParamPerms
       withRecFunsAsAxioms preDefs do
         mkBRecOnF recArgInfos positions r values[idx]! FTypes[idx]!
   trace[Elab.definition.structural] "FArgs: {FArgs}"
-  let brecOn := brecOnConst 0
-  -- the indices and the major premise are not mentioned in the minor premises
-  -- so using `default` is fine here
-  let brecOn := mkAppN brecOn (.replicate (indInfo.numIndices + 1) default)
-  let packedFTypes ← inferArgumentTypesN positions.size brecOn
-  let packedFArgs ← positions.mapMwith (PProdN.mkLambdas · ·) packedFTypes FArgs
-  trace[Elab.definition.structural] "packedFArgs: {packedFArgs}"
 
-  -- Compute `_f` values and types (closed over fixed parameters) for each function,
-  -- and add the `_f` definitions to the environment.
-  let fValues ← FArgs.mapM (mkLambdaFVars xs ·)
-  let fTypes ← fValues.mapM inferType
-  let us := preDefs[0]!.levelParams.map mkLevelParam
-  let packedFArgs ←
+  -- Extract the functionals into named `_f` helper definitions (e.g. `foo._f`) so they show up
+  -- with a helpful name in kernel diagnostics. The `_f` definitions are `.abbrev` so the kernel
+  -- unfolds them eagerly; their body heights are registered via `setDefHeightOverride` so that
+  -- `getMaxHeight` computes the correct height for parent definitions.
+  -- For inductive predicates, the previous inline behavior is kept.
+  let FArgs ←
     if isIndPred then
-      pure packedFArgs
+      pure FArgs
     else
-      for idx in [:preDefs.size] do
+      let us := preDefs[0]!.levelParams.map mkLevelParam
+      FArgs.mapIdxM fun idx fArg => do
         let fName := preDefs[idx]!.declName ++ `_f
-        let fValue ← eraseRecAppSyntaxExpr fValues[idx]!
-        let fType ← Meta.letToHave fTypes[idx]!
+        let fValue ← eraseRecAppSyntaxExpr (← mkLambdaFVars xs fArg)
+        let fType ← Meta.letToHave (← inferType fValue)
         let fHeight := getMaxHeight (← getEnv) fValue
         addDecl (.defnDecl {
           name := fName, levelParams := preDefs[idx]!.levelParams,
@@ -108,14 +102,17 @@ private def elimMutualRecursion (preDefs : Array PreDefinition) (fixedParamPerms
           hints := .abbrev,
           safety := if preDefs[idx]!.modifiers.isUnsafe then .unsafe else .safe,
           all := [fName] })
-        -- Register the height of this `.abbrev` definition so that `getMaxHeight` accounts for it
-        -- when computing the parent definition's height.
         modifyEnv (setDefHeightOverride · fName fHeight)
         setReducibleAttribute fName
-      -- Reference the `_f` constants in the packed functionals so they show up in
-      -- kernel diagnostics.
-      let fConsts := preDefs.map fun preDef => mkAppN (mkConst (preDef.declName ++ `_f) us) xs
-      positions.mapMwith (PProdN.mkLambdas · ·) packedFTypes fConsts
+        return mkAppN (mkConst fName us) xs
+
+  let brecOn := brecOnConst 0
+  -- the indices and the major premise are not mentioned in the minor premises
+  -- so using `default` is fine here
+  let brecOn := mkAppN brecOn (.replicate (indInfo.numIndices + 1) default)
+  let packedFTypes ← inferArgumentTypesN positions.size brecOn
+  let packedFArgs ← positions.mapMwith (PProdN.mkLambdas · ·) packedFTypes FArgs
+  trace[Elab.definition.structural] "packedFArgs: {packedFArgs}"
 
   -- Assemble the individual `.brecOn` applications
   let valuesNew ← (Array.zip recArgInfos values).mapIdxM fun i (r, v) => do
