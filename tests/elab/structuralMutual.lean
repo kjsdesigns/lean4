@@ -70,7 +70,7 @@ theorem B_size_eq3 : B.empty.size = 0  := rfl
 #guard_msgs in
 #check B.size.eq_3
 
--- `_f` definitions show up in kernel diagnostics
+-- `_f` definitions show up in diagnostics
 /--
 info: 3
 ---
