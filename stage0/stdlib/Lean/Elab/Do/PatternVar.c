@@ -1800,13 +1800,13 @@ goto _start;
 LEAN_EXPORT lean_object* l___private_Init_Data_Array_Basic_0__Array_foldlMUnsafe_fold___at___00Lean_Elab_Do_getLetRecDeclsVars_spec__3___boxed(lean_object* v___x_627_, lean_object* v_as_628_, lean_object* v_i_629_, lean_object* v_stop_630_, lean_object* v_b_631_){
 _start:
 {
-uint8_t v___x_1885__boxed_632_; size_t v_i_boxed_633_; size_t v_stop_boxed_634_; lean_object* v_res_635_; 
-v___x_1885__boxed_632_ = lean_unbox(v___x_627_);
+uint8_t v___x_1824__boxed_632_; size_t v_i_boxed_633_; size_t v_stop_boxed_634_; lean_object* v_res_635_; 
+v___x_1824__boxed_632_ = lean_unbox(v___x_627_);
 v_i_boxed_633_ = lean_unbox_usize(v_i_629_);
 lean_dec(v_i_629_);
 v_stop_boxed_634_ = lean_unbox_usize(v_stop_630_);
 lean_dec(v_stop_630_);
-v_res_635_ = l___private_Init_Data_Array_Basic_0__Array_foldlMUnsafe_fold___at___00Lean_Elab_Do_getLetRecDeclsVars_spec__3(v___x_1885__boxed_632_, v_as_628_, v_i_boxed_633_, v_stop_boxed_634_, v_b_631_);
+v_res_635_ = l___private_Init_Data_Array_Basic_0__Array_foldlMUnsafe_fold___at___00Lean_Elab_Do_getLetRecDeclsVars_spec__3(v___x_1824__boxed_632_, v_as_628_, v_i_boxed_633_, v_stop_boxed_634_, v_b_631_);
 lean_dec_ref(v_as_628_);
 return v_res_635_;
 }

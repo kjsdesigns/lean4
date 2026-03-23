@@ -11,7 +11,7 @@ public import Init.Data.Ord.Basic
 public import Init.Data.Iterators.Combinators.FilterMap
 public import Init.Data.String.ToSlice
 public import Init.Data.String.Subslice
-public import Init.Data.String.Iter
+public import Init.Data.String.Iter.Basic
 public import Init.Data.String.Iterate
 import Init.Data.Iterators.Consumers.Collect
 import Init.Data.Iterators.Consumers.Loop
@@ -84,10 +84,11 @@ instance : ToString String.Slice where
 theorem toStringToString_eq : ToString.toString = String.Slice.copy := (rfl)
 
 @[extern "lean_slice_hash"]
-opaque hash (s : @& Slice) : UInt64
+protected def hash (s : @& Slice) : UInt64 :=
+  String.hash s.copy
 
 instance : Hashable Slice where
-  hash := hash
+  hash := Slice.hash
 
 instance : LT Slice where
   lt x y := x.copy < y.copy
@@ -213,7 +214,7 @@ Examples:
  * {lean}`("ababababa".toSlice.splitToSubslice "aba").toStringList == ["coffee", "water"]`
  * {lean}`("baaab".toSlice.splitToSubslice "aa").toStringList == ["b", "ab"]`
 -/
-@[specialize pat]
+@[specialize pat, cbv_opaque]
 def splitToSubslice (s : Slice) (pat : ρ) [ToForwardSearcher pat σ] :
     Std.Iter (α := SplitIterator pat s) s.Subslice :=
   { internalState := .operating s.startPos (ToForwardSearcher.toSearcher pat s) }
@@ -945,7 +946,6 @@ Examples:
  * {lean}`"123_".toSlice.isNat = false`
  * {lean}`"12__34".toSlice.isNat = false`
 -/
-@[inline]
 def isNat (s : Slice) : Bool := Id.run do
   let mut lastWasDigit := false
 
@@ -1054,12 +1054,13 @@ Examples:
  * {lean}`" 5".toSlice.isInt = false`
  * {lean}`"2-3".toSlice.isInt = false`
  * {lean}`"0xff".toSlice.isInt = false`
+ * {lean}`"-0_1".toSlice.isInt = true`
+ * {lean}`"-_1".toSlice.isInt = false`
 -/
 def isInt (s : Slice) : Bool :=
-  if s.front = '-' then
-    (s.drop 1).isNat
-  else
-    s.isNat
+  match s.dropPrefix? '-' with
+  | some rest => rest.isNat
+  | none => s.isNat
 
 /--
 Interprets a slice as the decimal representation of an integer, returning it. Returns {lean}`none` if
@@ -1083,12 +1084,13 @@ Examples:
  * {lean}`" 5".toSlice.toInt? = none`
  * {lean}`"2-3".toSlice.toInt? = none`
  * {lean}`"0xff".toSlice.toInt? = none`
+ * {lean}`"-0_1".toSlice.toInt? = some (-1)`
+ * {lean}`"-_1".toSlice.toInt? = none`
 -/
 def toInt? (s : Slice) : Option Int :=
-  if s.front = '-' then
-    Int.negOfNat <$> (s.drop 1).toNat?
-  else
-   Int.ofNat <$> s.toNat?
+  match s.dropPrefix? '-' with
+  | some rest => rest.toNat?.map Int.negOfNat
+  | none => s.toNat?.map Int.ofNat
 
 /--
 Interprets a string as the decimal representation of an integer, returning it. Panics if the string
