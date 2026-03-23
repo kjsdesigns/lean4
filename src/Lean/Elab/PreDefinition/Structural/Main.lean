@@ -171,7 +171,6 @@ private def inferRecArgPos (preDefs : Array PreDefinition) (termMeasure?s : Arra
                     {indentExpr indParam}\ndepends on the function parameter{indentExpr (mkFVar y)}\n\
                     which cannot be fixed as it is an index or depends on an index, and indices \
                     cannot be fixed parameters when using structural recursion."
-      -- `elimMutualRecursion` adds `_f` definitions to the environment.
       withErasedFVars toErase do
         let preDefsNonRec ← elimMutualRecursion preDefs fixedParamPerms' xs' recArgInfos
         return (recArgPoss, preDefsNonRec, fixedParamPerms')
