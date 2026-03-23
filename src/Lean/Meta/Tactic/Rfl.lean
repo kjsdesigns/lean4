@@ -8,6 +8,7 @@ module
 prelude
 public import Lean.Elab.Tactic.Basic
 public import Lean.Meta.Tactic.Refl
+-- public import Lean.Meta.Tactic.Relations
 
 public section
 
@@ -35,7 +36,7 @@ Tags reflexivity lemmas to be used by the `rfl` tactic.
 
 A reflexivity lemma should have the conclusion `r x x` where `r` is an arbitrary relation.
 
-It is not possible to tag reflexivity lemmas for `=` using this attribute. These are handled as a
+It is not allowed to tag reflexivity lemmas for `=` using this attribute. These are handled as a
 special case in the `rfl` tactic.
 -/
 @[builtin_doc]
@@ -48,8 +49,7 @@ builtin_initialize registerBuiltinAttribute {
     let fail := throwError
       "`[refl]` attribute only applies to lemmas of the form `x ∼ x`, but this declaration is not:\
         {inlineExprTrailing declTy}"
-    -- Use `whnfR` to `applyRfl`/`liftReflToEq`
-    let .app (.app rel lhs) rhs ← whnfR targetTy | fail
+    let .app (.app rel lhs) rhs ← whnfCore targetTy | fail
     if let .app (.const ``Eq [_]) _ := rel then
       throwError "`[refl]` attribute may not be used on `Eq.refl`"
     unless ← withNewMCtxDepth <| isDefEq lhs rhs do fail
