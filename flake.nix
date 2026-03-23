@@ -38,8 +38,8 @@
           # Build OpenSSL 3 statically using pkgsDist's old-glibc stdenv,
           # so the resulting static libs don't require newer glibc symbols.
           opensslForDist = pkgsDist.stdenv.mkDerivation {
-            pname = "openssl-static";
-            inherit (pkgs.openssl) version src;
+            name = "openssl-static-${pkgs.lib.getVersion pkgs.openssl.name}";
+            inherit (pkgs.openssl) src;
             nativeBuildInputs = [ pkgsDist.perl ];
             configurePhase = ''./config --prefix=$out no-shared no-tests'';
             buildPhase = "make -j$NIX_BUILD_CORES";
