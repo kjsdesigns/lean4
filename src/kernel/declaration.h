@@ -224,6 +224,9 @@ public:
     bool is_mutual() const { return kind() == declaration_kind::MutualDefinition; }
     bool is_inductive() const { return kind() == declaration_kind::Inductive; }
     bool is_unsafe() const;
+    /** \brief Only definitions have values for the purpose of reduction and
+        type checking. Theorems used to be like that; now they are treated like
+        opaque declations. */
     bool has_value() const { return is_definition(); }
 
     axiom_val const & to_axiom_val() const { lean_assert(is_axiom()); return static_cast<axiom_val const &>(cnstr_get_ref(raw(), 0)); }

@@ -469,6 +469,10 @@ def numLevelParams (d : ConstantInfo) : Nat :=
 def type (d : ConstantInfo) : Expr :=
   d.toConstantVal.type
 
+/--
+Returns the value of a definition. With `allowOpaque := true`, values
+of theorems and opaque declarations are also returned.
+-/
 def value? (info : ConstantInfo) (allowOpaque := false) : Option Expr :=
   match info with
   | .defnInfo {value, ..}   => some value
@@ -476,6 +480,11 @@ def value? (info : ConstantInfo) (allowOpaque := false) : Option Expr :=
   | .opaqueInfo {value, ..} => if allowOpaque then some value else none
   | _                       => none
 
+/--
+Returns `true` if this declaration as a value for the purpose of reduction
+and type-checking, i.e. is a definition.
+With `allowOpaque := true`, theorems and opaque declarations are also considered to have values.
+-/
 def hasValue (info : ConstantInfo) (allowOpaque := false) : Bool :=
   match info with
   | .defnInfo _   => true
@@ -483,6 +492,10 @@ def hasValue (info : ConstantInfo) (allowOpaque := false) : Bool :=
   | .opaqueInfo _ => allowOpaque
   | _             => false
 
+/--
+Returns the value of a definition. With `allowOpaque := true`, values
+of theorems and opaque declarations are also returned.
+-/
 def value! (info : ConstantInfo) (allowOpaque := false) : Expr :=
   match info with
   | .defnInfo {value, ..}   => value
