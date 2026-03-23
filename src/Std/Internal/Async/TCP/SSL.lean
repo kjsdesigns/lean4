@@ -29,11 +29,13 @@ Default chunk size used by TLS I/O loops.
 def ioChunkSize : UInt64 := 16 * 1024
 
 /--
-Represents a TLS-enabled TCP server socket.
+Represents a TLS-enabled TCP server socket. Carries its own server context so
+that each accepted connection gets a session configured from the same context.
 -/
 structure Server where
   private ofNative ::
     native : Internal.UV.TCP.Socket
+    ctx : Std.Internal.SSL.Context
 
 /--
 Represents a TLS-enabled TCP client socket.
@@ -78,19 +80,19 @@ private partial def handshake (native : Internal.UV.TCP.Socket) (ssl : Std.Inter
 namespace Server
 
 /--
-Configures the shared TLS server context with PEM certificate and private key files.
+Creates a new TLS-enabled TCP server socket using the given server context.
 -/
 @[inline]
-def configureContext (certFile keyFile : String) : IO Unit :=
-  Std.Internal.SSL.configureServerContext certFile keyFile
+def mk (ctx : Std.Internal.SSL.Context) : IO Server := do
+  let native ← Internal.UV.TCP.Socket.new
+  return Server.ofNative native ctx
 
 /--
-Creates a new TLS-enabled TCP server socket.
+Configures the server context with a PEM certificate and private key.
 -/
 @[inline]
-def mk : IO Server := do
-  let native ← Internal.UV.TCP.Socket.new
-  return Server.ofNative native
+def configureContext (s : Server) (certFile keyFile : String) : IO Unit :=
+  s.ctx.configureServer certFile keyFile
 
 /--
 Binds the server socket to the specified address.
@@ -106,8 +108,8 @@ Listens for incoming connections with the given backlog.
 def listen (s : Server) (backlog : UInt32) : IO Unit :=
   s.native.listen backlog
 
-@[inline] private def mkServerClient (native : Internal.UV.TCP.Socket) : IO Client := do
-  let ssl ← Std.Internal.SSL.Session.mkServer
+@[inline] private def mkServerClient (native : Internal.UV.TCP.Socket) (ctx : Std.Internal.SSL.Context) : IO Client := do
+  let ssl ← Std.Internal.SSL.Session.mk ctx true
   return Client.ofNative native ssl
 
 /--
@@ -116,7 +118,7 @@ Accepts an incoming TLS client connection and performs the TLS handshake.
 @[inline]
 def accept (s : Server) (chunkSize : UInt64 := ioChunkSize) : Async Client := do
   let native ← Async.ofPromise <| s.native.accept
-  let client ← mkServerClient native
+  let client ← mkServerClient native s.ctx
   SSL.handshake client.native client.ssl chunkSize
   return client
 
@@ -129,7 +131,7 @@ def tryAccept (s : Server) : IO (Option Client) := do
   let socket ← IO.ofExcept res
   match socket with
   | none => return none
-  | some native => return some (← mkServerClient native)
+  | some native => return some (← mkServerClient native s.ctx)
 
 /--
 Creates a `Selector` that resolves once `s` has a connection available.
@@ -151,7 +153,7 @@ def acceptSelector (s : TCP.SSL.Server) : Selector Client :=
           let win promise := do
             try
               let native ← IO.ofExcept res
-              let ssl ← Std.Internal.SSL.Session.mkServer
+              let ssl ← Std.Internal.SSL.Session.mk s.ctx true
               promise.resolve (.ok (Client.ofNative native ssl))
             catch e =>
               promise.resolve (.error e)
@@ -186,21 +188,21 @@ end Server
 namespace Client
 
 /--
-Configures the shared TLS client context.
+Creates a new TLS-enabled TCP client socket using the given client context.
+-/
+@[inline]
+def mk (ctx : Std.Internal.SSL.Context) : IO Client := do
+  let native ← Internal.UV.TCP.Socket.new
+  let ssl ← Std.Internal.SSL.Session.mk ctx false
+  return Client.ofNative native ssl
+
+/--
+Configures the given client context.
 `caFile` may be empty to use default trust settings.
 -/
 @[inline]
-def configureContext (caFile := "") (verifyPeer := true) : IO Unit :=
-  Std.Internal.SSL.configureClientContext caFile verifyPeer
-
-/--
-Creates a new TLS-enabled TCP client socket with a client-side TLS session.
--/
-@[inline]
-def mk : IO Client := do
-  let native ← Internal.UV.TCP.Socket.new
-  let ssl ← Std.Internal.SSL.Session.mkClient
-  return Client.ofNative native ssl
+def configureContext (ctx : Std.Internal.SSL.Context) (caFile := "") (verifyPeer := true) : IO Unit :=
+  ctx.configureClient caFile verifyPeer
 
 /--
 Binds the client socket to the specified address.

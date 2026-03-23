@@ -6,19 +6,10 @@ Author: Sofia Rodrigues
 #pragma once
 #include <lean/lean.h>
 
-#ifndef LEAN_EMSCRIPTEN
-#include <openssl/ssl.h>
-#endif
-
 namespace lean {
 
 void initialize_openssl();
 void finalize_openssl();
-
-#ifndef LEAN_EMSCRIPTEN
-SSL_CTX * get_openssl_server_ctx();
-SSL_CTX * get_openssl_client_ctx();
-#endif
 
 }
 

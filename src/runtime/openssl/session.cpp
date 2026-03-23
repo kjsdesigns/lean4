@@ -32,7 +32,7 @@ static inline lean_object * mk_ssl_error(char const * where, int ssl_err = 0) {
     ERR_clear_error();
 
     std::string msg(where);
-    
+
     if (ssl_err != 0) {
         msg += " (ssl_error=" + std::to_string(ssl_err) + ")";
     }
@@ -194,12 +194,7 @@ void initialize_openssl_session() {
     });
 }
 
-static lean_obj_res mk_ssl_session(uint8_t is_server) {
-    SSL_CTX * ctx = is_server ? get_openssl_server_ctx() : get_openssl_client_ctx();
-    if (ctx == nullptr) {
-        return mk_ssl_io_error("failed to initialize OpenSSL context");
-    }
-
+static lean_obj_res mk_ssl_session(SSL_CTX * ctx, uint8_t is_server) {
     SSL * ssl = SSL_new(ctx);
     if (ssl == nullptr) {
         return mk_ssl_io_error("SSL_new failed");
@@ -244,67 +239,10 @@ static lean_obj_res mk_ssl_session(uint8_t is_server) {
     return lean_io_result_mk_ok(obj);
 }
 
-/* Std.Internal.SSL.Session.mk (isServer : Bool) : IO Session */
-extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_mk(uint8_t is_server) {
-    return mk_ssl_session(is_server);
-}
-
-/* Std.Internal.SSL.Session.mkServer : IO Session */
-extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_mk_server() {
-    return mk_ssl_session(1);
-}
-
-/* Std.Internal.SSL.Session.mkClient : IO Session */
-extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_mk_client() {
-    return mk_ssl_session(0);
-}
-
-/* Std.Internal.SSL.configureServerContext (certFile keyFile : @& String) : IO Unit */
-extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_configure_server_ctx(b_obj_arg cert_file, b_obj_arg key_file) {
-    SSL_CTX * ctx = get_openssl_server_ctx();
-    if (ctx == nullptr) {
-        return mk_ssl_io_error("failed to initialize OpenSSL context");
-    }
-
-    const char * cert = lean_string_cstr(cert_file);
-    const char * key = lean_string_cstr(key_file);
-
-    if (SSL_CTX_use_certificate_file(ctx, cert, SSL_FILETYPE_PEM) <= 0) {
-        return mk_ssl_io_error("SSL_CTX_use_certificate_file failed");
-    }
-
-    if (SSL_CTX_use_PrivateKey_file(ctx, key, SSL_FILETYPE_PEM) <= 0) {
-        return mk_ssl_io_error("SSL_CTX_use_PrivateKey_file failed");
-    }
-
-    if (SSL_CTX_check_private_key(ctx) != 1) {
-        return mk_ssl_io_error("SSL_CTX_check_private_key failed");
-    }
-
-    return lean_io_result_mk_ok(lean_box(0));
-}
-
-/* Std.Internal.SSL.configureClientContext (caFile : @& String) (verifyPeer : Bool) : IO Unit */
-extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_configure_client_ctx(b_obj_arg ca_file, uint8_t verify_peer) {
-    SSL_CTX * ctx = get_openssl_client_ctx();
-    if (ctx == nullptr) {
-        return mk_ssl_io_error("failed to initialize OpenSSL client context");
-    }
-
-    const char * ca = lean_string_cstr(ca_file);
-    if (ca != nullptr && ca[0] != '\0') {
-        if (SSL_CTX_load_verify_locations(ctx, ca, nullptr) != 1) {
-            return mk_ssl_io_error("SSL_CTX_load_verify_locations failed");
-        }
-    } else if (verify_peer) {
-        // Fall back to platform trust anchors when no custom CA file is provided.
-        if (SSL_CTX_set_default_verify_paths(ctx) != 1) {
-            return mk_ssl_io_error("SSL_CTX_set_default_verify_paths failed");
-        }
-    }
-
-    SSL_CTX_set_verify(ctx, verify_peer ? SSL_VERIFY_PEER : SSL_VERIFY_NONE, nullptr);
-    return lean_io_result_mk_ok(lean_box(0));
+/* Std.Internal.SSL.Session.mk (ctx : @& Context) (isServer : Bool) : IO Session */
+extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_mk(b_obj_arg ctx_obj, uint8_t is_server) {
+    lean_ssl_context_object * ctx = lean_to_ssl_context_object(ctx_obj);
+    return mk_ssl_session(ctx->ctx, is_server);
 }
 
 /* Std.Internal.SSL.Session.setServerName (ssl : @& Session) (host : @& String) : IO Unit */
@@ -482,21 +420,10 @@ extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_pending_plaintext(b_obj_arg ssl)
 
 void initialize_openssl_session() {}
 
-extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_mk(uint8_t is_server) {
+extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_mk(b_obj_arg ctx_obj, uint8_t is_server) {
+    (void)ctx_obj;
     (void)is_server;
     return io_result_mk_error("lean_uv_ssl_mk is not supported");
-}
-
-extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_configure_server_ctx(b_obj_arg cert_file, b_obj_arg key_file) {
-    (void)cert_file;
-    (void)key_file;
-    return io_result_mk_error("lean_uv_ssl_configure_server_ctx is not supported");
-}
-
-extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_configure_client_ctx(b_obj_arg ca_file, uint8_t verify_peer) {
-    (void)ca_file;
-    (void)verify_peer;
-    return io_result_mk_error("lean_uv_ssl_configure_client_ctx is not supported");
 }
 
 extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_set_server_name(b_obj_arg ssl, b_obj_arg host) {
@@ -508,14 +435,6 @@ extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_set_server_name(b_obj_arg ssl, b
 extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_verify_result(b_obj_arg ssl) {
     (void)ssl;
     return io_result_mk_error("lean_uv_ssl_verify_result is not supported");
-}
-
-extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_mk_server() {
-    return io_result_mk_error("lean_uv_ssl_mk_server is not supported");
-}
-
-extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_mk_client() {
-    return io_result_mk_error("lean_uv_ssl_mk_client is not supported");
 }
 
 extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_handshake(b_obj_arg ssl) {

@@ -14,6 +14,45 @@ namespace Std
 namespace Internal
 namespace SSL
 
+private opaque ContextImpl : NonemptyType.{0}
+
+/--
+Represents an OpenSSL context (`SSL_CTX`) that holds TLS configuration such as
+certificates, private keys, and verification settings.
+-/
+def Context : Type := ContextImpl.type
+
+instance : Nonempty Context := by exact ContextImpl.property
+
+namespace Context
+
+/--
+Creates a new server-side TLS context using `TLS_server_method`.
+-/
+@[extern "lean_uv_ssl_ctx_mk_server"]
+opaque mkServer : IO Context
+
+/--
+Creates a new client-side TLS context using `TLS_client_method`.
+-/
+@[extern "lean_uv_ssl_ctx_mk_client"]
+opaque mkClient : IO Context
+
+/--
+Loads a PEM certificate and private key into a server context.
+-/
+@[extern "lean_uv_ssl_ctx_configure_server"]
+opaque configureServer (ctx : @& Context) (certFile : @& String) (keyFile : @& String) : IO Unit
+
+/--
+Configures CA trust anchors and peer verification for a client context.
+`caFile` may be empty to use platform default trust anchors.
+-/
+@[extern "lean_uv_ssl_ctx_configure_client"]
+opaque configureClient (ctx : @& Context) (caFile : @& String) (verifyPeer : Bool) : IO Unit
+
+end Context
+
 private opaque SessionImpl : NonemptyType.{0}
 
 /--
@@ -23,38 +62,14 @@ def Session : Type := SessionImpl.type
 
 instance : Nonempty Session := by exact SessionImpl.property
 
-/--
-Configures the shared server context with a certificate and key in PEM format.
--/
-@[extern "lean_uv_ssl_configure_server_ctx"]
-opaque configureServerContext (certFile : @& String) (keyFile : @& String) : IO Unit
-
-/--
-Configures the shared client context.
-`caFile` may be empty to keep default trust configuration.
--/
-@[extern "lean_uv_ssl_configure_client_ctx"]
-opaque configureClientContext (caFile : @& String) (verifyPeer : Bool) : IO Unit
-
 namespace Session
 
 /--
-Creates a new SSL session. Set `isServer := true` for server-side handshakes.
+Creates a new SSL session from the given context.
+Set `isServer := true` for server-side handshakes.
 -/
 @[extern "lean_uv_ssl_mk"]
-opaque mk (isServer : Bool) : IO Session
-
-/--
-Creates a server-side SSL session.
--/
-@[extern "lean_uv_ssl_mk_server"]
-opaque mkServer : IO Session
-
-/--
-Creates a client-side SSL session.
--/
-@[extern "lean_uv_ssl_mk_client"]
-opaque mkClient : IO Session
+opaque mk (ctx : @& Context) (isServer : Bool) : IO Session
 
 /--
 Sets SNI host name for client-side handshakes.
