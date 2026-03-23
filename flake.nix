@@ -35,9 +35,16 @@
           # more convenient `ctest` output
           CTEST_OUTPUT_ON_FAILURE = 1;
         } // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux (let
-          # Rebuild OpenSSL 3 from current nixpkgs using pkgsDist's old-glibc stdenv,
-          # so the bundled .so files don't require newer glibc symbols.
-          opensslForDist = pkgs.openssl_3.override { stdenv = pkgsDist.stdenv; };
+          # Build OpenSSL 3 statically using pkgsDist's old-glibc stdenv,
+          # so the resulting static libs don't require newer glibc symbols.
+          opensslForDist = pkgsDist.stdenv.mkDerivation {
+            pname = "openssl-static";
+            inherit (pkgs.openssl) version src;
+            nativeBuildInputs = [ pkgsDist.perl ];
+            configurePhase = ''./config --prefix=$out no-shared no-tests'';
+            buildPhase = "make -j$NIX_BUILD_CORES";
+            installPhase = "make install_sw";
+          };
         in {
           GMP = (pkgsDist.gmp.override { withStatic = true; }).overrideAttrs (attrs:
             pkgs.lib.optionalAttrs (pkgs.stdenv.system == "aarch64-linux") {
@@ -57,8 +64,8 @@
             };
             doCheck = false;
           });
-          OPENSSL = opensslForDist.out;
-          OPENSSL_DEV = opensslForDist.dev;
+          OPENSSL = opensslForDist;
+          OPENSSL_DEV = opensslForDist;
           GLIBC = pkgsDist.glibc;
           GLIBC_DEV = pkgsDist.glibc.dev;
           GCC_LIB = pkgsDist.gcc.cc.lib;
