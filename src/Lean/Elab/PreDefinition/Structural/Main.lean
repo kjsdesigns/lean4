@@ -110,7 +110,7 @@ private def elimMutualRecursion (preDefs : Array PreDefinition) (fixedParamPerms
           all := [fName] })
         -- Register the height of this `.abbrev` definition so that `getMaxHeight` accounts for it
         -- when computing the parent definition's height.
-        modifyEnv (setAbbrevHeightHint · fName fHeight)
+        modifyEnv (setDefHeightOverride · fName fHeight)
         setReducibleAttribute fName
       -- Reference the `_f` constants in the packed functionals so they show up in
       -- kernel diagnostics.
