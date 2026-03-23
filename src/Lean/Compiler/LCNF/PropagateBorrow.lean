@@ -106,8 +106,8 @@ where
   collectLetValue (z : FVarId) (v : LetValue .impure) : InferM Unit := do
     match v with
     | .oproj _ parent _ =>
-      let parentval ← getOwnedness parent
-      join z parentval
+      let parentVal ← getOwnedness parent
+      join z parentVal
     -- Keep in sync with ExplicitRC, InferBorrow
     | .fap ``Array.getInternal args =>
       if let .fvar parent := args[1]! then
