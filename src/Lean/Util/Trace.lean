@@ -418,8 +418,10 @@ where
       modifyTraces (oldTraces ++ ·)
       return (← MonadExcept.ofExcept res)
     let result := res.toTraceResult
+    let headerContent := msg
     let mut msg := m!"{result.toEmoji} {msg}"
-    let mut data : TraceData := { cls, collapsed, tag, result? := some result }
+    let mut data : TraceData := { cls, collapsed, tag, result? := some result,
+      headerContent? := some headerContent }
     if trace.profiler.get opts then
       data := { data with startTime := start, stopTime := stop }
     addTraceNode oldTraces data ref msg

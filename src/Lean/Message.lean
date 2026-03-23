@@ -97,6 +97,12 @@ structure TraceData where
   collapsed : Bool := true
   /-- Optional tag shown in `trace.profiler.output` output after the trace class name. -/
   tag       : String := ""
+  /-- The trace header content without the leading status emoji.
+  `withTraceNodeBefore` prepends `TraceResult.toEmoji` to the stored header message;
+  this field provides the original pre-emoji content for programmatic consumers
+  that need to compare headers across trace runs (where the same check may have
+  different emoji prefixes depending on success/failure). -/
+  headerContent? : Option MessageData := none
 
 /-- Structured message data. We use it for reporting errors, trace messages, etc. -/
 inductive MessageData where
