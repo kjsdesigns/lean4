@@ -46,6 +46,13 @@ def SpecProof.key : SpecProof → Name
   | .local fvarId => fvarId.name
   | .stx id _ _ => id
 
+def SpecProof.getProof : SpecProof → MetaM (List Name × Expr)
+  | .stx _ _ proof => pure ([], proof)
+  | .local fvarId => pure ([], mkFVar fvarId)
+  | .global declName => do
+    let info ← getConstInfo declName
+    pure (info.levelParams, mkConst declName (info.levelParams.map mkLevelParam))
+
 instance : Hashable SpecProof where
   hash sp := hash sp.key
 
@@ -91,7 +98,7 @@ structure SpecTheorems where
   erased : PHashSet SpecProof := {}
   deriving Inhabited
 
-def SpecTheorems.add (d : SpecTheorems) (e : SpecTheorem) : SpecTheorems :=
+def SpecTheorems.insert (d : SpecTheorems) (e : SpecTheorem) : SpecTheorems :=
   { d with specs := d.specs.insertKeyValue e.keys e }
 
 def SpecTheorems.isErased (d : SpecTheorems) (thmId : SpecProof) : Bool :=
@@ -208,7 +215,7 @@ def SpecExtension.addSpecTheoremFromLocal (ext : SpecExtension) (fvar : FVarId) 
 def mkSpecExt : SimpleScopedEnvExtension.Descr SpecEntry SpecTheorems where
   name     := `specMap
   initial  := {}
-  addEntry := fun d e => d.add e
+  addEntry := fun d e => d.insert e
 
 builtin_initialize specAttr : SpecExtension ← registerSimpleScopedEnvExtension mkSpecExt
 
@@ -243,3 +250,42 @@ def SpecExtension.getTheorems (ext : SpecExtension) : CoreM SpecTheorems :=
 
 def getSpecTheorems : CoreM SpecTheorems :=
   specAttr.getTheorems
+
+/--
+Marks a type as an invariant type for the `mvcgen` tactic.
+Goals whose type is an application of a tagged type will be classified
+as invariants rather than verification conditions.
+-/
+builtin_initialize mvcgenInvariantAttr : TagAttribute ←
+  registerTagAttribute `mvcgen_invariant_type
+    "marks a type as an invariant type for the `mvcgen` tactic"
+
+/--
+Returns `true` if `ty` is an application of a type tagged with `@[mvcgen_invariant_type]`.
+-/
+def isMVCGenInvariantType (env : Environment) (ty : Expr) : Bool :=
+  if let .const name .. := ty.getAppFn then
+    mvcgenInvariantAttr.hasTag env name
+  else
+    false
+
+/--
+Marks a type as a witness type for the `mvcgen` tactic.
+Goals whose type is an application of a tagged type will be classified
+as witnesses rather than verification conditions.
+In the spirit of zero-knowledge proofs, witnesses are concrete values that the user
+must provide, as opposed to invariants (predicates maintained across iterations)
+or verification conditions (propositions to prove).
+-/
+builtin_initialize mvcgenWitnessTypeAttr : TagAttribute ←
+  registerTagAttribute `mvcgen_witness_type
+    "marks a type as a witness type for the `mvcgen` tactic"
+
+/--
+Returns `true` if `ty` is an application of a type tagged with `@[mvcgen_witness_type]`.
+-/
+def isMVCGenWitnessType (env : Environment) (ty : Expr) : Bool :=
+  if let .const name .. := ty.getAppFn then
+    mvcgenWitnessTypeAttr.hasTag env name
+  else
+    false

@@ -10,6 +10,7 @@ set -uxo pipefail
 
 GMP=${GMP:-$(brew --prefix)}
 LIBUV=${LIBUV:-$(brew --prefix)}
+OPENSSL=${OPENSSL:-$(brew --prefix openssl@3)}
 
 [[ -d llvm ]] || (mkdir llvm; gtar xf $1 --strip-components 1 --directory llvm)
 [[ -d llvm-host ]] || if [[ "$#" -gt 1 ]]; then
@@ -41,6 +42,7 @@ gcp llvm/lib/libc++.dylib stage1/lib/libc
 # and apparently since Sonoma does not do so implicitly either
 install_name_tool -id /usr/lib/libc++.dylib stage1/lib/libc/libc++.dylib
 echo -n " -DLEAN_STANDALONE=ON"
+echo -n " -DOPENSSL_INCLUDE_DIR=$OPENSSL/include -DOPENSSL_SSL_LIBRARY=$OPENSSL/lib/libssl.a -DOPENSSL_CRYPTO_LIBRARY=$OPENSSL/lib/libcrypto.a"
 # do not change C++ compiler; libc++ etc. being system libraries means there's no danger of conflicts,
 # and the custom clang++ outputs a myriad of warnings when consuming the SDK
 echo -n " -DLEAN_EXTRA_CXX_FLAGS='${EXTRA_FLAGS:-}'"
@@ -48,7 +50,7 @@ if [[ -L llvm-host ]]; then
   echo -n " -DCMAKE_C_COMPILER=$PWD/stage1/bin/clang"
   gcp $GMP/lib/libgmp.a stage1/lib/
   gcp $LIBUV/lib/libuv.a stage1/lib/
-  echo -n " -DLEAN_EXTRA_LINKER_FLAGS='-lgmp -luv'"
+  echo -n " -DLEAN_EXTRA_LINKER_FLAGS='-lgmp -luv $OPENSSL/lib/libssl.a $OPENSSL/lib/libcrypto.a'"
 else
   echo -n " -DCMAKE_C_COMPILER=$PWD/llvm-host/bin/clang -DLEANC_OPTS='--sysroot $PWD/stage1 -resource-dir $PWD/stage1/lib/clang/15.0.1 ${EXTRA_FLAGS:-}'"
 fi

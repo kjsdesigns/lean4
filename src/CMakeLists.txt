@@ -1,6 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
-cmake_policy(SET CMP0054 NEW)
-cmake_policy(SET CMP0110 NEW)
+cmake_minimum_required(VERSION 3.21)
 if(NOT CMAKE_GENERATOR MATCHES "Unix Makefiles")
   message(FATAL_ERROR "The only supported CMake generator at the moment is 'Unix Makefiles'")
 endif()
@@ -9,11 +7,17 @@ if(NOT DEFINED STAGE)
 endif()
 include(ExternalProject)
 project(LEAN CXX C)
-set(LEAN_VERSION_MAJOR 4)
-set(LEAN_VERSION_MINOR 29)
-set(LEAN_VERSION_PATCH 0)
-set(LEAN_VERSION_IS_RELEASE 0) # This number is 1 in the release revision, and 0 otherwise.
+set(LEAN_VERSION_MAJOR 4 CACHE STRING "")
+set(LEAN_VERSION_MINOR 30 CACHE STRING "")
+set(LEAN_VERSION_PATCH 0 CACHE STRING "")
+set(LEAN_VERSION_IS_RELEASE 0 CACHE STRING "") # This number is 1 in the release revision, and 0 otherwise.
 set(LEAN_SPECIAL_VERSION_DESC "" CACHE STRING "Additional version description like 'nightly-2018-03-11'")
+# project(LEAN) above implicitly creates empty LEAN_VERSION_{MAJOR,MINOR,PATCH}
+# normal variables (CMake sets <PROJECT>_VERSION_* for the project name). These
+# shadow the cache values. Remove them so ${VAR} falls through to the cache.
+unset(LEAN_VERSION_MAJOR)
+unset(LEAN_VERSION_MINOR)
+unset(LEAN_VERSION_PATCH)
 set(LEAN_VERSION_STRING "${LEAN_VERSION_MAJOR}.${LEAN_VERSION_MINOR}.${LEAN_VERSION_PATCH}")
 if(LEAN_SPECIAL_VERSION_DESC)
   string(APPEND LEAN_VERSION_STRING "-${LEAN_SPECIAL_VERSION_DESC}")
@@ -83,6 +87,8 @@ option(USE_GITHASH "GIT_HASH" ON)
 option(INSTALL_LICENSE "INSTALL_LICENSE" ON)
 # When ON we install a copy of cadical
 option(INSTALL_CADICAL "Install a copy of cadical" ON)
+# When ON we install a copy of leantar
+option(INSTALL_LEANTAR "Install a copy of leantar" ON)
 
 # FLAGS for disabling optimizations and debugging
 option(FREE_VAR_RANGE_OPT "FREE_VAR_RANGE_OPT" ON)
@@ -111,6 +117,9 @@ option(USE_LAKE_CACHE "Use the Lake artifact cache for stage 1 builds (requires 
 
 set(LEAN_EXTRA_MAKE_OPTS "" CACHE STRING "extra options to lean --make")
 set(LEANC_CC ${CMAKE_C_COMPILER} CACHE STRING "C compiler to use in `leanc`")
+
+# Temporary, core-only flags. Must be synced with stdlib_flags.h.
+string(APPEND LEAN_EXTRA_MAKE_OPTS " -Dbackward.do.legacy=false")
 
 if(LAZY_RC MATCHES "ON")
   set(LEAN_LAZY_RC "#define LEAN_LAZY_RC")
@@ -371,9 +380,27 @@ else()
   set(OPENSSL_LIBRARIES ${OPENSSL_SSL_LIBRARY} ${OPENSSL_CRYPTO_LIBRARY})
 endif()
 include_directories(${OPENSSL_INCLUDE_DIR})
+
+string(JOIN " " OPENSSL_LIBRARIES_STR ${OPENSSL_LIBRARIES})
+string(APPEND LEANSHARED_LINKER_FLAGS " ${OPENSSL_LIBRARIES_STR}")
 if(NOT LEAN_STANDALONE)
-  string(JOIN " " OPENSSL_LIBRARIES ${OPENSSL_LIBRARIES})
-  string(APPEND LEAN_EXTRA_LINKER_FLAGS " ${OPENSSL_LIBRARIES}")
+  string(APPEND LEAN_EXTRA_LINKER_FLAGS " ${OPENSSL_LIBRARIES_STR}")
+endif()
+# On Linux, libleanshared.so dynamically links OpenSSL. Embed $ORIGIN as DT_RPATH so the dynamic
+# linker finds the bundled libssl/libcrypto in the same directory as libleanshared.so at runtime.
+# ($$ORIGIN in the CMake string becomes $$ORIGIN in stdlib.make, which make expands to $ORIGIN.)
+if(CMAKE_SYSTEM_NAME MATCHES "Linux")
+  string(APPEND LEANSHARED_LINKER_FLAGS " -Wl,--disable-new-dtags,-rpath,$$ORIGIN")
+  if(NOT LEAN_STANDALONE)
+    string(APPEND LEAN_EXTRA_LINKER_FLAGS " -Wl,--disable-new-dtags,-rpath,$$ORIGIN")
+  endif()
+endif()
+# On Windows, static OpenSSL pulls in the Windows certificate store provider which requires crypt32
+if(CMAKE_SYSTEM_NAME MATCHES "Windows")
+  string(APPEND LEANSHARED_LINKER_FLAGS " -lcrypt32 -lgdi32")
+  if(NOT LEAN_STANDALONE)
+    string(APPEND LEAN_EXTRA_LINKER_FLAGS " -lcrypt32 -lgdi32")
+  endif()
 endif()
 
 # Windows SDK (for ICU)
@@ -782,6 +809,14 @@ if(STAGE GREATER 0 AND CADICAL AND INSTALL_CADICAL)
   add_dependencies(leancpp copy-cadical)
 endif()
 
+if(LEANTAR AND INSTALL_LEANTAR)
+  add_custom_target(
+    copy-leantar
+    COMMAND cmake -E copy_if_different "${LEANTAR}" "${CMAKE_BINARY_DIR}/bin/leantar${CMAKE_EXECUTABLE_SUFFIX}"
+  )
+  add_dependencies(leancpp copy-leantar)
+endif()
+
 # MSYS2 bash usually handles Windows paths relatively well, but not when putting them in the PATH
 string(REGEX REPLACE "^([a-zA-Z]):" "/\\1" LEAN_BIN "${CMAKE_BINARY_DIR}/bin")
 
@@ -809,7 +844,7 @@ if(LLVM AND STAGE GREATER 0)
   set(EXTRA_LEANMAKE_OPTS "LLVM=1")
 endif()
 
-set(STDLIBS Init Std Lean Leanc)
+set(STDLIBS Init Std Lean Leanc LeanIR)
 if(NOT CMAKE_SYSTEM_NAME MATCHES "Emscripten")
   list(APPEND STDLIBS Lake LeanChecker)
 endif()
@@ -916,9 +951,16 @@ if(PREV_STAGE)
   add_custom_target(update-stage0-commit COMMAND git commit -m "chore: update stage0" DEPENDS update-stage0)
 endif()
 
+if(NOT CMAKE_SYSTEM_NAME MATCHES "Emscripten")
+  add_custom_target(leanir ALL
+    DEPENDS leanshared
+    COMMAND $(MAKE) -f ${CMAKE_BINARY_DIR}/stdlib.make leanir
+    VERBATIM)
+endif()
+
 # use Bash version for building, use Lean version in bin/ for tests & distribution
 configure_file("${LEAN_SOURCE_DIR}/bin/leanc.in" "${CMAKE_BINARY_DIR}/leanc.sh" @ONLY)
-if(STAGE GREATER 0 AND EXISTS "${LEAN_SOURCE_DIR}/Leanc.lean" AND NOT CMAKE_SYSTEM_NAME MATCHES "Emscripten")
+if(STAGE GREATER 0 AND NOT CMAKE_SYSTEM_NAME MATCHES "Emscripten")
   configure_file("${LEAN_SOURCE_DIR}/Leanc.lean" "${CMAKE_BINARY_DIR}/leanc/Leanc.lean" @ONLY)
   add_custom_target(
     leanc
@@ -938,6 +980,10 @@ if(STAGE GREATER 0 AND CADICAL AND INSTALL_CADICAL)
   install(PROGRAMS "${CADICAL}" DESTINATION bin)
 endif()
 
+if(LEANTAR AND INSTALL_LEANTAR)
+  install(PROGRAMS "${LEANTAR}" DESTINATION bin)
+endif()
+
 add_custom_target(
   clean-stdlib
   COMMAND rm -rf "${CMAKE_BINARY_DIR}/lib" || true
@@ -953,6 +999,7 @@ install(
   PATTERN "*.hash" EXCLUDE
   PATTERN "*.trace" EXCLUDE
   PATTERN "*.rsp" EXCLUDE
+  PATTERN "*.filelist" EXCLUDE
 )
 
 # symlink source into expected installation location for go-to-definition, if file system allows it

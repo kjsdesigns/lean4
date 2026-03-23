@@ -14,7 +14,6 @@ Author: Sofia Rodrigues
 
 namespace lean {
 
-static std::once_flag g_openssl_init_once;
 static SSL_CTX * g_ssl_server_ctx = nullptr;
 static SSL_CTX * g_ssl_client_ctx = nullptr;
 

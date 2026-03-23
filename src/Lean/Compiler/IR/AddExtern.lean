@@ -8,13 +8,14 @@ module
 
 prelude
 import Init.While
-import Lean.Compiler.IR.RC
 import Lean.Compiler.IR.ToIR
 import Lean.Compiler.LCNF.ToImpureType
 import Lean.Compiler.LCNF.ToImpure
 import Lean.Compiler.LCNF.ExplicitBoxing
 import Lean.Compiler.LCNF.Internalize
 public import Lean.Compiler.ExternAttr
+import Lean.Compiler.LCNF.ExplicitRC
+import Lean.Compiler.Options
 
 public section
 
@@ -32,9 +33,10 @@ where
     let type ← Compiler.LCNF.getOtherDeclMonoType declName
     let mut typeIter := type
     let mut params := #[]
+    let ignoreBorrow := Compiler.compiler.ignoreBorrowAnnotation.get (← getOptions)
     repeat
       let .forallE binderName ty b _ := typeIter | break
-      let borrow := isMarkedBorrowed ty
+      let borrow := !ignoreBorrow && isMarkedBorrowed ty
       params := params.push {
         fvarId := (← mkFreshFVarId)
         type := ty,
@@ -68,11 +70,15 @@ where
     Compiler.LCNF.CompilerM.run (phase := .impure) do
       let decl ← decl.internalize
       decl.saveImpure
-      Compiler.LCNF.addBoxedVersions #[decl]
-      
+      let decls ← Compiler.LCNF.addBoxedVersions #[decl]
+      let decls ← Compiler.LCNF.runExplicitRc decls
+      for decl in decls do
+        decl.saveImpure
+        modifyEnv fun env => Compiler.LCNF.recordFinalImpureDecl env decl.name
+      return decls
+
   addIr (decls : Array (Compiler.LCNF.Decl .impure)) : CoreM Unit := do
     let decls ← toIR decls
-    let decls ← explicitRC decls
     logDecls `result decls
     addDecls decls
 

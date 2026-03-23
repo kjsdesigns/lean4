@@ -18,11 +18,11 @@ namespace Lean.Elab.Term
 open Meta
 
 @[builtin_term_elab «prop»] def elabProp : TermElab := fun _ _ =>
-  return mkSort levelZero
+  return mkSort Level.zero
 
 private def elabOptLevel (stx : Syntax) : TermElabM Level :=
   if stx.isNone then
-    pure levelZero
+    pure Level.zero
   else
     elabLevel stx[0]
 
@@ -384,10 +384,13 @@ private opaque evalFilePath (stx : Syntax) : TermElabM System.FilePath
       withoutExporting do
         let e ← elabTermAndSynthesize e expectedType?
         let compile := !(← read).isNoncomputableSection && !(← read).declName?.any (Lean.isNoncomputable (← getEnv))
-        let e ← mkAuxDefinitionFor (compile := compile) name e
+        let e ← mkAuxDefinitionFor (compile := false) name e
         if compile then
           -- Inline as changing visibility should not affect run time.
           setInlineAttribute name
+          if (← read).declName?.any (isMarkedMeta (← getEnv)) then
+            modifyEnv (markMeta · name)
+          compileDecls #[name]
         return e
     else
       elabTerm e expectedType?
