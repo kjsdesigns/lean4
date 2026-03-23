@@ -53,6 +53,9 @@ def externEntry := leading_parser
 @[builtin_attr_parser] def extern     := leading_parser
   nonReservedSymbol "extern" >> many (ppSpace >> externEntry)
 
+@[builtin_attr_parser] def relation   := leading_parser
+  nonReservedSymbol "relation" >> many (ppSpace >> (ident <|> numLit))
+
 /--
 Declares this tactic to be an alias or alternative form of an existing tactic.
 

@@ -40,6 +40,7 @@ public import Lean.Meta.Tactic.Symm
 public import Lean.Meta.Tactic.Backtrack
 public import Lean.Meta.Tactic.SolveByElim
 public import Lean.Meta.Tactic.FunInd
+public import Lean.Meta.Tactic.Relations
 public import Lean.Meta.Tactic.Rfl
 public import Lean.Meta.Tactic.Rewrites
 public import Lean.Meta.Tactic.Grind
