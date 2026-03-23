@@ -42,8 +42,8 @@ $CP $GLIBC/lib/*crt* stage1/lib/
 # runtime
 (cd llvm; $CP --parents lib/clang/*/lib/*/{clang_rt.*.o,libclang_rt.builtins*} ../stage1)
 $CP llvm/lib/*/lib{c++,c++abi,unwind}.* $GMP/lib/libgmp.a $LIBUV/lib/libuv.a stage1/lib/
-# bundle OpenSSL shared libs so the lean distribution is self-contained
-$CP $OPENSSL/lib/libssl.so* $OPENSSL/lib/libcrypto.so* stage1/lib/
+# bundle OpenSSL static libs
+cp $OPENSSL/lib/libssl.a $OPENSSL/lib/libcrypto.a stage1/lib/
 # LLVM 19 appears to ship the dependencies in 'llvm/lib/<target-triple>/' and 'llvm/include/<target-triple>/'
 # but clang-19 that we use to compile is linked against 'llvm/lib/' and 'llvm/include'
 # https://github.com/llvm/llvm-project/issues/54955
@@ -59,7 +59,7 @@ for f in $GLIBC/lib/{ld,lib{c,dl,m,rt,pthread}}-*; do b=$(basename $f); cp $f st
 OPTIONS=()
 # We build cadical using the custom toolchain on Linux to avoid glibc versioning issues
 echo -n " -DLEAN_STANDALONE=ON -DCADICAL_USE_CUSTOM_CXX=ON"
-echo -n " -DOPENSSL_INCLUDE_DIR=$OPENSSL_DEV/include -DOPENSSL_SSL_LIBRARY=$OPENSSL/lib/libssl.so -DOPENSSL_CRYPTO_LIBRARY=$OPENSSL/lib/libcrypto.so"
+echo -n " -DOPENSSL_INCLUDE_DIR=$OPENSSL_DEV/include -DOPENSSL_SSL_LIBRARY=$OPENSSL/lib/libssl.a -DOPENSSL_CRYPTO_LIBRARY=$OPENSSL/lib/libcrypto.a"
 echo -n " -DCMAKE_CXX_COMPILER=$PWD/llvm-host/bin/clang++ -DLEAN_CXX_STDLIB='-Wl,-Bstatic -lc++ -lc++abi -Wl,-Bdynamic'"
 # these should also be used for cadical, so do not use `LEAN_EXTRA_CXX_FLAGS` here
 echo -n " -DCMAKE_CXX_FLAGS='--sysroot $PWD/llvm -idirafter $GLIBC_DEV/include ${EXTRA_FLAGS:-}'"
@@ -77,8 +77,8 @@ fi
 echo -n " -DLEANC_INTERNAL_FLAGS='--sysroot ROOT -nostdinc -isystem ROOT/include/clang' -DLEANC_CC=ROOT/bin/clang"
 # ld.so is usually included by the libc.so linker script but we discard those. Make sure it is linked to only after `libc.so` like in the original
 # linker script so that no libc symbols are bound to it instead.
-echo -n " -DLEANC_INTERNAL_LINKER_FLAGS='--sysroot ROOT -L ROOT/lib -L ROOT/lib/glibc -lc -lc_nonshared -Wl,--as-needed -l:ld.so -Wl,--no-as-needed -lpthread_nonshared -Wl,--as-needed -Wl,-Bstatic -lgmp -lunwind -luv -Wl,-Bdynamic -lssl -lcrypto -Wl,--no-as-needed -Wl,--disable-new-dtags,-rpath,ROOT/lib -fuse-ld=lld'"
+echo -n " -DLEANC_INTERNAL_LINKER_FLAGS='--sysroot ROOT -L ROOT/lib -L ROOT/lib/glibc -lc -lc_nonshared -Wl,--as-needed -l:ld.so -Wl,--no-as-needed -lpthread_nonshared -Wl,--as-needed -Wl,-Bstatic -lgmp -lunwind -luv -lssl -lcrypto -Wl,-Bdynamic -Wl,--no-as-needed -Wl,--disable-new-dtags,-rpath,ROOT/lib -fuse-ld=lld'"
 # when not using the above flags, link GMP/libuv/OpenSSL dynamically/as usual
-echo -n " -DLEAN_EXTRA_LINKER_FLAGS='-Wl,--as-needed -L$OPENSSL/lib -lgmp -luv -lssl -lcrypto -lpthread -ldl -lrt -Wl,--no-as-needed'"
+echo -n " -DLEAN_EXTRA_LINKER_FLAGS='-Wl,--as-needed -lgmp -luv -Wl,-Bstatic -lssl -lcrypto -Wl,-Bdynamic -lpthread -ldl -lrt -Wl,--no-as-needed'"
 # do not set `LEAN_CC` for tests
 echo -n " -DLEAN_TEST_VARS=''"
