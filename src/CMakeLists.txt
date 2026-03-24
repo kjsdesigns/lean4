@@ -376,23 +376,21 @@ if("${CMAKE_SYSTEM_NAME}" MATCHES "Emscripten")
   set(OPENSSL_SSL_LIBRARY "${CMAKE_BINARY_DIR}/openssl/lib/libssl.a")
   set(OPENSSL_LIBRARIES "${OPENSSL_SSL_LIBRARY} ${OPENSSL_CRYPTO_LIBRARY}")
 else()
-  find_package(OpenSSL REQUIRED)
+  find_package(OpenSSL 3 REQUIRED)
   set(OPENSSL_LIBRARIES ${OPENSSL_SSL_LIBRARY} ${OPENSSL_CRYPTO_LIBRARY})
 endif()
 include_directories(${OPENSSL_INCLUDE_DIR})
-
 string(JOIN " " OPENSSL_LIBRARIES_STR ${OPENSSL_LIBRARIES})
 string(APPEND LEANSHARED_LINKER_FLAGS " ${OPENSSL_LIBRARIES_STR}")
+
 if(NOT LEAN_STANDALONE)
   string(APPEND LEAN_EXTRA_LINKER_FLAGS " ${OPENSSL_LIBRARIES_STR}")
 endif()
-# On Linux, libleanshared.so dynamically links OpenSSL. Embed $ORIGIN as DT_RPATH so the dynamic
-# linker finds the bundled libssl/libcrypto in the same directory as libleanshared.so at runtime.
-# ($$ORIGIN in the CMake string becomes $$ORIGIN in stdlib.make, which make expands to $ORIGIN.)
+
 if(CMAKE_SYSTEM_NAME MATCHES "Linux")
   string(APPEND LEANSHARED_LINKER_FLAGS " -Wl,--disable-new-dtags,-rpath,$$ORIGIN")
 endif()
-# On Windows, static OpenSSL pulls in the Windows certificate store provider which requires crypt32
+
 if(CMAKE_SYSTEM_NAME MATCHES "Windows")
   string(APPEND LEANSHARED_LINKER_FLAGS " -lcrypt32 -lgdi32")
   if(NOT LEAN_STANDALONE)
