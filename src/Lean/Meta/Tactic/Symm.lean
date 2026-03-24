@@ -32,6 +32,12 @@ builtin_initialize symmExt :
     initial := {}
   }
 
+/-- Returns the symmetry lemmas that match the target type. -/
+def getSymmLemmas (tgt : Expr) : MetaM (Expr × Array Name) := do
+  let .app (.app rel _) _ := tgt
+    | throwError "Symmetry lemmas only apply to binary relations, not{indentExpr tgt}"
+  return (rel, ← (symmExt.getState (← getEnv)).getMatch rel)
+
 /--
 Tags symmetry lemmas to be used by the `symm` tactic.
 
@@ -59,16 +65,10 @@ builtin_initialize registerBuiltinAttribute {
     symmExt.add (decl, key) kind
 }
 
-/-- Return the symmetry lemmas that match the target type. -/
-def getSymmLems (tgt : Expr) : MetaM (Expr × Array Name) := do
-  let .app (.app rel _) _ := tgt
-    | throwError "Symmetry lemmas only apply to binary relations, not{indentExpr tgt}"
-  return (rel, ← (symmExt.getState (← getEnv)).getMatch rel)
-
 def forEachSymmLemma {α} (g? : Option MVarId) (tgt : Expr)
     (k : Expr → Expr → Array Expr → Expr → Expr → MetaM α) : MetaM α := do
   let tgt ← instantiateMVars (← whnfR tgt)
-  let (rel, lems) ← getSymmLems tgt
+  let (rel, lems) ← getSymmLemmas tgt
   let s ← saveState
   let mut ex? := none
   for lem in lems do

@@ -25,7 +25,12 @@ relation, that is, a relation which has a reflexive lemma tagged with the attrib
 -/
 @[builtin_tactic Lean.Parser.Tactic.applyRfl] def evalApplyRfl : Tactic := fun stx =>
   match stx with
-  | `(tactic| apply_rfl) => withMainContext do liftMetaFinishingTactic (·.applyRfl)
+  | `(tactic| apply_rfl) => liftMetaFinishingTactic (·.applyRfl)
+  | _ => throwUnsupportedSyntax
+
+@[builtin_tactic Lean.Parser.Tactic.liftRfl] def evalLiftRfl : Tactic := fun stx =>
+  match stx with
+  | `(tactic| lift_rfl) => liftMetaTactic1 (·.liftReflToEq (allowHEq := true) (failIfUnchanged := true))
   | _ => throwUnsupportedSyntax
 
 end Lean.Elab.Tactic.Rfl

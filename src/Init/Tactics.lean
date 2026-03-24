@@ -437,6 +437,14 @@ theorems included (relevant for declarations defined by well-founded recursion).
 macro "rfl'" : tactic => `(tactic| set_option smartUnfolding false in with_unfolding_all rfl)
 
 /--
+This tactic applies to a goal whose target has the form `x ~ y`,
+where `~` is equality, heterogeneous equality or any relation that
+has a reflexivity lemma tagged with the attribute @[refl] and attempts
+to reduce it to `x = y` or `x ≍ y`.
+-/
+syntax (name := liftRfl) "lift_rfl" : tactic
+
+/--
 `ac_rfl` proves equalities up to application of an associative and commutative operator.
 ```
 instance : Std.Associative (α := Nat) (.+.) := ⟨Nat.add_assoc⟩
