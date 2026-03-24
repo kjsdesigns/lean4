@@ -389,6 +389,10 @@ where
     | .fap ``Array.uget args =>
       if let .fvar parent := args[1]! then
         if ← isOwned parent then ownFVar z (.forwardProjectionProp z)
+    | .fap f #[] =>
+      -- We do not need to own `z` as `f` is persistent and thus stays alive at least until the end
+      -- of execution.
+      return ()
     | .fap f args =>
       let ps ← getParamInfo (.decl f)
       ownFVar z (.functionCallResult z)

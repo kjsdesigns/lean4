@@ -3256,23 +3256,6 @@ Examples:
   dite (LT.lt i a.size) (fun h => a.getInternal i h) (fun _ => v₀)
 
 /--
-Version of `Array.get!Internal` that does not increment the reference count of its result.
-
-This is only intended for direct use by the compiler.
--/
-@[extern "lean_array_get_borrowed"]
-unsafe opaque Array.get!InternalBorrowed {α : Type u} [@&Inhabited α] (a : @& Array α) (i : @& Nat) : α
-
-/--
-Use the indexing notation `a[i]!` instead.
-
-Access an element from an array, or panic if the index is out of bounds.
--/
-@[extern "lean_array_get"]
-def Array.get!Internal {α : Type u} [@&Inhabited α] (a : @& Array α) (i : @& Nat) : α :=
-  Array.getD a i default
-
-/--
 Adds an element to the end of an array. The resulting array's size is one greater than the input
 array. If there are no other references to the array, then it is modified in-place.
 
@@ -3665,6 +3648,24 @@ elimination and other optimizations that assume that the expression is pure.
 @[noinline, never_extract]
 def panic {α : Sort u} [Inhabited α] (msg : String) : α :=
   panicCore msg
+
+/--
+Version of `Array.get!Internal` that does not increment the reference count of its result.
+
+This is only intended for direct use by the compiler.
+-/
+@[extern "lean_array_get_borrowed"]
+unsafe opaque Array.get!InternalBorrowed {α : Type u} [@&Inhabited α] (a : @& Array α) (i : @& Nat) : α
+
+/--
+Use the indexing notation `a[i]!` instead.
+
+Access an element from an array, or panic if the index is out of bounds.
+-/
+--@[extern "lean_array_get"]
+@[inline]
+def Array.get!Internal {α : Type u} [@&Inhabited α] (a : @& Array α) (i : @& Nat) : α :=
+  dite (LT.lt i a.size) (fun h => a.getInternal i h) (fun _ => (panic "bad bad"))
 
 -- TODO: this be applied directly to `Inhabited`'s definition when we remove the above workaround
 attribute [nospecialize] Inhabited

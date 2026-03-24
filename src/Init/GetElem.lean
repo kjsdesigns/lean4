@@ -404,7 +404,7 @@ instance : LawfulGetElem (Array α) Nat α fun xs i => i < xs.size where
     simp only [getElem?, decidableGetElem?]
     split <;> rfl
   getElem!_def xs i := by
-    simp only [getElem!, getElem?, decidableGetElem?, get!Internal, getD, getElem]
+    simp only [getElem!, getElem?, decidableGetElem?, get!Internal, getElem]
     split <;> rfl
 
 @[simp] theorem getInternal_eq_getElem (a : Array α) (i : Nat) (h) :
@@ -412,8 +412,8 @@ instance : LawfulGetElem (Array α) Nat α fun xs i => i < xs.size where
 
 @[simp] theorem get!Internal_eq_getElem! [Inhabited α] (a : Array α) (i : Nat) :
     a.get!Internal i = a[i]! := by
-  simp only [get!Internal, getD, getInternal_eq_getElem, getElem!_def]
-  split <;> simp_all [getElem?_pos, getElem?_neg]
+  simp only [get!Internal, getInternal_eq_getElem, getElem!_def]
+  split <;> simp_all [getElem?_pos, getElem?_neg, panic, panicCore]
 
 end Array
 
