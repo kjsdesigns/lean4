@@ -41,7 +41,10 @@
             name = "openssl-static-${pkgs.lib.getVersion pkgs.openssl.name}";
             inherit (pkgs.openssl) src;
             nativeBuildInputs = [ pkgsDist.perl ];
-            configurePhase = ''./config --prefix=$out no-shared no-tests'';
+            configurePhase = ''
+            patchShebangs .
+            ./config --prefix=$out no-shared no-tests
+          '';
             buildPhase = "make -j$NIX_BUILD_CORES";
             installPhase = "make install_sw";
           };
