@@ -26,20 +26,23 @@ def setupTestCerts : IO (String × String) := do
   IO.FS.createDirAll "/tmp/lean_ssl_test"
   let keyFile  := "/tmp/lean_ssl_test/key.pem"
   let certFile := "/tmp/lean_ssl_test/cert.pem"
+
   discard <| IO.Process.output {
     cmd  := "openssl"
     args := #["genrsa", "-out", keyFile, "2048"]
   }
+
   discard <| IO.Process.output {
     cmd  := "openssl"
     args := #["req", "-new", "-x509", "-key", keyFile, "-out", certFile,
               "-days", "1", "-subj", "/CN=localhost"]
   }
+
   return (certFile, keyFile)
 
 -- Drive one handshake step: advance both state machines and exchange encrypted
 -- bytes between their memory BIOs. Returns (clientDone, serverDone).
-def handshakeStep (c s : Session) : IO (Bool × Bool) := do
+def handshakeStep {rc rs : Role} (c : Session rc) (s : Session rs) : IO (Bool × Bool) := do
   let cd ← c.handshake
   let cOut ← c.drainEncrypted
   if cOut.size > 0 then
@@ -50,12 +53,12 @@ def handshakeStep (c s : Session) : IO (Bool × Bool) := do
     discard <| c.feedEncrypted sOut
   return (cd, sd)
 
-partial def runHandshake (c s : Session) : IO Unit := do
+partial def runHandshake {rc rs : Role} (c : Session rc) (s : Session rs) : IO Unit := do
   let (cd, sd) ← handshakeStep c s
   unless cd && sd do runHandshake c s
 
 -- Pipe all pending encrypted output from src into dst's read BIO.
-def pipeEncrypted (src dst : Session) : IO Unit := do
+def pipeEncrypted {r1 r2 : Role} (src : Session r1) (dst : Session r2) : IO Unit := do
   let bytes ← src.drainEncrypted
   if bytes.size > 0 then
     discard <| dst.feedEncrypted bytes
@@ -65,29 +68,29 @@ def pipeEncrypted (src dst : Session) : IO Unit := do
 -- ---------------------------------------------------------------------------
 
 def testContextCreation (certFile keyFile : String) : IO Unit := do
-  let serverCtx ← Context.mkServer
-  serverCtx.configureServer certFile keyFile
+  let serverCtx ← Context.Server.mk
+  serverCtx.configure certFile keyFile
 
-  let clientCtx ← Context.mkClient
-  clientCtx.configureClient "" false
+  let clientCtx ← Context.Client.mk
+  clientCtx.configure "" false
 
   -- Configuring with a CA file path (non-empty) exercises the other branch.
-  let clientCtx2 ← Context.mkClient
-  clientCtx2.configureClient certFile false
+  let clientCtx2 ← Context.Client.mk
+  clientCtx2.configure certFile false
 
 -- ---------------------------------------------------------------------------
 -- Test 2: In-process TLS handshake between two memory-BIO sessions
 -- ---------------------------------------------------------------------------
 
 def testInProcessHandshake (certFile keyFile : String) : IO Unit := do
-  let serverCtx ← Context.mkServer
-  serverCtx.configureServer certFile keyFile
+  let serverCtx ← Context.Server.mk
+  serverCtx.configure certFile keyFile
 
-  let clientCtx ← Context.mkClient
-  clientCtx.configureClient "" false  -- skip peer verification
+  let clientCtx ← Context.Client.mk
+  clientCtx.configure "" false  -- skip peer verification
 
-  let serverSess ← Session.mk serverCtx true
-  let clientSess ← Session.mk clientCtx false
+  let serverSess ← Session.Server.mk serverCtx
+  let clientSess ← Session.Client.mk clientCtx
 
   -- setServerName exercises SSL_set_tlsext_host_name.
   clientSess.setServerName "localhost"
@@ -103,14 +106,14 @@ def testInProcessHandshake (certFile keyFile : String) : IO Unit := do
 -- ---------------------------------------------------------------------------
 
 def testDataTransfer (certFile keyFile : String) : IO Unit := do
-  let serverCtx ← Context.mkServer
-  serverCtx.configureServer certFile keyFile
+  let serverCtx ← Context.Server.mk
+  serverCtx.configure certFile keyFile
 
-  let clientCtx ← Context.mkClient
-  clientCtx.configureClient "" false
+  let clientCtx ← Context.Client.mk
+  clientCtx.configure "" false
 
-  let serverSess ← Session.mk serverCtx true
-  let clientSess ← Session.mk clientCtx false
+  let serverSess ← Session.Server.mk serverCtx
+  let clientSess ← Session.Client.mk clientCtx
 
   runHandshake clientSess serverSess
 
@@ -141,18 +144,18 @@ def testDataTransfer (certFile keyFile : String) : IO Unit := do
 -- ---------------------------------------------------------------------------
 
 def testPendingPlaintext (certFile keyFile : String) : IO Unit := do
-  let serverCtx ← Context.mkServer
-  serverCtx.configureServer certFile keyFile
+  let serverCtx ← Context.Server.mk
+  serverCtx.configure certFile keyFile
 
-  let clientCtx ← Context.mkClient
-  clientCtx.configureClient "" false
+  let clientCtx ← Context.Client.mk
+  clientCtx.configure "" false
 
-  let serverSess ← Session.mk serverCtx true
-  let clientSess ← Session.mk clientCtx false
+  let serverSess ← Session.Server.mk serverCtx
+  let clientSess ← Session.Client.mk clientCtx
 
   runHandshake clientSess serverSess
 
-  let bigMsg := (String.mk (List.replicate 100 'x')).toUTF8
+  let bigMsg := (String.ofList (List.replicate 100 'x')).toUTF8
   discard <| clientSess.write bigMsg
   pipeEncrypted clientSess serverSess
 
@@ -171,8 +174,8 @@ def serverTask (server : TCP.SSL.Server) : Async Unit := do
   client.send (msg.getD ByteArray.empty)  -- echo
   client.shutdown
 
-def clientTask (addr : SocketAddress) (clientCtx : Context) : Async Unit := do
-  let client ← TCP.SSL.Client.mk clientCtx
+def clientTask (addr : SocketAddress) (clientCtx : Context.Client) : Async Unit := do
+  let client ← Client.mk clientCtx
   client.setServerName "localhost"
   client.connect addr
   client.noDelay
@@ -187,14 +190,14 @@ def clientTask (addr : SocketAddress) (clientCtx : Context) : Async Unit := do
   client.shutdown
 
 def testTCPSSL (addr : SocketAddress) (certFile keyFile : String) : IO Unit := do
-  let serverCtx ← Context.mkServer
-  serverCtx.configureServer certFile keyFile
+  let serverCtx ← Context.Server.mk
+  serverCtx.configure certFile keyFile
 
-  let clientCtx ← Context.mkClient
-  TCP.SSL.Client.configureContext clientCtx "" false
+  let clientCtx ← Context.Client.mk
+  Client.configureContext clientCtx "" false
 
-  let server ← TCP.SSL.Server.mk serverCtx
-  server.configureContext certFile keyFile  -- idempotent re-configuration
+  let server ← Server.mk serverCtx
+  server.configureServer certFile keyFile  -- idempotent re-configuration
   server.bind addr
   server.listen 128
 

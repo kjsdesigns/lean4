@@ -239,14 +239,20 @@ static lean_obj_res mk_ssl_session(SSL_CTX * ctx, uint8_t is_server) {
     return lean_io_result_mk_ok(obj);
 }
 
-/* Std.Internal.SSL.Session.mk (ctx : @& Context) (isServer : Bool) : IO Session */
-extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_mk(b_obj_arg ctx_obj, uint8_t is_server) {
+/* Std.Internal.SSL.Session.Server.mk (ctx : @& Context.Server) : IO Session.Server */
+extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_mk_server(b_obj_arg ctx_obj) {
     lean_ssl_context_object * ctx = lean_to_ssl_context_object(ctx_obj);
-    return mk_ssl_session(ctx->ctx, is_server);
+    return mk_ssl_session(ctx->ctx, 1);
+}
+
+/* Std.Internal.SSL.Session.Client.mk (ctx : @& Context.Client) : IO Session.Client */
+extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_mk_client(b_obj_arg ctx_obj) {
+    lean_ssl_context_object * ctx = lean_to_ssl_context_object(ctx_obj);
+    return mk_ssl_session(ctx->ctx, 0);
 }
 
 /* Std.Internal.SSL.Session.setServerName (ssl : @& Session) (host : @& String) : IO Unit */
-extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_set_server_name(b_obj_arg ssl, b_obj_arg host) {
+extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_set_server_name(b_obj_arg _role, b_obj_arg ssl, b_obj_arg host) {
     lean_ssl_session_object * ssl_obj = lean_to_ssl_session_object(ssl);
     const char * server_name = lean_string_cstr(host);
     if (SSL_set_tlsext_host_name(ssl_obj->ssl, server_name) != 1) {
@@ -256,14 +262,14 @@ extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_set_server_name(b_obj_arg ssl, b
 }
 
 /* Std.Internal.SSL.Session.verifyResult (ssl : @& Session) : IO UInt64 */
-extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_verify_result(b_obj_arg ssl) {
+extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_verify_result(b_obj_arg _role, b_obj_arg ssl) {
     lean_ssl_session_object * ssl_obj = lean_to_ssl_session_object(ssl);
     long result = SSL_get_verify_result(ssl_obj->ssl);
     return lean_io_result_mk_ok(lean_box_uint64((uint64_t)result));
 }
 
 /* Std.Internal.SSL.Session.handshake (ssl : @& Session) : IO Bool */
-extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_handshake(b_obj_arg ssl) {
+extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_handshake(b_obj_arg _role, b_obj_arg ssl) {
     lean_ssl_session_object * ssl_obj = lean_to_ssl_session_object(ssl);
     int rc = SSL_do_handshake(ssl_obj->ssl);
 
@@ -280,7 +286,7 @@ extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_handshake(b_obj_arg ssl) {
 }
 
 /* Std.Internal.SSL.Session.write (ssl : @& Session) (data : @& ByteArray) : IO Bool */
-extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_write(b_obj_arg ssl, b_obj_arg data) {
+extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_write(b_obj_arg _role, b_obj_arg ssl, b_obj_arg data) {
     lean_ssl_session_object * ssl_obj = lean_to_ssl_session_object(ssl);
     size_t data_len = lean_sarray_size(data);
     char const * payload = (char const*)lean_sarray_cptr(data);
@@ -311,7 +317,7 @@ extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_write(b_obj_arg ssl, b_obj_arg d
 }
 
 /* Std.Internal.SSL.Session.read? (ssl : @& Session) (maxBytes : UInt64) : IO (Option ByteArray) */
-extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_read(b_obj_arg ssl, uint64_t max_bytes) {
+extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_read(b_obj_arg _role, b_obj_arg ssl, uint64_t max_bytes) {
     lean_ssl_session_object * ssl_obj = lean_to_ssl_session_object(ssl);
 
     if (max_bytes == 0) {
@@ -350,7 +356,7 @@ extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_read(b_obj_arg ssl, uint64_t max
 }
 
 /* Std.Internal.SSL.Session.feedEncrypted (ssl : @& Session) (data : @& ByteArray) : IO UInt64 */
-extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_feed_encrypted(b_obj_arg ssl, b_obj_arg data) {
+extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_feed_encrypted(b_obj_arg _role, b_obj_arg ssl, b_obj_arg data) {
     lean_ssl_session_object * ssl_obj = lean_to_ssl_session_object(ssl);
     size_t data_len = lean_sarray_size(data);
 
@@ -375,7 +381,7 @@ extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_feed_encrypted(b_obj_arg ssl, b_
 }
 
 /* Std.Internal.SSL.Session.drainEncrypted (ssl : @& Session) : IO ByteArray */
-extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_drain_encrypted(b_obj_arg ssl) {
+extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_drain_encrypted(b_obj_arg _role, b_obj_arg ssl) {
     lean_ssl_session_object * ssl_obj = lean_to_ssl_session_object(ssl);
     size_t pending = BIO_ctrl_pending(ssl_obj->write_bio);
 
@@ -405,13 +411,13 @@ extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_drain_encrypted(b_obj_arg ssl) {
 }
 
 /* Std.Internal.SSL.Session.pendingEncrypted (ssl : @& Session) : IO UInt64 */
-extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_pending_encrypted(b_obj_arg ssl) {
+extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_pending_encrypted(b_obj_arg _role, b_obj_arg ssl) {
     lean_ssl_session_object * ssl_obj = lean_to_ssl_session_object(ssl);
     return lean_io_result_mk_ok(lean_box_uint64((uint64_t)BIO_ctrl_pending(ssl_obj->write_bio)));
 }
 
 /* Std.Internal.SSL.Session.pendingPlaintext (ssl : @& Session) : IO UInt64 */
-extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_pending_plaintext(b_obj_arg ssl) {
+extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_pending_plaintext(b_obj_arg _role, b_obj_arg ssl) {
     lean_ssl_session_object * ssl_obj = lean_to_ssl_session_object(ssl);
     return lean_io_result_mk_ok(lean_box_uint64((uint64_t)SSL_pending(ssl_obj->ssl)));
 }
@@ -420,57 +426,61 @@ extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_pending_plaintext(b_obj_arg ssl)
 
 void initialize_openssl_session() {}
 
-extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_mk(b_obj_arg ctx_obj, uint8_t is_server) {
+extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_mk_server(b_obj_arg ctx_obj) {
     (void)ctx_obj;
-    (void)is_server;
-    return io_result_mk_error("lean_uv_ssl_mk is not supported");
+    return io_result_mk_error("lean_uv_ssl_mk_server is not supported");
 }
 
-extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_set_server_name(b_obj_arg ssl, b_obj_arg host) {
+extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_mk_client(b_obj_arg ctx_obj) {
+    (void)ctx_obj;
+    return io_result_mk_error("lean_uv_ssl_mk_client is not supported");
+}
+
+extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_set_server_name(b_obj_arg _role, b_obj_arg ssl, b_obj_arg host) {
     (void)ssl;
     (void)host;
     return io_result_mk_error("lean_uv_ssl_set_server_name is not supported");
 }
 
-extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_verify_result(b_obj_arg ssl) {
+extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_verify_result(b_obj_arg _role, b_obj_arg ssl) {
     (void)ssl;
     return io_result_mk_error("lean_uv_ssl_verify_result is not supported");
 }
 
-extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_handshake(b_obj_arg ssl) {
+extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_handshake(b_obj_arg _role, b_obj_arg ssl) {
     (void)ssl;
     return io_result_mk_error("lean_uv_ssl_handshake is not supported");
 }
 
-extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_write(b_obj_arg ssl, b_obj_arg data) {
+extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_write(b_obj_arg _role, b_obj_arg ssl, b_obj_arg data) {
     (void)ssl;
     (void)data;
     return io_result_mk_error("lean_uv_ssl_write is not supported");
 }
 
-extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_read(b_obj_arg ssl, uint64_t max_bytes) {
+extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_read(b_obj_arg _role, b_obj_arg ssl, uint64_t max_bytes) {
     (void)ssl;
     (void)max_bytes;
     return io_result_mk_error("lean_uv_ssl_read is not supported");
 }
 
-extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_feed_encrypted(b_obj_arg ssl, b_obj_arg data) {
+extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_feed_encrypted(b_obj_arg _role, b_obj_arg ssl, b_obj_arg data) {
     (void)ssl;
     (void)data;
     return io_result_mk_error("lean_uv_ssl_feed_encrypted is not supported");
 }
 
-extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_drain_encrypted(b_obj_arg ssl) {
+extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_drain_encrypted(b_obj_arg _role, b_obj_arg ssl) {
     (void)ssl;
     return io_result_mk_error("lean_uv_ssl_drain_encrypted is not supported");
 }
 
-extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_pending_encrypted(b_obj_arg ssl) {
+extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_pending_encrypted(b_obj_arg _role, b_obj_arg ssl) {
     (void)ssl;
     return io_result_mk_error("lean_uv_ssl_pending_encrypted is not supported");
 }
 
-extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_pending_plaintext(b_obj_arg ssl) {
+extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_pending_plaintext(b_obj_arg _role, b_obj_arg ssl) {
     (void)ssl;
     return io_result_mk_error("lean_uv_ssl_pending_plaintext is not supported");
 }
