@@ -87,9 +87,25 @@ builtin_initialize registerBuiltinAttribute {
       reflExt.add (decl, key) kind
 }
 
-private def throwNoRflLemma {α} (tacticName : Name) (goal : MVarId) (rel : Expr) : MetaM α :=
-  throwTacticEx tacticName goal <| m!"No `[refl]` lemma registered for relation{indentExpr rel}"
+private def noRflLemmaMsg (rel : Expr) : MessageData :=
+  m!"No `[refl]` lemma registered for relation{indentExpr rel}"
     ++ MessageData.hint' m!"Add the `[refl]` attribute to reflexivity lemmas for{inlineExpr rel}to use this tactic"
+
+private def throwNoRflLemma {α} (tacticName : Name) (goal : MVarId) (rel : Expr) : MetaM α :=
+  throwTacticEx tacticName goal <| noRflLemmaMsg rel
+
+private def throwRelError {α} (tacticName : Name) (goal : MVarId) : MetaM α := do
+  let t ← goal.getType
+  throwTacticEx tacticName goal <| MessageData.ofLazyM (es := #[t]) do
+    if let some info ← matchesPotentialRelation? t then
+      return noRflLemmaMsg info.rel
+    else
+      return m!"Expecting a goal that is a binary relation"
+
+def throwNotDefEqError (tacticName : Name) (goal : MVarId) (lhs rhs : Expr) (thing : MessageData := m!"side") : MetaM Unit := do
+  throwTacticEx tacticName goal <| MessageData.ofLazyM (es := #[lhs, rhs]) do
+    let (lhs, rhs) ← addPPExplicitToExposeDiff lhs rhs
+    return m!"The left-hand {thing}{indentExpr lhs}\nis not definitionally equal to the right-hand {thing}{indentExpr rhs}"
 
 private def applyLemmas (tacticName : Name) (goal : MVarId) (rel : Expr) (lems : Array Name) : MetaM Unit := do
   let mut ex? := none
@@ -120,7 +136,7 @@ Unfolds `t` step-by-step looking for lemmas.
 private partial def applyRflCore (goal : MVarId) (t : Expr) : MetaM Unit := do
   let t ← whnfCore t
   if !t.getAppFn.isConst then
-    throwRelError
+    throwRelError `rfl goal
   else if t.isAppOfArity ``Eq 3 then
     -- The common case is equality: just use `Eq.refl`
     let_expr Eq α lhs rhs := t | unreachable!
@@ -131,7 +147,7 @@ private partial def applyRflCore (goal : MVarId) (t : Expr) : MetaM Unit := do
     -- `HEq` is less common, but we can give a more precise error report than for general relations
     let_expr HEq α lhs β rhs := t | unreachable!
     let us := t.getAppFn.constLevels!
-    checkDefEq α β "type"
+    checkDefEq α β "side's type"
     checkDefEq lhs rhs
     goal.assign (mkApp2 (mkConst ``HEq.refl us) α lhs)
   else if t.isAppOfArity ``Iff 2 then
@@ -152,18 +168,14 @@ private partial def applyRflCore (goal : MVarId) (t : Expr) : MetaM Unit := do
       goal.setType t
       applyLemmas `rfl goal rel lems
   else
-    tryUnfold goal t throwRelError
+    tryUnfold goal t (throwRelError `rfl goal)
 where
-  throwRelError :=
-    throwTacticEx `rfl goal <| m!"Expecting a goal that is a binary relation"
-      ++ MessageData.hint' m!"Reflexivity tactics can only be used on goals of the form `x ~ x` or `R x x`"
-  checkDefEq (lhs rhs : Expr) (thing : MessageData := "side") := do
-    unless ← approxDefEq <| isDefEq lhs rhs do
-      throwTacticEx `rfl goal <| MessageData.ofLazyM (es := #[lhs, rhs]) do
-        let (lhs, rhs) ← addPPExplicitToExposeDiff lhs rhs
-        return m!"The left-hand {thing}{indentExpr lhs}\nis not definitionally equal to the right-hand {thing}{indentExpr rhs}"
+  checkDefEq (lhs rhs : Expr) (thing : MessageData := m!"side") := do
+    withTraceNode `Meta.Tactic.relation (fun _ => return m!"applyRflCore: {lhs} =?= {rhs} at {repr (← getTransparency)}") do
+      unless ← approxDefEq <| isDefEq lhs rhs do
+        throwNotDefEqError `rfl goal lhs rhs thing
   tryUnfold (goal : MVarId) (t : Expr) (err : MetaM Unit) : MetaM Unit := do
-    if let some t' ← unfoldDefinition? t then
+    if let some t' ← withReducible <| unfoldDefinition? t then
       applyRflCore goal t'
     else
       err
@@ -174,10 +186,11 @@ This tactic applies to a goal whose target has the form `x ~ x`, where `~` is a 
 relation, that is, equality or another relation which has a reflexive lemma tagged with the
 attribute [refl].
 -/
-def _root_.Lean.MVarId.applyRfl (goal : MVarId) : MetaM Unit := goal.withContext do
-  goal.checkNotAssigned `rfl
-  let t ← goal.getType
-  applyRflCore goal t {}
+def _root_.Lean.MVarId.applyRfl (goal : MVarId) : MetaM Unit :=
+  goal.withContext do
+    goal.checkNotAssigned `rfl
+    let t ← goal.getType
+    applyRflCore goal t
 
 /--
 Finds a `@[refl]` lemma that applies to lift `x ~ y` to `x = y` or `x ≍ y`.
@@ -189,21 +202,23 @@ This is a congruence task. The key problems are:
    and there might be typeclass instances).
 2. Proving that `x = y → (x ~ x = x ~ y)`.
 -/
-private partial def liftReflToEqHEqCore (goal : MVarId) (t : Expr) (allowHEq : Bool := true) : MetaM MVarId := do
+private partial def liftReflToEqHEqCore (goal : MVarId) (t : Expr) (allowHEq : Bool := true) (failIfUnchanged : Bool) : MetaM MVarId := do
   let t ← whnfCore t
   if !t.getAppFn.isConst then
-    throwRelError
+    throwRelError `liftReflToEq goal
   else if t.isAppOfArity ``Eq 3 then
     -- Already Eq
+    if failIfUnchanged then
+      throwTacticEx `liftReflToEq goal "Goal is already an equality"
     goal.setType t
     return goal
   else if t.isAppOfArity ``HEq 4 then
     -- Already HEq.
     goal.setType t
     let goal ← goal.heqOfEq
-    unless allowHEq do
+    unless !failIfUnchanged && allowHEq do
       if let some (lhsTy, _, rhsTy, _) := (← goal.getType).heq? then
-        throwTypeNotDefEqError lhsTy rhsTy
+        throwNotDefEqError `liftReflToEq goal lhsTy rhsTy (thing := "side's type")
     return goal
   else if t.isAppOfArity ``Iff 2 then
     -- There is a meta tactic for this, so may as well use it for this common case.
@@ -213,7 +228,7 @@ private partial def liftReflToEqHEqCore (goal : MVarId) (t : Expr) (allowHEq : B
     -- Search through `[refl]` keyed by the relation
     let lems ← getReflLemmas rel
     if lems.isEmpty then
-      tryUnfold goal t (throwNoRflLemma rel)
+      tryUnfold goal t (throwNoRflLemma `liftReflToEq goal rel)
     else
       let lhsTy ← inferType lhs
       let lhsU ← getLevel lhsTy
@@ -226,15 +241,15 @@ private partial def liftReflToEqHEqCore (goal : MVarId) (t : Expr) (allowHEq : B
       -- Try unifying the types
       let typesEq ← approxDefEq <| isDefEq lhsTy rhsTy
       if !allowHEq && !typesEq then
-        throwTypeNotDefEqError lhsTy rhsTy
+        throwNotDefEqError `liftReflToEq goal lhsTy rhsTy (thing := "type")
       if typesEq && info.rhsIdx == info.numArgs - 1 then
         -- Common case: `Eq` where rhs is the last argument.
         -- The `@[relation]` attribute validates that the type of the relation doesn't depend on the arguments
         let goalEq ← mkFreshExprSyntheticOpaqueMVar (tag := ← goal.getTag) (← mkEq lhs rhs)
         let pf ← mkCongrArg t.appFn! goalEq  -- Proof that `lhs ~ lhs = lhs ~ rhs`
         let t' := Expr.app t.appFn! lhs
-        let goal' ← goal.replaceTargetEq t' (← mkEqSymm pf)
-        applyLemmas `liftReflToEq goal' rel lems
+        let goal ← goal.replaceTargetEq t' (← mkEqSymm pf)
+        applyLemmas `liftReflToEq goal rel lems
         return goalEq.mvarId!
       else
         -- Otherwise, use a congruence lemma.
@@ -246,40 +261,44 @@ private partial def liftReflToEqHEqCore (goal : MVarId) (t : Expr) (allowHEq : B
         let (args, _, teq) ← forallMetaTelescope congr.type
         -- We're going for `teq : lhs ~ lhs = lhs ~ rhs`
         -- This way, the congruence goal `goalEq` is `lhs = rhs` (or `lhs ≍ rhs`).
-        let some (_, trfl, t') := teq.eq? | throwCongrError ()
+        let some (ty1, trfl, ty2, t') := teq.heq? | throwCongrError ()
         unless ← isDefEq t' t do throwCongrError ()  -- sets all arguments for `t` (*)
+        unless ← isDefEq ty1 ty2 do throwCongrError ()
         -- Locate where the arguments for each kind are in `args`
         let (kindArgIdxs, _) := congr.argKinds.foldl (init := (#[], 0)) fun (kindArgIdxs, idx) kind =>
           (kindArgIdxs.push idx,
             match kind with
-            | .fixed | .cast    => idx + 1
-            | .subsingletonInst => idx + 2
             | .eq | .heq        => idx + 3
-            | .fixedNoParam     => unreachable!)
+            | _                 => unreachable!)
         -- Three arguments: trfl's lhs, t's lhs, and eq/heq. t's lhs already set at (*)
         let lhsArgIdx := kindArgIdxs[info.lhsIdx - info.relArgs]!
         -- Three arguments: trfl's rhs, t's rhs, and eq/heq. t's rhs already set at (*)
         let rhsArgIdx := kindArgIdxs[info.rhsIdx - info.relArgs]! -- lhs =/≍ rhs
-        -- Set up `trfl` as `lhs ~ lhs`, and set the eq/heq for the lhs
+        -- Set up `trfl` as `lhs ~ lhs`, and prove the eq/heq for the lhs using refl
         unless ← approxDefEq <| isDefEq args[lhsArgIdx]! lhs do throwCongrError ()
         try (← args[lhsArgIdx+2]!.mvarId!.heqOfEq).refl catch _ => throwCongrError ()
         unless ← approxDefEq <| isDefEq args[rhsArgIdx]! lhs do throwCongrError ()
         -- This is the goal we want to reduce the relation to:
         let goalEq := args[rhsArgIdx+2]!.mvarId!
         goalEq.setKind .syntheticOpaque
+        goalEq.setTag (← goal.getTag)
         -- Reduce the main goal to proving reflexivity:
-        let goal ← goal.replaceTargetEq trfl (← mkEqSymm (mkAppN congr.proof args))
-        -- Apply reflexivity lemmas. This will also ensure remaining arguments are synthesized.
+        let goal ← goal.replaceTargetEq trfl (← mkEqSymm (← mkEqOfHEq (mkAppN congr.proof args) (check := false)))
+        -- Apply reflexivity lemmas. This will also ensure remaining trfl arguments are synthesized.
         applyLemmas `liftReflToEq goal rel lems
         -- Now prove remaining equality goals
         let goalEq ← goalEq.heqOfEq
+        if !allowHEq then
+          -- Consistency check. This should be an Eq already since in this case `typesEq` must be true here.
+          assert! (← goalEq.getType).isEq
         let mut unsolved := #[]
         for kind in congr.argKinds, idx in kindArgIdxs do
-          if idx != rhsArgIdx && kind matches .eq | .heq then
+          if idx != lhsArgIdx && idx != rhsArgIdx && kind matches .eq | .heq then
             let g ← pure args[idx+2]!.mvarId!
             let g ← g.heqOfEq
             try
               g.refl
+                <|> do (guard <| ← g.proofIrrelHeq)
                 <|> do (guard <| ← g.subsingletonElim)
                 <|> do
                       let pf ← mkAppM ``type_eq_of_heq #[.mvar goalEq]
@@ -288,24 +307,14 @@ private partial def liftReflToEqHEqCore (goal : MVarId) (t : Expr) (allowHEq : B
             catch _ =>
               unsolved := unsolved.push g
         unless unsolved.isEmpty do
-          throwError MessageData.tagged `Tactic.unsolvedGoals <| m!"unsolved goals\n{goalsToMessageData unsolved.toList}"
+          throwError MessageData.tagged `Tactic.unsolvedGoals <| m!"Failed rewrite relation{indentExpr t}\nto be reflexive. Unsolved goals\n{goalsToMessageData unsolved.toList}"
         return goalEq
   else
-    tryUnfold goal t throwRelError
+    tryUnfold goal t (throwRelError `liftReflToEq goal)
 where
-  throwRelError :=
-    throwTacticEx `liftReflToEq goal <| m!"Expected the goal to be a binary relation"
-      ++ MessageData.hint' m!"Reflexivity tactics can only be used on goals of the form `x ~ y`"
-  throwNoRflLemma {α} (rel : Expr) : MetaM α :=
-    throwTacticEx `liftReflToEq goal <| m!"No `[refl]` lemma registered for relation{indentExpr rel}"
-      ++ MessageData.hint' m!"Add the `[refl]` attribute to reflexivity lemmas for{inlineExpr rel}to use this tactic"
-  throwTypeNotDefEqError (lhsTy rhsTy : Expr) :=
-    throwTacticEx `liftReflToEq goal <| MessageData.ofLazyM (es := #[lhsTy, rhsTy]) do
-      let (lhsTy, rhsTy) ← addPPExplicitToExposeDiff lhsTy rhsTy
-      return m!"The left-hand type{indentExpr lhsTy}\nis not definitionally equal to the right-hand type{indentExpr rhsTy}"
   tryUnfold (goal : MVarId) (t : Expr) (err : MetaM MVarId) : MetaM MVarId := do
-    if let some t' ← unfoldDefinition? t then
-      liftReflToEqHEqCore goal t'
+    if let some t' ← withReducible <| unfoldDefinition? t then
+      liftReflToEqHEqCore goal t' (failIfUnchanged := false)
     else
       err
 
@@ -321,9 +330,10 @@ def _root_.Lean.MVarId.liftReflToEq (goal : MVarId) (allowHEq : Bool := false) (
   goal.withContext do
     goal.checkNotAssigned `liftReflToEq
     let t ← goal.getType
+    let act := liftReflToEqHEqCore goal t (allowHEq := allowHEq) (failIfUnchanged := failIfUnchanged)
     if failIfUnchanged then
-      liftReflToEqHEqCore goal t allowHEq
+      act
     else
-      return (← observing? (liftReflToEqHEqCore goal t allowHEq)).getD goal
+      return (← observing? act).getD goal
 
 end Lean.Meta.Rfl

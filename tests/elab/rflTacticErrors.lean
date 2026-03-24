@@ -152,7 +152,7 @@ error: Tactic `rfl` failed: No `[refl]` lemma registered for relation
 
 Hint: Add the `[refl]` attribute to reflexivity lemmas for `Q'` to use this tactic
 
-⊢ Q' true' true'
+⊢ Q' true' true
 -/
 #guard_msgs in
 example : Q' true' true  := by apply_rfl -- Error
@@ -162,7 +162,7 @@ error: Tactic `rfl` failed: No `[refl]` lemma registered for relation
 
 Hint: Add the `[refl]` attribute to reflexivity lemmas for `R` to use this tactic
 
-⊢ R true' true'
+⊢ R true' true
 -/
 #guard_msgs in
 example : R true' true   := by apply_rfl -- Error
@@ -178,7 +178,7 @@ error: Tactic `rfl` failed: No `[refl]` lemma registered for relation
 
 Hint: Add the `[refl]` attribute to reflexivity lemmas for `Q'` to use this tactic
 
-⊢ Q' true' true'
+⊢ Q' true' true
 -/
 #guard_msgs in
 example : Q' true' true  := by with_reducible apply_rfl -- Error
@@ -188,7 +188,7 @@ error: Tactic `rfl` failed: No `[refl]` lemma registered for relation
 
 Hint: Add the `[refl]` attribute to reflexivity lemmas for `R` to use this tactic
 
-⊢ R true' true'
+⊢ R true' true
 -/
 #guard_msgs in
 example : R true' true   := by with_reducible apply_rfl -- Error
@@ -209,7 +209,7 @@ error: Tactic `rfl` failed: No `[refl]` lemma registered for relation
 
 Hint: Add the `[refl]` attribute to reflexivity lemmas for `Q'` to use this tactic
 
-⊢ Q' true'' true''
+⊢ Q' true'' true
 -/
 #guard_msgs in
 example : Q' true'' true  := by apply_rfl -- Error
@@ -219,7 +219,7 @@ error: Tactic `rfl` failed: No `[refl]` lemma registered for relation
 
 Hint: Add the `[refl]` attribute to reflexivity lemmas for `R` to use this tactic
 
-⊢ R true'' true''
+⊢ R true'' true
 -/
 #guard_msgs in
 example : R true'' true   := by apply_rfl -- Error
@@ -237,13 +237,22 @@ example : true'' = true   := by with_reducible apply_rfl -- Error
 
 
 /--
-error: Tactic `apply` failed: could not unify the conclusion of 'HEq.refl'
-  @HEq ?α ?a ?α ?a
-with the goal
-  @HEq Bool true'' Bool true
+error: Tactic `rfl` failed: The left-hand side's type
+  Bool
+is not definitionally equal to the right-hand side's type
+  id Bool
 
-Note: The full type of 'HEq.refl' is
-  ∀ {α : Sort _} (a : α), a ≍ a
+⊢ true ≍
+    have this := true;
+    this
+-/
+#guard_msgs in
+example : true ≍ (show id Bool from true) := by with_reducible apply_rfl -- Error
+/--
+error: Tactic `rfl` failed: The left-hand side
+  true''
+is not definitionally equal to the right-hand side
+  true
 
 ⊢ true'' ≍ true
 -/
@@ -280,20 +289,20 @@ is not definitionally equal to the right-hand side
 #guard_msgs in
 example : Q true'' true   := by with_reducible apply_rfl -- Error
 /--
-error: Tactic `rfl` failed: The left-hand side
-  true''
-is not definitionally equal to the right-hand side
-  true
+error: Tactic `rfl` failed: No `[refl]` lemma registered for relation
+  Q'
+
+Hint: Add the `[refl]` attribute to reflexivity lemmas for `Q'` to use this tactic
 
 ⊢ Q' true'' true
 -/
 #guard_msgs in
 example : Q' true'' true  := by with_reducible apply_rfl -- Error
 /--
-error: Tactic `rfl` failed: The left-hand side
-  true''
-is not definitionally equal to the right-hand side
-  true
+error: Tactic `rfl` failed: No `[refl]` lemma registered for relation
+  R
+
+Hint: Add the `[refl]` attribute to reflexivity lemmas for `R` to use this tactic
 
 ⊢ R true'' true
 -/
@@ -312,13 +321,10 @@ is not definitionally equal to the right-hand side
 #guard_msgs in
 example : false = true   := by apply_rfl -- Error
 /--
-error: Tactic `apply` failed: could not unify the conclusion of 'HEq.refl'
-  ?a ≍ ?a
-with the goal
-  false ≍ true
-
-Note: The full type of 'HEq.refl' is
-  ∀ {α : Sort _} (a : α), a ≍ a
+error: Tactic `rfl` failed: The left-hand side
+  false
+is not definitionally equal to the right-hand side
+  true
 
 ⊢ false ≍ true
 -/
@@ -355,20 +361,20 @@ is not definitionally equal to the right-hand side
 #guard_msgs in
 example : Q false true   := by apply_rfl -- Error
 /--
-error: Tactic `rfl` failed: The left-hand side
-  false
-is not definitionally equal to the right-hand side
-  true
+error: Tactic `rfl` failed: No `[refl]` lemma registered for relation
+  Q'
+
+Hint: Add the `[refl]` attribute to reflexivity lemmas for `Q'` to use this tactic
 
 ⊢ Q' false true
 -/
 #guard_msgs in
 example : Q' false true  := by apply_rfl -- Error
 /--
-error: Tactic `rfl` failed: The left-hand side
-  false
-is not definitionally equal to the right-hand side
-  true
+error: Tactic `rfl` failed: No `[refl]` lemma registered for relation
+  R
+
+Hint: Add the `[refl]` attribute to reflexivity lemmas for `R` to use this tactic
 
 ⊢ R false true
 -/
@@ -386,13 +392,10 @@ is not definitionally equal to the right-hand side
 #guard_msgs in
 example : false = true   := by with_reducible apply_rfl -- Error
 /--
-error: Tactic `apply` failed: could not unify the conclusion of 'HEq.refl'
-  ?a ≍ ?a
-with the goal
-  false ≍ true
-
-Note: The full type of 'HEq.refl' is
-  ∀ {α : Sort _} (a : α), a ≍ a
+error: Tactic `rfl` failed: The left-hand side
+  false
+is not definitionally equal to the right-hand side
+  true
 
 ⊢ false ≍ true
 -/
@@ -429,20 +432,20 @@ is not definitionally equal to the right-hand side
 #guard_msgs in
 example : Q false true   := by with_reducible apply_rfl -- Error
 /--
-error: Tactic `rfl` failed: The left-hand side
-  false
-is not definitionally equal to the right-hand side
-  true
+error: Tactic `rfl` failed: No `[refl]` lemma registered for relation
+  Q'
+
+Hint: Add the `[refl]` attribute to reflexivity lemmas for `Q'` to use this tactic
 
 ⊢ Q' false true
 -/
 #guard_msgs in
 example : Q' false true  := by with_reducible apply_rfl -- Error
 /--
-error: Tactic `rfl` failed: The left-hand side
-  false
-is not definitionally equal to the right-hand side
-  true
+error: Tactic `rfl` failed: No `[refl]` lemma registered for relation
+  R
+
+Hint: Add the `[refl]` attribute to reflexivity lemmas for `R` to use this tactic
 
 ⊢ R false true
 -/
@@ -452,26 +455,20 @@ example : R false true   := by with_reducible apply_rfl -- Error
 -- Inheterogeneous unequal
 
 /--
-error: Tactic `apply` failed: could not unify the conclusion of 'HEq.refl'
-  ?a ≍ ?a
-with the goal
-  true ≍ 1
-
-Note: The full type of 'HEq.refl' is
-  ∀ {α : Sort _} (a : α), a ≍ a
+error: Tactic `rfl` failed: The left-hand side's type
+  Bool
+is not definitionally equal to the right-hand side's type
+  Nat
 
 ⊢ true ≍ 1
 -/
 #guard_msgs in
 example : true ≍ 1 := by apply_rfl -- Error
 /--
-error: Tactic `apply` failed: could not unify the conclusion of 'HEq.refl'
-  ?a ≍ ?a
-with the goal
-  true ≍ 1
-
-Note: The full type of 'HEq.refl' is
-  ∀ {α : Sort _} (a : α), a ≍ a
+error: Tactic `rfl` failed: The left-hand side's type
+  Bool
+is not definitionally equal to the right-hand side's type
+  Nat
 
 ⊢ true ≍ 1
 -/

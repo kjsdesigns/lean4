@@ -43,16 +43,18 @@ Try to apply `heq_of_eq`. If successful, then return new goal, otherwise return 
 -/
 def _root_.Lean.MVarId.heqOfEq (mvarId : MVarId) : MetaM MVarId :=
   mvarId.withContext do
-    let some [mvarId] ← observing? do mvarId.apply (mkConst ``heq_of_eq [← mkFreshLevelMVar]) | return mvarId
-    return mvarId
+    let some [mvarId'] ← observing? do mvarId.apply (mkConst ``heq_of_eq [← mkFreshLevelMVar]) | return mvarId
+    mvarId'.setTag (← mvarId.getTag)
+    return mvarId'
 
 /--
 Try to apply `eq_of_heq`. If successful, then return new goal, otherwise return `mvarId`.
 -/
 def _root_.Lean.MVarId.eqOfHEq (mvarId : MVarId) : MetaM MVarId :=
   mvarId.withContext do
-    let some [mvarId] ← observing? do mvarId.apply (mkConst ``eq_of_heq [← mkFreshLevelMVar]) | return mvarId
-    return mvarId
+    let some [mvarId'] ← observing? do mvarId.apply (mkConst ``eq_of_heq [← mkFreshLevelMVar]) | return mvarId
+    mvarId'.setTag (← mvarId.getTag)
+    return mvarId'
 
 /--
 Close given goal using `HEq.refl`.
