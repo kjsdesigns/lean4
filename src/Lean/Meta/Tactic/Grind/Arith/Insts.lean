@@ -20,6 +20,10 @@ def getIsCharInst? (u : Level) (type : Expr) (semiringInst : Expr) : GoalM (Opti
   return some (charInst, n)
 
 def getPowIdentityInst? (u : Level) (type : Expr) : GoalM (Option (Expr × Expr × Nat)) := do withNewMCtxDepth do
+  -- We use a fresh metavar for `CommSemiring` (unlike `getIsCharInst?` which pins the semiring)
+  -- because `PowIdentity` instances may be declared against a canonical `CommSemiring` instance
+  -- that is not definitionally equal to `CommRing.toCommSemiring`. The synthesized `csInst` is
+  -- stored and used in proof terms to ensure type-correctness.
   let csInst ← mkFreshExprMVar (mkApp (mkConst ``Grind.CommSemiring [u]) type)
   let p ← mkFreshExprMVar (mkConst ``Nat)
   let powIdentityType := mkApp3 (mkConst ``Grind.PowIdentity [u]) type csInst p
