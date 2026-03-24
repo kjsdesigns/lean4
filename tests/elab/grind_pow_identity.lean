@@ -1,3 +1,4 @@
+module
 -- Test that grind can solve equations over Fin 2 using PowIdentity
 -- The PowIdentity instance for Fin 2 gives x^2 = x, which the ring solver
 -- uses to reduce high-degree polynomials.
