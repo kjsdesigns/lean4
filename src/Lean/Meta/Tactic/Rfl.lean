@@ -71,16 +71,16 @@ builtin_initialize registerBuiltinAttribute {
             registerRelation relName info kind
         let some info ← matchesRelation? targetTy | unreachable!
         -- Validate the conclusion of the lemma
-        unless ← withNewMCtxDepth <| isDefEq info.lhs info.rhs do
+        unless ← isDefEq info.lhs info.rhs do
           let (lhs, rhs) ← addPPExplicitToExposeDiff info.lhs info.rhs
           throwError "\
-            `[refl]` attribute only applies to lemmas concluding with `x ∼ x`,
+            `[refl]` attribute only applies to lemmas concluding with `x ∼ x`, \
             but the left-hand side{indentExpr lhs}\nis not definitionally equal to the right-hand side{indentExpr rhs}"
         -- Validate applicability of the lemma
-        let g ← mkFreshExprSyntheticOpaqueMVar declTy
+        let g ← mkFreshExprSyntheticOpaqueMVar targetTy
         let gs ← g.mvarId!.apply (← mkConstWithFreshMVarLevels decl) (term? := m!"'{.ofConstName decl}'")
         unless gs.isEmpty do
-          throwError "`[refl]` lemma cannot be applied, has unsolved goals\n{goalsToMessageData gs}"
+          throwError "`[refl]` lemma has unsolved goals when applied to its own conclusion\n{goalsToMessageData gs}"
       let (_, _, targetTy) ← forallMetaTelescope declTy
       let some info ← matchesRelation? (← whnfCore targetTy) | unreachable!
       let key ← DiscrTree.mkPath info.rel
