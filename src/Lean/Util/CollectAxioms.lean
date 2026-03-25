@@ -10,10 +10,6 @@ public import Lean.MonadEnv
 
 namespace Lean
 
-private builtin_initialize exportedAxiomsExt : MapDeclarationExtension (Array Name) ←
-  -- Use `sync` so we can add entries from the `addDecl` main env without async restrictions
-  mkMapDeclarationExtension (asyncMode := .sync)
-
 namespace CollectAxioms
 
 structure State where
@@ -22,18 +18,23 @@ structure State where
 
 abbrev M := ReaderT Environment $ StateM State
 
-private partial def collect (c : Name) : M Unit := do
-  let collectExpr (e : Expr) : M Unit := e.getUsedConstants.forM collect
+/--
+Core axiom collection logic, parameterized on a cache lookup function.
+The cache is checked first; on a miss, walks the constant's body/type from `env.checked.get`.
+-/
+private partial def collectCore (lookupCache : Environment → Name → Option (Array Name))
+    (c : Name) : M Unit := do
+  let collectExpr (e : Expr) : M Unit := e.getUsedConstants.forM (collectCore lookupCache)
   let s ← get
   unless s.visited.contains c do
     modify fun s => { s with visited := s.visited.insert c }
     let env ← read
-    if let some axioms := exportedAxiomsExt.find? env c then
+    if let some axioms := lookupCache env c then
       for ax in axioms do
         if ax == c then
           modify fun s => { s with axioms := s.axioms.push c }
         else
-          collect ax
+          collectCore lookupCache ax
       return
     -- We should take the constant from the kernel env, which may differ from the one in the elab
     -- env in case of (async) errors.
@@ -47,66 +48,50 @@ private partial def collect (c : Name) : M Unit := do
     | some (ConstantInfo.quotInfo _)   => pure ()
     | some (ConstantInfo.ctorInfo v)   => collectExpr v.type
     | some (ConstantInfo.recInfo v)    => collectExpr v.type
-    | some (ConstantInfo.inductInfo v) => collectExpr v.type *> v.ctors.forM collect
+    | some (ConstantInfo.inductInfo v) => collectExpr v.type *> v.ctors.forM (collectCore lookupCache)
     | none                             => pure ()
 
 /--
-Like `collect` but does NOT access `env.checked` (which may block on async constants).
-For current-module constants, uses `exportedAxiomsExt`.
-For imported constants, uses `Kernel.Environment.find?` on the base env
-(which is eagerly available and does not block).
+Collect axioms without consulting any cache. Used at export time when all declaration bodies are
+still available in `env.checked.get`. Imported constants whose bodies were stripped will appear as
+axioms; their transitive dependencies are resolved by downstream consumers via the extension.
 -/
-private partial def collectNonBlocking (c : Name) : M Unit := do
-  let collectExpr (e : Expr) : M Unit := e.getUsedConstants.forM collectNonBlocking
-  let s ← get
-  unless s.visited.contains c do
-    modify fun s => { s with visited := s.visited.insert c }
-    let env ← read
-    -- For current-module constants, use the pre-recorded axioms
-    if let some axioms := exportedAxiomsExt.find? (asyncMode := .local) env c then
-      for ax in axioms do
-        if ax == c then
-          modify fun s => { s with axioms := s.axioms.push c }
-        else
-          collectNonBlocking ax
-      return
-    -- For imported constants, use the base kernel env (non-blocking).
-    -- `Kernel.Environment.find?` on the base env does not block because
-    -- the base env is eagerly available. Note: `Environment.find?` would
-    -- block due to async constant lookups, so we bypass it.
-    -- For current-module async constants not yet in the extension, they are
-    -- not our dependencies (since we register before their async tasks).
-    match (env.importEnv?.getD env).find? c with
-    | some (ConstantInfo.axiomInfo v)  =>
-        modify fun s => { s with axioms := (s.axioms.push c) }
-        collectExpr v.type
-    | some (ConstantInfo.defnInfo v)   => collectExpr v.type *> collectExpr v.value
-    | some (ConstantInfo.thmInfo v)    => collectExpr v.type *> collectExpr v.value
-    | some (ConstantInfo.opaqueInfo v) => collectExpr v.type *> collectExpr v.value
-    | some (ConstantInfo.quotInfo _)   => pure ()
-    | some (ConstantInfo.ctorInfo v)   => collectExpr v.type
-    | some (ConstantInfo.recInfo v)    => collectExpr v.type
-    | some (ConstantInfo.inductInfo v) => collectExpr v.type *> v.ctors.forM collectNonBlocking
-    | none                             => pure ()
+private partial def collectDirect (c : Name) : M Unit :=
+  collectCore (fun _ _ => none) c
+
+end CollectAxioms
 
 /--
-Collect axioms for a `ConstantInfo` that may not be in the environment yet.
-Uses the non-blocking collection strategy.
+Environment extension that records axiom dependencies for declarations whose bodies are stripped
+when exported under the module system. Entries are computed lazily at olean export time by
+`exportEntriesFn`, not during elaboration. During elaboration, `collectAxioms` walks bodies
+directly. Downstream modules look up pre-computed entries for imported stripped declarations.
 -/
-private def collectForInfoNonBlocking (info : ConstantInfo) : M Unit := do
-  let collectExpr (e : Expr) : M Unit := e.getUsedConstants.forM collectNonBlocking
-  modify fun s => { s with visited := s.visited.insert info.name }
-  match info with
-  | .axiomInfo v  =>
-      modify fun s => { s with axioms := s.axioms.push info.name }
-      collectExpr v.type
-  | .defnInfo v   => collectExpr v.type *> collectExpr v.value
-  | .thmInfo v    => collectExpr v.type *> collectExpr v.value
-  | .opaqueInfo v => collectExpr v.type *> collectExpr v.value
-  | .quotInfo _   => pure ()
-  | .ctorInfo v   => collectExpr v.type
-  | .recInfo v    => collectExpr v.type
-  | .inductInfo v => collectExpr v.type *> v.ctors.forM collectNonBlocking
+private builtin_initialize exportedAxiomsExt : MapDeclarationExtension (Array Name) ←
+  mkMapDeclarationExtension (asyncMode := .mainOnly) (exportEntriesFn := fun env _state level =>
+    -- At `.private` level, all bodies are preserved; no axiom recording needed.
+    if level == .private then #[]
+    else
+      -- At export time, all async tasks are complete, so `env.checked.get` is safe.
+      -- Find current-module constants whose bodies are stripped in the exported view
+      -- (they appear as axioms in the exported view but have bodies in the private view).
+      let privateEnv := env.setExporting false
+      let map : NameMap (Array Name) := env.checked.get.constants.foldStage2
+        (fun map name _ =>
+          match env.find? name, privateEnv.find? name with
+          | some exported, some private_ =>
+            if exported.isAxiom && !private_.isAxiom then
+              let (_, s) := ((CollectAxioms.collectDirect name).run privateEnv).run {}
+              map.insert name s.axioms
+            else map
+          | _, _ => map) {}
+      map.toArray)
+
+namespace CollectAxioms
+
+/-- Collect axioms, consulting `exportedAxiomsExt` for imported stripped declarations. -/
+private partial def collect (c : Name) : M Unit :=
+  collectCore (fun env c => exportedAxiomsExt.find? env c) c
 
 end CollectAxioms
 
@@ -114,15 +99,5 @@ public def collectAxioms [Monad m] [MonadEnv m] (constName : Name) : m (Array Na
   let env ← getEnv
   let (_, s) := ((CollectAxioms.collect constName).run env).run {}
   pure s.axioms
-
-/--
-Registers axioms used by a `ConstantInfo` in an environment extension so they can be retrieved
-even after the declaration's body becomes inaccessible (e.g., when exported as an axiom under the
-module system). Does not access `env.checked`, safe for async main environments.
--/
-public def registerAxiomsForInfo [Monad m] [MonadEnv m] (info : ConstantInfo) : m Unit := do
-  let env ← getEnv
-  let (_, s) := ((CollectAxioms.collectForInfoNonBlocking info).run env).run {}
-  modifyEnv (exportedAxiomsExt.insert · info.name s.axioms)
 
 end Lean

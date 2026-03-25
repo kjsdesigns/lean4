@@ -146,11 +146,6 @@ def addDecl (decl : Declaration) (forceExpose := false) : CoreM Unit :=
   async.commitConst async.asyncEnv (some info) (exportedInfo? <|> info)
   setEnv async.mainEnv
 
-  -- Under the module system, record axioms on the main env now, before the declaration's body
-  -- may become inaccessible (bodies are stripped when exported). We collect axiom dependencies
-  -- from the declaration body directly, looking up transitive axiom dependencies in the env.
-  if (← getEnv).header.isModule then
-    registerAxiomsForInfo info
   let doAddAndCommit := do
     setEnv async.asyncEnv
     try
