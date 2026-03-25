@@ -364,7 +364,7 @@ def elabInvariants (stx : Syntax) (invariants : Array MVarId) (suggestInvariant 
     for h : n in 0...alts.size do
       let alt := alts[n]
       match alt with
-      | `(goalDotAlt| · $rhs) =>
+      | `(invariantDotAlt| · $rhs) =>
         if dotOrCase matches .false then
           logErrorAt alt m!"Alternation between labelled and bulleted invariants is not supported."
           break
@@ -374,7 +374,7 @@ def elabInvariants (stx : Syntax) (invariants : Array MVarId) (suggestInvariant 
           continue
         withRef rhs do
         discard <| evalTacticAt (← `(tactic| exact $rhs)) mv
-      | `(goalCaseAlt| | $tag $args* => $rhs) =>
+      | `(invariantCaseAlt| | $tag $args* => $rhs) =>
         if dotOrCase matches .true then
           logErrorAt alt m!"Alternation between labelled and bulleted invariants is not supported."
           break
@@ -391,7 +391,7 @@ def elabInvariants (stx : Syntax) (invariants : Array MVarId) (suggestInvariant 
           continue
         withRef rhs do
         discard <| evalTacticAt (← `(tactic| rename_i $args*; exact $rhs)) mv
-      | _ => logErrorAt alt m!"Expected `goalDotAlt`, got {alt}"
+      | _ => logErrorAt alt m!"Expected `invariantDotAlt`, got {alt}"
 
     if let `(invariantsKW| invariants) := invariantsKW then
       if alts.size < invariants.size then
@@ -405,7 +405,7 @@ def elabInvariants (stx : Syntax) (invariants : Array MVarId) (suggestInvariant 
         if ← mv.isAssigned then
           continue
         let invariant ← suggestInvariant mv
-        suggestions := suggestions.push (← `(goalDotAlt| · $invariant))
+        suggestions := suggestions.push (← `(invariantDotAlt| · $invariant))
       let alts' := alts ++ suggestions
       let stx' ← `(invariantAlts|invariants $alts'*)
       if suggestions.size > 0 then
@@ -468,10 +468,7 @@ def elabMVCGen : Tactic := fun stx => withMainContext do
   let invariants ←
     if ctx.config.leave then runOnVCs (← `(tactic| try mleave)) "Try again with -leave." invariants else pure invariants
   trace[Elab.Tactic.Do.vcgen] "before elabInvariants {← (invariants ++ vcs).mapM fun m => m.getTag}"
-  -- TODO: This is a vestige from removing the witnesses section (stx[3]) introduced in #12882.
-  -- After stage0 update, nargs will be constantly 5 again, as it used to.
-  let nargs := stx.getNumArgs
-  elabInvariants stx[nargs-2] invariants (suggestInvariant vcs)
+  elabInvariants stx[3] invariants (suggestInvariant vcs)
   let invariants ← invariants.filterM (not <$> ·.isAssigned)
   trace[Elab.Tactic.Do.vcgen] "before trying trivial VCs {← (invariants ++ vcs).mapM fun m => m.getTag}"
   let vcs ← do
@@ -482,7 +479,7 @@ def elabMVCGen : Tactic := fun stx => withMainContext do
   -- so we don't do it. Presumably some weird delayed assignment thing is going on.
   -- let vcs ← if ctx.config.elimLets then liftMetaM <| vcs.mapM elimLets else pure vcs
   trace[Elab.Tactic.Do.vcgen] "before elabVCs {← (invariants ++ vcs).mapM fun m => m.getTag}"
-  let vcs ← elabVCs stx[nargs-1] vcs
+  let vcs ← elabVCs stx[4] vcs
   trace[Elab.Tactic.Do.vcgen] "before replacing main goal {← (invariants ++ vcs).mapM fun m => m.getTag}"
   replaceMainGoal (invariants ++ vcs).toList
   -- trace[Elab.Tactic.Do.vcgen] "replaced main goal, new: {← getGoals}"
@@ -491,7 +488,7 @@ def elabMVCGen : Tactic := fun stx => withMainContext do
 def elabMVCGenHint : Tactic := fun stx => withMainContext do
   let stx' : TSyntax ``mvcgen := TSyntax.mk <| stx
     |>.setKind ``Lean.Parser.Tactic.mvcgen
-    |>.modifyArgs (·.set! 0 (mkAtom "mvcgen") |>.push mkNullNode |>.push (mkNullNode #[← `(invariantAlts| invariants?)]) |>.push mkNullNode)
+    |>.modifyArgs (·.set! 0 (mkAtom "mvcgen") |>.push (mkNullNode #[← `(invariantAlts| invariants?)]) |>.push mkNullNode)
   -- logInfo m!"{stx}\n{toString stx}\n{repr stx}"
   -- logInfo m!"{stx'}\n{toString stx'}\n{repr stx'}"
   Lean.Meta.Tactic.TryThis.addSuggestion stx stx'
