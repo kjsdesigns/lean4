@@ -40,15 +40,14 @@ Has errors for symm lemmas that have arguments that can't be synthesized at all.
 -/
 
 axiom R' : Nat → Nat → Prop
-@[symm]
-axiom R'.symm (x : Bool) {n m} : R' n m → R' m n
-
 /--
-error: unsolved goals
+error: `[symm]` lemma has unsolved goals when applied to its own conclusion
 case x
+x : Bool
 n m : Nat
+a✝ : R' n m
 ⊢ Bool
 -/
 #guard_msgs in
-example {n m} : R' m n := by
-  symm
+@[symm]
+axiom R'.symm (x : Bool) {n m} : R' n m → R' m n

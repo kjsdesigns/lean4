@@ -97,9 +97,7 @@ theorem needsIntro : ∀ n : Nat, n = n := fun _ => rfl
 theorem simpleEq : 1 = 1 := rfl
 
 /--
-error: Tactic `rfl` failed: Expected the goal to be a binary relation
-
-Hint: Reflexivity tactics can only be used on goals of the form `x ~ x` or `R x x`
+error: Tactic `rfl` failed: Expecting a goal that is a binary relation
 
 ⊢ ∀ (n : Nat), n = n
 -/

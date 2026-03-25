@@ -1723,6 +1723,9 @@ class Membership (α : outParam (  Type u)) (γ : Type v) where
   /-- The membership relation `a ∈ s : Prop` where `a : α`, `s : γ`. -/
   mem : γ → α → Prop
 
+-- Membership is a relation, with the arguments in reverse order.
+attribute [relation 5 4] Membership.mem
+
 set_option bootstrap.genMatcherCode false in
 /--
 Addition of natural numbers, typically used via the `+` operator.

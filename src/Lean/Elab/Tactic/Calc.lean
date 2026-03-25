@@ -29,8 +29,8 @@ def evalCalc : Tactic
           -- Immediately the right type, no need for further processing.
           return val
 
-        let some (_, lhs, rhs) ← Term.getCalcRelation? valType | unreachable!
-        if let some (er, elhs, erhs) ← Term.getCalcRelation? target then
+        let (_, lhs, rhs) ← Term.getCalcRelation valType
+        if let some (er, elhs, erhs) ← observing? <| Term.getCalcRelation target then
           -- Feature: if the goal is `x ~ y`, try extending the `calc` with `_ ~ y` with a new "last step" goal.
           if ← isDefEq lhs elhs <&&> isDefEq (← inferType rhs) (← inferType elhs) then
             let lastStep := mkApp2 er rhs erhs

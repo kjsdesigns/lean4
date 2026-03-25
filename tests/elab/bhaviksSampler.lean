@@ -141,7 +141,7 @@ theorem randFin_total {m : Type → Type u} [Monad m] [WPMonad m ps] {n : ℕ} [
     unfold randFin
     mintro hs ∀s
     simp [wp, StateT.run]
-
+attribute [refl] Std.Do.SPred.entails.refl -- TODO(kmill) remove after stage0 update
 @[spec]
 theorem randBound_spec {m : Type → Type u} [Monad m] [WPMonad m ps] (h : lo ≤ hi)  :
   ⦃fun _ => P⦄

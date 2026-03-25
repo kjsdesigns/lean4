@@ -1,3 +1,5 @@
+section
+
 variable (t1 t2 t3 t4 : Nat)
 variable (pf12 : t1 = t2) (pf23 : t2 = t3) (pf34 : t3 = t4)
 include pf12 pf23 pf34
@@ -79,3 +81,24 @@ theorem foo₈ : t1 < t5 := by
     _ < t3 := pf23'
     _ = t4 := pf34
     _ < t5 := pf45'
+
+end
+
+/-!
+Can handle reversed argument order, like in `Membership.mem`.
+-/
+def Set (α : Type _) := α → Prop
+instance : Membership α (Set α) where
+  mem s x := s x
+instance : HasSubset (Set α) where
+  Subset s t := ∀ x ∈ s, x ∈ t
+theorem Set.mem_of_mem_subset {α} {x : α} {s t : Set α} (h1 : x ∈ s) (h2 : s ⊆ t) : x ∈ t := by
+  exact h2 x h1
+instance {α} : Trans ((· ∈ ·) : α → Set α → Prop) ((· ⊆ ·) : Set α → Set α → Prop) ((· ∈ ·) : α → Set α → Prop) where
+  trans := Set.mem_of_mem_subset
+theorem Set.subset_trans {α} {s t u : Set α} (h1 : s ⊆ t) (h2 : t ⊆ u) : s ⊆ u := by
+  intro x hx
+  calc
+    x ∈ s := hx
+    _ ⊆ t := h1
+    _ ⊆ u := h2

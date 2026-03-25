@@ -1,3 +1,5 @@
+attribute [refl] Nat.le_refl -- TODO(kmill) remove after stage0 update
+
 example (a b : Nat) : 1 ≤ 2 :=
   have : 1 ≤ a + b := by rfl
   have : a + b ≤ b := by rfl

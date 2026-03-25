@@ -479,52 +479,11 @@ example : true ≍ 1 := by with_reducible apply_rfl -- Error
 -- Error message should show left-over goal
 
 inductive S : Bool → Bool → Prop where | refl : a = true → S a a
-attribute [refl] S.refl
 /--
-error: Tactic `rfl` failed: The left-hand side
-  true
-is not definitionally equal to the right-hand side
-  false
-
-⊢ S true false
--/
-#guard_msgs in
-example : S true false  := by apply_rfl -- Error
-/--
-error: Tactic `rfl` failed: The left-hand side
-  true
-is not definitionally equal to the right-hand side
-  false
-
-⊢ S true false
--/
-#guard_msgs in
-example : S true false  := by with_reducible apply_rfl -- Error
-/--
-error: unsolved goals
+error: `[refl]` lemma has unsolved goals when applied to its own conclusion
 case a
-⊢ true = true
+a : Bool
+a✝ : a = true
+⊢ a = true
 -/
-#guard_msgs in
-example : S true true   := by apply_rfl -- Error (left-over goal)
-/--
-error: unsolved goals
-case a
-⊢ true = true
--/
-#guard_msgs in
-example : S true true   := by with_reducible apply_rfl -- Error (left-over goal)
-/--
-error: unsolved goals
-case a
-⊢ false = true
--/
-#guard_msgs in
-example : S false false := by apply_rfl -- Error (left-over goal)
-/--
-error: unsolved goals
-case a
-⊢ false = true
--/
-#guard_msgs in
-example : S false false := by with_reducible apply_rfl -- Error (left-over goal)
+#guard_msgs in attribute [refl] S.refl

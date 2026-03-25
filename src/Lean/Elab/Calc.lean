@@ -7,6 +7,7 @@ module
 
 prelude
 public import Lean.Elab.App
+public import Lean.Meta.Tactic.Relations
 
 public section
 
@@ -14,15 +15,55 @@ namespace Lean.Elab.Term
 open Meta
 
 /--
-Decompose `e` into `(r, a, b)`.
+Decomposes the type `e` into `(r, lhs, rhs)` using three methods:
+- Using the `@[relation]` system,
+- Taking the last two explicit arguments as the operands,
+- Or it might be an arrow.
 
-Remark: it assumes the last two arguments are explicit.
+Throws an error if it's not a relation or if the relation won't be useable by `Trans`.
+
+Note: we are careful not to unfold definitions while determining the relation.
+We want to avoid LHS/RHS swapping meanings. For example, GT.gt is an abbreviation for LT.lt
+with reversed argument order! We also avoid unfolding local let definitions for similar reasons.
 -/
-def getCalcRelation? (e : Expr) : MetaM (Option (Expr × Expr × Expr)) := do
-  if e.getAppNumArgs < 2 then
-    return none
+def getCalcRelation (e : Expr) (extraMsg : MessageData := m!"") :
+    MetaM (Expr × Expr × Expr) := do
+  let e ← withConfig ({ · with zeta := false }) <| whnfCore e
+  if let some info ← matchesRelation? e then
+    processMatch info.numArgs info.lhsIdx info.rhsIdx
+  else if e.isArrow then
+    let lhs := e.bindingDomain!
+    let rhs := e.bindingBody!
+    withLocalDeclD `lhs (← inferType lhs) fun lhsVar => do
+    withLocalDeclD `rhs (← inferType rhs) fun rhsVar => do
+      let rel ← mkLambdaFVars #[lhsVar, rhsVar] <| ← mkArrow lhsVar rhsVar
+      return (rel, lhs, rhs)
   else
-    return some (e.appFn!.appFn!, e.appFn!.appArg!, e.appArg!)
+    let numArgs := e.getAppNumArgs
+    forallBoundedTelescope (← inferType e.getAppFn) numArgs fun xs _ => do
+      let bis ← xs.mapM fun x => x.fvarId!.getBinderInfo
+      let explicits := bis.zipIdx |>.filter (fun (bi, _) => bi.isExplicit) |>.map Prod.snd
+      if explicits.size < 2 then
+        throwNotRelation
+      else
+        processMatch numArgs explicits[explicits.size-2]! explicits[explicits.size-1]!
+where
+  throwNotRelation {α} : MetaM α :=
+    throwError "invalid 'calc' step, relation expected{extraMsg}{indentExpr e}"
+  processMatch (numArgs lhsIdx rhsIdx : Nat) : MetaM (Expr × Expr × Expr) := do
+    -- Currently we only support the cases where the lhs/rhs are the last two arguments,
+    -- since this is what `Trans` supports.
+    if lhsIdx == numArgs - 2 && rhsIdx == numArgs - 1 then
+      return (e.appFn!.appFn!, e.appFn!.appArg!, e.appArg!)
+    else if lhsIdx == numArgs - 1 && rhsIdx == numArgs - 2 then
+      let lhs := e.appArg!
+      let rhs := e.appFn!.appArg!
+      withLocalDeclD `lhs (← inferType lhs) fun lhsVar => do
+      withLocalDeclD `rhs (← inferType rhs) fun rhsVar => do
+        let rel ← mkLambdaFVars #[lhsVar, rhsVar] (mkApp2 e.appFn!.appFn! rhsVar lhsVar)
+        return (rel, lhs, rhs)
+    else
+      throwError "invalid 'calc' step, relation{extraMsg} has unsupported left-hand side and right-hand side argument positions {lhsIdx+1} and {rhsIdx+1}{indentExpr e}"
 
 private def getRelUniv (r : Expr) : MetaM Level := do
   let rType ← inferType r
@@ -31,8 +72,8 @@ private def getRelUniv (r : Expr) : MetaM Level := do
     return u
 
 def mkCalcTrans (result resultType step stepType : Expr) : MetaM (Expr × Expr) := do
-  let some (r, a, b) ← getCalcRelation? resultType | unreachable!
-  let some (s, _, c) ← getCalcRelation? (← instantiateMVars stepType) | unreachable!
+  let (r, a, b) ← getCalcRelation resultType
+  let (s, _, c) ← getCalcRelation (← instantiateMVars stepType)
   let u ← getRelUniv r
   let v ← getRelUniv s
   let (α, β, γ)       := (← inferType a, ← inferType b, ← inferType c)
@@ -44,8 +85,7 @@ def mkCalcTrans (result resultType step stepType : Expr) : MetaM (Expr × Expr) 
   | .some self =>
     let result := mkAppN (Lean.mkConst ``Trans.trans [u, v, w, u_1, u_2, u_3]) #[α, β, γ, r, s, t, self, a, b, c, result, step]
     let resultType := (← instantiateMVars (← inferType result)).headBeta
-    unless (← getCalcRelation? resultType).isSome do
-      throwError "invalid 'calc' step, step result is not a relation{indentExpr resultType}"
+    discard <| getCalcRelation resultType (extraMsg := m!" for step result")
     return (result, resultType)
   | _ => throwError "invalid 'calc' step, failed to synthesize `Trans` instance{indentExpr selfType}{useDiagnosticMsg}"
 
@@ -110,8 +150,7 @@ def elabCalcSteps (steps : Array CalcStepView) : TermElabM (Expr × Expr) := do
         annotateFirstHoleWithType step.term (← inferType prevRhs)
       else
         pure step.term
-    let some (_, lhs, rhs) ← getCalcRelation? type |
-      throwErrorAt step.term "invalid 'calc' step, relation expected{indentExpr type}"
+    let (_, lhs, rhs) ← withRef step.term <| getCalcRelation type
     if let some prevRhs := prevRhs? then
       unless (← isDefEqGuarded lhs prevRhs) do
         throwErrorAt step.term "\
@@ -130,8 +169,8 @@ def elabCalcSteps (steps : Array CalcStepView) : TermElabM (Expr × Expr) := do
 
 def throwCalcFailure (steps : Array CalcStepView) (expectedType result : Expr) : MetaM α := do
   let resultType := (← instantiateMVars (← inferType result)).headBeta
-  let some (r, lhs, rhs) ← getCalcRelation? resultType | unreachable!
-  if let some (er, elhs, erhs) ← getCalcRelation? expectedType then
+  let (r, lhs, rhs) ← getCalcRelation resultType
+  if let some (er, elhs, erhs) ← observing? <| getCalcRelation expectedType then
     if ← isDefEqGuarded r er then
       let mut failed := false
       unless ← isDefEqGuarded lhs elhs do

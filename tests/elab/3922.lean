@@ -39,7 +39,7 @@ attribute [symm] r.symm
 
 /--
 info: Try this:
-  [apply] exact r.trans (id (r.symm h₂)) h₁
+  [apply] exact r.trans (r.symm h₂) h₁
 -/
 #guard_msgs in
 example (a b c : Nat) (h₁ : r b a) (h₂ : r b c) : r c a := by
