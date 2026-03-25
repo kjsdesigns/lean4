@@ -102,3 +102,15 @@ theorem Set.subset_trans {α} {s t u : Set α} (h1 : s ⊆ t) (h2 : t ⊆ u) : s
     x ∈ s := hx
     _ ⊆ t := h1
     _ ⊆ u := h2
+
+/-!
+Can handle function composition.
+-/
+instance : Trans (fun α β => α → β) (fun β γ => β → γ) (fun α γ => α → γ) where
+  trans f g := Function.comp g f
+
+def trip_compose {α β γ δ} (f : α → β) (g : β → γ) (h : γ → δ) :=
+  calc
+    α → β := f
+    _ → γ := g
+    _ → δ := h
