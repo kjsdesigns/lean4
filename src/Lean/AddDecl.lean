@@ -146,6 +146,11 @@ def addDecl (decl : Declaration) (forceExpose := false) : CoreM Unit :=
   async.commitConst async.asyncEnv (some info) (exportedInfo? <|> info)
   setEnv async.mainEnv
 
+  -- Under the module system, record axioms on the main env now, before the declaration's body
+  -- may become inaccessible (bodies are stripped when exported). We collect axiom dependencies
+  -- from the declaration body directly, looking up transitive axiom dependencies in the env.
+  if (← getEnv).header.isModule then
+    registerAxiomsForInfo info
   let doAddAndCommit := do
     setEnv async.asyncEnv
     try
@@ -175,12 +180,6 @@ where
           let env ← (← getEnv).addDeclAux (← getOptions) decl (← read).cancelTk?
             |> ofExceptKernelException
           setEnv env
-          if env.header.isModule then
-            -- Under the module system, must record axioms in environment extension now when we
-            -- still have access to the declaration's body. We could skip this for non-opaque decls
-            -- but for them, registering simply acts as a cache.
-            for n in decl.getTopLevelNames do
-              registerAxiomsForDecl n
         catch ex =>
           -- avoid follow-up errors by (trying to) add broken decl as axiom
           addAsAxiom
