@@ -20,6 +20,9 @@ structure State where
 
 abbrev M := ReaderT Environment $ StateM State
 
+def runM (env : Environment) (x : M α) : α :=
+  x.run env |>.run' {}
+
 private def insertArray (s : NameSet) (axs : Array Name) : NameSet :=
   axs.foldl (init := s) fun acc ax => acc.insert ax
 
@@ -132,9 +135,9 @@ private builtin_initialize exportedAxiomsExt :
               else names
             | _, _ => names) #[]
         -- Compute axioms for each stripped constant within a shared state (for caching).
-        let entries := (strippedNames.mapM fun name => do
+        let entries := CollectAxioms.runM privateEnv do
+          strippedNames.mapM fun name =>
             return (name, ← CollectAxioms.collectAndGet s.find? name)
-          ).run privateEnv |>.run' {}
         -- Sort by name for binary search at import time.
         entries.qsort fun a b => Name.quickLt a.1 b.1
     asyncMode     := .mainOnly
@@ -145,6 +148,7 @@ public def collectAxioms [Monad m] [MonadEnv m] (constName : Name) : m (Array Na
   let env ← getEnv
   let privateEnv := env.setExporting false
   let s := exportedAxiomsExt.getState (asyncMode := .mainOnly) env
-  return (CollectAxioms.collectAndGet s.find? constName).run privateEnv |>.run' {}
+  return CollectAxioms.runM privateEnv do
+    CollectAxioms.collectAndGet s.find? constName
 
 end Lean
