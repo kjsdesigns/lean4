@@ -276,6 +276,8 @@ jobs:
       - name: Check rebootstrap
         run: |
           set -e
+          git config user.email "stage0@lean-fro.org"
+          git config user.name "update-stage0"
           make -C build update-stage0-commit
           time make -C build -j$NPROC
           time ctest --preset ${{ matrix.CMAKE_PRESET || 'release' }} --test-dir build/stage1 -j$NPROC
