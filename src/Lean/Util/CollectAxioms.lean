@@ -20,6 +20,9 @@ structure State where
 
 abbrev M := ReaderT Environment $ StateM State
 
+private def insertArray (s : NameSet) (axs : Array Name) : NameSet :=
+  axs.foldl (init := s) fun acc ax => acc.insert ax
+
 /--
 Collect axioms reachable from constant `c`, using `extFind?` to look up pre-computed axioms
 for imported stripped declarations. Results are cached in `State.seen`.
@@ -34,12 +37,12 @@ private partial def collect
   let env ← read
   -- Check extension for pre-computed axioms (imported stripped declarations)
   if let some axs := extFind? env c then
-    modify fun s => { s with axioms := axs.foldl (init := s.axioms) fun acc ax => acc.insert ax }
+    modify fun s => { s with axioms := insertArray s.axioms axs }
     return
   -- Check local cache
   let s ← get
   if let some axs := s.seen.find? c then
-    modify fun s => { s with axioms := axs.foldl (init := s.axioms) fun acc ax => acc.insert ax }
+    modify fun s => { s with axioms := insertArray s.axioms axs }
     return
   -- Recurse: temporarily clear axioms to isolate this constant's contribution.
   -- Insert sentinel to prevent infinite recursion (e.g., inductives ↔ constructors).
@@ -64,7 +67,7 @@ private partial def collect
   let result := collected.toArray.qsort Name.lt
   modify fun s => { s with
     seen   := s.seen.insert c result
-    axioms := result.foldl (init := savedAxioms) fun acc ax => acc.insert ax
+    axioms := insertArray savedAxioms result
   }
 
 end CollectAxioms
@@ -73,6 +76,12 @@ end CollectAxioms
 Extension state holding imported module entries for efficient lookup of
 pre-computed axiom data for stripped declarations. Entries are stored per-module
 (not merged) and looked up via `getModuleIdxFor?` + binary search.
+
+We use `registerPersistentEnvExtension` with manual lookup instead of `MapDeclarationExtension`
+because `exportEntriesFnEx` needs to call `collect`, which needs the extension's `find?`, but
+`exportEntriesFnEx` is defined inside the `builtin_initialize` that creates the extension and
+thus cannot reference it. This state replicates `MapDeclarationExtension.find?`'s per-module
+binary search without requiring the extension object.
 -/
 private structure ExportedAxiomsState where
   importedModuleEntries : Array (Array (Name × Array Name)) := #[]
