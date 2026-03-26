@@ -73,12 +73,6 @@ Remark: `isInst` is `true` if element is an instance.
 private def canonElemCore (parent : Expr) (f : Expr) (i : Nat) (e : Expr) (useIsDefEqBounded : Bool) (isInst := false) : GoalM Expr := do
   let s ← get'
   let key := { f, i, arg := e : CanonArgKey }
-  /-
-  **Note**: We used to use `s.canon.find? e` instead of `s.canonArg.find? key`. This was incorrect.
-  First, for types and implicit arguments, we recursively visit `e` before invoking this function.
-  Thus, `s.canon.find? e` always returns some value `c`, causing us to miss possible canonicalization opportunities.
-  Moreover, `e` may be the argument of two different `f` functions.
-  -/
   if let some c := s.canonArg.find? key then
     return c
   let c ← go
@@ -92,13 +86,11 @@ where
       -- However, we don't revert previously canonicalized elements in the `grind` tactic.
       -- Moreover, we store the canonicalizer state in the `Goal` because we case-split
       -- and different locals are added in different branches.
-      modify' fun s => { s with canon := s.canon.insert e c }
       trace_goal[grind.debug.canon] "found {e} ===> {c}"
       return true
     if useIsDefEqBounded then
       -- If `e` and `c` are not types, we use `isDefEqBounded`
       if (← isDefEqBounded e c parent) then
-        modify' fun s => { s with canon := s.canon.insert e c }
         trace_goal[grind.debug.canon] "found using `isDefEqBounded`: {e} ===> {c}"
         return true
     return false
@@ -130,7 +122,7 @@ where
         if (← checkDefEq e c) then
           return c
     trace_goal[grind.debug.canon] "({f}, {i}) ↦ {e}"
-    modify' fun s => { s with canon := s.canon.insert e e, argMap := s.argMap.insert key ((e, eType)::cs) }
+    modify' fun s => { s with argMap := s.argMap.insert key ((e, eType)::cs) }
     return e
 
 private abbrev canonType (parent f : Expr) (i : Nat) (e : Expr) :=
