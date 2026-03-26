@@ -302,6 +302,20 @@ private meta def expandReportIssueMacro (s : Syntax) : MacroM (TSyntax `doElem) 
 macro "reportIssue!" s:(interpolatedStr(term) <|> term) : doElem => do
   expandReportIssueMacro s.raw
 
+/-- Reports an issue if both `verbose` and `sym.debug` are enabled. Does nothing otherwise. -/
+@[inline] def reportDbgIssue (msg : MessageData) : SymM Unit := do
+  if (← getConfig).verbose then
+    if sym.debug.get (← getOptions) then
+      reportIssue msg
+
+meta def expandReportDbgIssueMacro (s : Syntax) : MacroM (TSyntax `doElem) := do
+  let msg ← if s.getKind == interpolatedStrKind then `(m! $(⟨s⟩)) else `(($(⟨s⟩) : MessageData))
+  `(doElem| Sym.reportDbgIssue $msg)
+
+/-- Similar to `reportIssue!`, but only reports issue if `sym.debug` is set to `true`. -/
+macro "reportDbgIssue!" s:(interpolatedStr(term) <|> term) : doElem => do
+  expandReportDbgIssueMacro s.raw
+
 /-- Returns all accumulated issues without clearing them. -/
 def getIssues : SymM (List MessageData) :=
   return (← get).issues

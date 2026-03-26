@@ -396,19 +396,6 @@ def mkHCongrWithArity (f : Expr) (numArgs : Nat) : GrindM CongrTheorem := do
   modify fun s => { s with congrThms := s.congrThms.insert key result }
   return result
 
-/-- Reports an issue if both `verbose` and `grind.debug` are enabled. -/
-def reportDbgIssue (msg : MessageData) : GrindM Unit := do
-  if (← Sym.getConfig).verbose then
-    if grind.debug.get (← getOptions) then
-      Sym.reportIssue msg
-
-meta def expandReportDbgIssueMacro (s : Syntax) : MacroM (TSyntax `doElem) := do
-  let msg ← if s.getKind == interpolatedStrKind then `(m! $(⟨s⟩)) else `(($(⟨s⟩) : MessageData))
-  `(doElem| reportDbgIssue $msg)
-
-/-- Similar to `reportIssue!`, but only reports issue if `grind.debug` is set to `true` -/
-macro "reportDbgIssue!" s:(interpolatedStr(term) <|> term) : doElem => do
-  expandReportDbgIssueMacro s.raw
 
 /--
 Each E-node may have "solver terms" attached to them.

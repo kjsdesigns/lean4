@@ -1,6 +1,6 @@
 module
 open Std Lean.Grind
-set_option grind.debug true
+set_option sym.debug true
 
 example [IntModule α] [LE α] [LT α] [LawfulOrderLT α] [IsPreorder α] [OrderedAdd α] (a b : α)
     : (2:Int) • a + b < b + a + a → False := by
