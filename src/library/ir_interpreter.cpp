@@ -882,9 +882,6 @@ private:
         auto cached_entry = m_constant_cache.find(fn);
         if (cached_entry != m_constant_cache.end()) {
             auto cached = cached_entry->second;
-            if (!cached.m_is_scalar) {
-                inc(cached.m_val.m_obj);
-            }
             return cached.m_val;
         }
         auto o_entry = g_init_globals->find(fn);
@@ -931,9 +928,6 @@ private:
         lean_always_assert(fn_body_tag(decl_fun_body(e.m_decl)) != fn_body_kind::Unreachable);
         value r = eval_body(decl_fun_body(e.m_decl));
         pop_frame(r, decl_type(e.m_decl));
-        if (!type_is_scalar(t)) {
-            inc(r.m_obj);
-        }
         m_constant_cache.insert({ fn, constant_cache_entry { type_is_scalar(t), r } });
         return r;
     }
@@ -1064,6 +1058,12 @@ public:
         }
     }
 
+    bool is_const_decl(name const & fn) {
+        symbol_cache_entry e = lookup_symbol(fn);
+        unsigned arity = decl_params(e.m_decl).size();
+        return arity == 0;
+    }
+
     /** A variant of `call` designed for external uses.
      *  * takes (owned) `object *`s instead of `arg`s.
      *  * supports under- and over-application.
@@ -1161,7 +1161,13 @@ object * run_boxed(elab_environment const & env, options const & opts, name cons
         throw exception(sstream() << "cannot evaluate code because '" << *decl_with_sorry
             << "' uses 'sorry' and/or contains errors");
     }
-    return interpreter::with_interpreter<object *>(env, opts, fn, [&](interpreter & interp) { return interp.call_boxed(fn, n, args); });
+    return interpreter::with_interpreter<object *>(env, opts, fn, [&](interpreter & interp) {
+        object* result = interp.call_boxed(fn, n, args);
+        if (interp.is_const_decl(fn)) {
+            inc(result);
+        }
+        return result;
+    });
 }
 
 extern "C" obj_res lean_elab_environment_of_kernel_env(obj_arg);
