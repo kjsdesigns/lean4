@@ -85,19 +85,16 @@ end CollectAxioms
 
 /--
 Extension state holding imported module entries for efficient lookup of
-pre-computed axiom data, plus a sorted array of current-module entries computed
-by `beforeExportFn`.
+pre-computed axiom data.
 
 We use `registerPersistentEnvExtension` with manual lookup instead of `MapDeclarationExtension`
-because `beforeExportFn` needs to call `collect`, which needs the extension's `find?`, but
-`beforeExportFn` is defined inside the `builtin_initialize` that creates the extension and
+because `exportEntriesFnEx` needs to call `collect`, which needs the extension's `find?`, but
+`exportEntriesFnEx` is defined inside the `builtin_initialize` that creates the extension and
 thus cannot reference it. This state replicates `MapDeclarationExtension.find?`'s per-module
 binary search without requiring the extension object.
 -/
 private structure ExportedAxiomsState where
   importedModuleEntries : Array (Array (Name × Array Name)) := #[]
-  /-- Current-module entries, computed by `beforeExportFn` and returned by `exportEntriesFnEx`. -/
-  currentEntries : Array (Name × Array Name) := #[]
 
 instance : Inhabited ExportedAxiomsState := ⟨{}⟩
 
@@ -126,7 +123,7 @@ private builtin_initialize exportedAxiomsExt :
     mkInitial     := pure {}
     addImportedFn := fun importedEntries => pure { importedModuleEntries := importedEntries }
     addEntryFn    := fun s _ => s
-    beforeExportFn := fun env s =>
+    exportEntriesFnEx := fun env s =>
       let exportedEnv := env.setExporting true
       let privateEnv := env.setExporting false
       -- Collect current-module declarations visible in the exported view.
@@ -143,8 +140,8 @@ private builtin_initialize exportedAxiomsExt :
         allNames.mapM fun name =>
           return (name, ← CollectAxioms.collectAndGet s.find? name)
       -- Sort by name for binary search at import time.
-      { s with currentEntries := entries.qsort fun a b => Name.quickLt a.1 b.1 }
-    exportEntriesFn := fun s => s.currentEntries
+      let entries := entries.qsort fun a b => Name.quickLt a.1 b.1
+      .uniform entries
     asyncMode     := .mainOnly
   }
 
