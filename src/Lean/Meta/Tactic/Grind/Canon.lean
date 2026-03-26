@@ -247,12 +247,8 @@ where
         if f.isConstOf ``Grind.nestedProof && args.size == 2 then
           let prop := args[0]!
           let prop' ← visit prop
-          if let some r := (← get').proofCanon.find? prop' then
-            pure r
-          else
-            let e' := if isSameExpr prop prop' then e else mkAppN f (args.set! 0 prop')
-            modify' fun s => { s with proofCanon := s.proofCanon.insert prop' e' }
-            pure e'
+          let e' := if isSameExpr prop prop' then e else mkAppN f (args.set! 0 prop')
+          pure e'
         else if f.isConstOf ``Grind.nestedDecidable && args.size == 2 then
           let prop := args[0]!
           let prop' ← visit prop
