@@ -78,7 +78,8 @@ private def collectAndGet
     (extFind? : Environment → Name → Option (Array Name))
     (c : Name) : M (Array Name) := do
   collect extFind? c
-  return (← get).seen.find? c |>.getD #[]
+  let some axs := (← get).seen.find? c | panic! s!"collectAndGet: '{c}' not in seen after collect"
+  return axs
 
 end CollectAxioms
 
