@@ -125,11 +125,12 @@ private builtin_initialize exportedAxiomsExt :
               else names
             | _, _ => names) #[]
         -- Compute axioms for each stripped constant within a shared state (for caching).
-        let (_, finalState) :=
-          (strippedNames.forM (CollectAxioms.collect s.find?)).run privateEnv |>.run {}
-        -- Extract results, sorted by name for binary search at import time.
-        let entries := strippedNames.filterMap fun name =>
-          finalState.seen.find? name |>.map (name, ·)
+        -- Each name's sorted axiom list is read from the `seen` cache right after `collect`.
+        let entries := (strippedNames.mapM fun name => do
+            CollectAxioms.collect s.find? name
+            return (name, (← get).seen.find? name |>.getD #[])
+          ).run privateEnv |>.run' {}
+        -- Sort by name for binary search at import time.
         entries.qsort fun a b => Name.quickLt a.1 b.1
     asyncMode     := .mainOnly
   }
