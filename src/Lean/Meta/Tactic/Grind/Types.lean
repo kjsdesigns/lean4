@@ -214,11 +214,6 @@ structure State where
   and implement the macro `trace_goal`.
   -/
   lastTag    : Name := .anonymous
-  /--
-  Issues found during the proof search. These issues are reported to
-  users when `grind` fails.
-  -/
-  issues     : List MessageData := []
   /-- Performance counters -/
   counters   : Counters := {}
   /-- Split diagnostic information. This information is only collected when `set_option diagnostics true` -/
@@ -402,8 +397,7 @@ def mkHCongrWithArity (f : Expr) (numArgs : Nat) : GrindM CongrTheorem := do
   return result
 
 def reportIssue (msg : MessageData) : GrindM Unit := do
-  let msg ← addMessageContext msg
-  modify fun s => { s with issues := .trace { cls := `issue } msg #[] :: s.issues }
+  Sym.reportIssue msg
   /-
   We also add a trace message because we may want to know when
   an issue happened relative to other trace messages.

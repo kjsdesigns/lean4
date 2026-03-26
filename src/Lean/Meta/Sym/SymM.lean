@@ -177,6 +177,11 @@ structure State where
   defEqI : PHashMap (ExprPtr × ExprPtr) Bool := {}
   /-- State for registered `SymExtension`s, indexed by extension id. -/
   extensions : Array SymExtensionState := #[]
+  /--
+  Issues found during symbolic computation. Accumulated across operations
+  within a `sym =>` block and reported when a tactic fails.
+  -/
+  issues : List MessageData := []
   debug : Bool := false
 
 abbrev SymM := ReaderT Context <| StateRefT State MetaM
@@ -265,6 +270,24 @@ abbrev share (e : Expr) : SymM Expr :=
 /-- Returns `true` if `sym.debug` is set -/
 @[inline] def isDebugEnabled : SymM Bool :=
   return (← get).debug
+
+/-- Adds an issue message to the issue tracker. -/
+def reportIssue (msg : MessageData) : SymM Unit := do
+  let msg ← addMessageContext msg
+  modify fun s => { s with issues := .trace { cls := `issue } msg #[] :: s.issues }
+
+/-- Returns all accumulated issues without clearing them. -/
+def getIssues : SymM (List MessageData) :=
+  return (← get).issues
+
+/--
+Runs `x` with a fresh issue context. Issues reported during `x` are
+prepended to the issues that existed before the call.
+-/
+def withNewIssueContext (x : SymM α) : SymM α := do
+  let saved := (← get).issues
+  modify fun s => { s with issues := [] }
+  try x finally modify fun s => { s with issues := s.issues ++ saved }
 
 /-- Similar to `Meta.isDefEqI`, but the result is cache using pointer equality. -/
 def isDefEqI (s t : Expr) : SymM Bool := do
