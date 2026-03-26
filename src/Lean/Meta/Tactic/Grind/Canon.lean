@@ -47,30 +47,10 @@ Furthermore, `grind` will not be able to infer that  `a + a ≍ b + b` even if w
   modify fun s => { s with canon := f s.canon }
 
 /--
-Helper function for `canonElemCore`. It tries `isDefEq a b` with default transparency, but using
-at most `canonHeartbeats` heartbeats. It reports an issue if the threshold is reached.
-Remark: `parent` is use only to report an issue.
--/
-private def isDefEqBounded (a b : Expr) (parent : Expr) : GoalM Bool := do
-  withCurrHeartbeats do
-  let curr := (← getConfig).canonHeartbeats
-  tryCatchRuntimeEx
-    (withTheReader Core.Context (fun ctx => { ctx with maxHeartbeats := curr*1000 }) do
-      isDefEqD a b)
-    fun ex => do
-      if ex.isRuntime then
-        reportIssue! "failed to show that{indentExpr a}\nis definitionally equal to{indentExpr b}\nwhile canonicalizing{indentExpr parent}\nusing `{curr}*1000` heartbeats, `(canonHeartbeats := {curr})`"
-        return false
-      else
-        throw ex
-
-/--
 Helper function for canonicalizing `e` occurring as the `i`th argument of an `f`-application.
-If `useIsDefEqBounded` is `true`, we try `isDefEqBounded` before returning false.
-
 Remark: `isInst` is `true` if element is an instance.
 -/
-private def canonElemCore (parent : Expr) (f : Expr) (i : Nat) (e : Expr) (useIsDefEqBounded : Bool) (isInst := false) : GoalM Expr := do
+private def canonElemCore (f : Expr) (i : Nat) (e : Expr) (isInst := false) : GoalM Expr := do
   let s ← get'
   let key := { f, i, arg := e : CanonArgKey }
   if let some c := s.canonArg.find? key then
@@ -81,18 +61,8 @@ private def canonElemCore (parent : Expr) (f : Expr) (i : Nat) (e : Expr) (useIs
 where
   checkDefEq (e c : Expr) : GoalM Bool := do
     if (← isDefEq e c) then
-      -- We used to check `c.fvarsSubset e` because it is not
-      -- in general safe to replace `e` with `c` if `c` has more free variables than `e`.
-      -- However, we don't revert previously canonicalized elements in the `grind` tactic.
-      -- Moreover, we store the canonicalizer state in the `Goal` because we case-split
-      -- and different locals are added in different branches.
       trace_goal[grind.debug.canon] "found {e} ===> {c}"
       return true
-    if useIsDefEqBounded then
-      -- If `e` and `c` are not types, we use `isDefEqBounded`
-      if (← isDefEqBounded e c parent) then
-        trace_goal[grind.debug.canon] "found using `isDefEqBounded`: {e} ===> {c}"
-        return true
     return false
 
   go : GoalM Expr := do
@@ -125,14 +95,14 @@ where
     modify' fun s => { s with argMap := s.argMap.insert key ((e, eType)::cs) }
     return e
 
-private abbrev canonType (parent f : Expr) (i : Nat) (e : Expr) :=
-  withDefault <| canonElemCore parent f i e (useIsDefEqBounded := false)
+private abbrev canonType (f : Expr) (i : Nat) (e : Expr) :=
+  withDefault <| canonElemCore f i e
 
-private abbrev canonInst (parent f : Expr) (i : Nat) (e : Expr) :=
-  withReducibleAndInstances <| canonElemCore parent f i e (useIsDefEqBounded := true) (isInst := true)
+private abbrev canonInst (f : Expr) (i : Nat) (e : Expr) :=
+  withReducibleAndInstances <| canonElemCore f i e (isInst := true)
 
-private abbrev canonImplicit (parent f : Expr) (i : Nat) (e : Expr) :=
-  withReducible <| canonElemCore parent f i e (useIsDefEqBounded := true)
+private abbrev canonImplicit (f : Expr) (i : Nat) (e : Expr) :=
+  withReducible <| canonElemCore f i e
 
 /--
 Return type for the `shouldCanon` function.
@@ -273,8 +243,8 @@ where
                 The type may have nested propositions and terms that may need to be canonicalized too.
                 So, we must recurse over it. See issue #10232
                 -/
-                canonType e f i (← visit arg)
-              | .canonImplicit => canonImplicit e f i (← visit arg)
+                canonType f i (← visit arg)
+              | .canonImplicit => canonImplicit f i (← visit arg)
               | .visit => visit arg
               | .canonInst =>
                 if arg.isAppOfArity ``Grind.nestedDecidable 2 then
@@ -282,7 +252,7 @@ where
                   let prop' ← visit prop
                   if isSameExpr prop prop' then pure arg else pure (mkApp2 arg.appFn!.appFn! prop' arg.appArg!)
                 else
-                  canonInst e f i arg
+                  canonInst f i arg
             unless isSameExpr arg arg' do
               args := args.set i arg'
               modified := true
