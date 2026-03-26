@@ -175,7 +175,6 @@ where
           let env ← (← getEnv).addDeclAux (← getOptions) decl (← read).cancelTk?
             |> ofExceptKernelException
           setEnv env
-          computeAndStoreAxioms decl.getNames
         catch ex =>
           -- avoid follow-up errors by (trying to) add broken decl as axiom
           addAsAxiom

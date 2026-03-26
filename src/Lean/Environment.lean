@@ -1591,6 +1591,13 @@ structure PersistentEnvExtension (α : Type) (β : Type) (σ : Type) where
   addImportedFn   : Array (Array α) → ImportM σ
   addEntryFn      : σ → β → σ
   /--
+  Hook called once before `exportEntriesFn` during olean serialization.
+  Receives the environment (after all async threads have joined) and the current extension state,
+  and returns a potentially updated state. Use this for whole-module computations that should
+  happen once, rather than per-level in `exportEntriesFn`.
+  -/
+  beforeExportFn  : Environment → σ → σ
+  /--
   Function to transform state into data that should be imported into other modules. When using the
   module system without `import all`, `OLeanLevel.exported` is imported, else `OLeanLevel.private`.
   Additionally, when using the module system in the language server, the `OLeanLevel.server` data is
@@ -1612,6 +1619,7 @@ instance {α β σ} [Inhabited σ] : Inhabited (PersistentEnvExtension α β σ)
      name := default,
      addImportedFn := fun _ => default,
      addEntryFn := fun s _ => s,
+     beforeExportFn := fun _ s => s,
      exportEntriesFn := fun _ _ _ => #[],
      statsFn := fun _ => Format.nil
   }
@@ -1668,6 +1676,7 @@ structure PersistentEnvExtensionDescrCore (α β σ : Type) where
   mkInitial         : IO σ
   addImportedFn     : Array (Array α) → ImportM σ
   addEntryFn        : σ → β → σ
+  beforeExportFn    : Environment → σ → σ := fun _ s => s
   exportEntriesFnEx : Environment → σ → OLeanLevel → Array α
   statsFn           : σ → Format := fun _ => Format.nil
   asyncMode         : EnvExtension.AsyncMode := .mainOnly
@@ -1710,6 +1719,7 @@ unsafe def registerPersistentEnvExtensionUnsafe {α β σ : Type} [Inhabited σ]
     name            := descr.name,
     addImportedFn   := descr.addImportedFn,
     addEntryFn      := descr.addEntryFn,
+    beforeExportFn  := descr.beforeExportFn,
     exportEntriesFn := descr.exportEntriesFnEx,
     statsFn         := descr.statsFn
   }
@@ -1826,7 +1836,17 @@ private def mkIRData (env : Environment) : ModuleData :=
     extraConstNames := getIRExtraConstNames env .private (includeDecls := true)
   }
 
+/-- Run `beforeExportFn` hooks for all persistent extensions, returning an updated environment. -/
+private def runBeforeExportHooks (env : Environment) : IO Environment := do
+  let pExts ← persistentEnvExtensionsRef.get
+  return pExts.foldl (init := env) fun env pExt =>
+    let asyncMode := match pExt.toEnvExtension.asyncMode with
+      | .async _ => .sync
+      | m => m
+    pExt.modifyState (asyncMode := asyncMode) env (pExt.beforeExportFn env)
+
 def writeModule (env : Environment) (fname : System.FilePath) (writeIR := true) : IO Unit := do
+  let env ← runBeforeExportHooks env
   if env.header.isModule then
     let mkPart (level : OLeanLevel) :=
       return (level.adjustFileName fname, (← mkModuleData env level))
