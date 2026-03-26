@@ -13,44 +13,35 @@ namespace Lean
 namespace CollectAxioms
 
 structure State where
-  /-- Cache mapping constants to their (sorted) axiom dependencies. -/
-  seen   : NameMap (Array Name) := {}
+  /-- Set of constants already visited, to prevent infinite recursion (e.g., inductives ↔ constructors). -/
+  visited : NameSet := {}
   /-- Axioms accumulated for the current constant being processed. -/
-  axioms : NameSet := {}
+  axioms  : NameSet := {}
 
 abbrev M := ReaderT Environment $ StateM State
-
-def runM (env : Environment) (x : M α) : α :=
-  x.run env |>.run' {}
 
 private def insertArray (s : NameSet) (axs : Array Name) : NameSet :=
   axs.foldl (init := s) fun acc ax => acc.insert ax
 
 /--
-Collect axioms reachable from constant `c`, using `extFind?` to look up pre-computed axioms
-for imported declarations. Results are cached in `State.seen`.
+Collect axioms reachable from constant `c`, using `extFind?` to look up pre-computed axioms.
 
-When processing a constant not found in `extFind?` or the cache, the function temporarily
-clears the axiom accumulator, recurses into the constant's dependencies, caches the result
-in `seen`, and merges the collected axioms back.
+When processing a constant not found in `extFind?`, the function recurses into the constant's
+dependencies, accumulating axioms in `State.axioms`. `State.visited` prevents infinite recursion
+for mutually referential declarations (e.g., inductives ↔ constructors).
 -/
 private partial def collect
     (extFind? : Name → Option (Array Name))
     (c : Name) : M Unit := do
   let env ← read
-  -- Check extension for pre-computed axioms (imported declarations)
+  -- Check extension for pre-computed axioms
   if let some axs := extFind? c then
-    modify fun s => { s with axioms := insertArray s.axioms axs, seen := s.seen.insert c axs }
-    return
-  -- Check local cache
-  let s ← get
-  if let some axs := s.seen.find? c then
     modify fun s => { s with axioms := insertArray s.axioms axs }
     return
-  -- Recurse: temporarily clear axioms to isolate this constant's contribution.
-  -- Insert sentinel to prevent infinite recursion (e.g., inductives ↔ constructors).
-  let savedAxioms := s.axioms
-  modify fun s => { s with axioms := {}, seen := s.seen.insert c #[] }
+  -- Check if already visited (cycle prevention)
+  if (← get).visited.contains c then
+    return
+  modify fun s => { s with visited := s.visited.insert c }
   let collectExpr (e : Expr) : M Unit := e.getUsedConstants.forM (collect extFind?)
   -- Take constants from the kernel env, which may differ from the elab env for (async) errors.
   match env.checked.get.find? c with
@@ -65,21 +56,12 @@ private partial def collect
   | some (.recInfo v)    => collectExpr v.type
   | some (.inductInfo v) => collectExpr v.type *> v.ctors.forM (collect extFind?)
   | none                 => pure ()
-  -- Cache result (sorted for canonical order) and merge back into saved axioms
-  let collected := (← get).axioms
-  let result := collected.toArray.qsort Name.lt
-  modify fun s => { s with
-    seen   := s.seen.insert c result
-    axioms := insertArray savedAxioms result
-  }
 
-/-- Collect axioms for `c` and return its sorted axiom list from the cache. -/
-def collectAndGet
-    (extFind? : Name → Option (Array Name))
-    (c : Name) : M (Array Name) := do
-  collect extFind? c
-  let some axs := (← get).seen.find? c | panic! s!"collectAndGet: '{c}' not in seen after collect"
-  return axs
+/-- Collect axioms for `c` and return its sorted axiom array. -/
+def collectFor (extFind? : Name → Option (Array Name))
+    (env : Environment) (c : Name) : Array Name :=
+  let (_, s) := (collect extFind? c).run env |>.run {}
+  s.axioms.toArray.qsort Name.lt
 
 end CollectAxioms
 
@@ -93,13 +75,11 @@ builtin_initialize axiomDataExt : MapDeclarationExtension (Array Name) ←
 public def computeAndStoreAxioms [Monad m] [MonadEnv m] (declNames : List Name) : m Unit := do
   let env ← getEnv
   let privateEnv := env.setExporting false
-  let extFind? := fun c => axiomDataExt.find? env c
-  let results := CollectAxioms.runM privateEnv do
-    declNames.mapM fun name =>
-      return (name, ← CollectAxioms.collectAndGet extFind? name)
-  modifyEnv fun env =>
-    results.foldl (init := env) fun env (name, axs) =>
-      axiomDataExt.insert env name axs
+  for name in declNames do
+    let env' ← getEnv
+    let extFind? := fun c => axiomDataExt.find? env' c
+    let axs := CollectAxioms.collectFor extFind? privateEnv name
+    modifyEnv fun env => axiomDataExt.insert env name axs
 
 /-- Collect all axioms transitively used by a constant. -/
 public def collectAxioms [Monad m] [MonadEnv m] (constName : Name) : m (Array Name) := do
@@ -110,7 +90,6 @@ public def collectAxioms [Monad m] [MonadEnv m] (constName : Name) : m (Array Na
   -- Fallback: compute on the fly (bootstrap / failed declarations)
   let privateEnv := env.setExporting false
   let extFind? := fun c => axiomDataExt.find? env c
-  return CollectAxioms.runM privateEnv do
-    CollectAxioms.collectAndGet extFind? constName
+  return CollectAxioms.collectFor extFind? privateEnv constName
 
 end Lean
