@@ -37,7 +37,7 @@ private partial def collect
   let env ← read
   -- Check extension for pre-computed axioms (imported stripped declarations)
   if let some axs := extFind? env c then
-    modify fun s => { s with axioms := insertArray s.axioms axs }
+    modify fun s => { s with axioms := insertArray s.axioms axs, seen := s.seen.insert c axs }
     return
   -- Check local cache
   let s ← get
@@ -69,6 +69,13 @@ private partial def collect
     seen   := s.seen.insert c result
     axioms := insertArray savedAxioms result
   }
+
+/-- Collect axioms for `c` and return its sorted axiom list from the cache. -/
+private def collectAndGet
+    (extFind? : Environment → Name → Option (Array Name))
+    (c : Name) : M (Array Name) := do
+  collect extFind? c
+  return (← get).seen.find? c |>.getD #[]
 
 end CollectAxioms
 
@@ -125,10 +132,8 @@ private builtin_initialize exportedAxiomsExt :
               else names
             | _, _ => names) #[]
         -- Compute axioms for each stripped constant within a shared state (for caching).
-        -- Each name's sorted axiom list is read from the `seen` cache right after `collect`.
         let entries := (strippedNames.mapM fun name => do
-            CollectAxioms.collect s.find? name
-            return (name, (← get).seen.find? name |>.getD #[])
+            return (name, ← CollectAxioms.collectAndGet s.find? name)
           ).run privateEnv |>.run' {}
         -- Sort by name for binary search at import time.
         entries.qsort fun a b => Name.quickLt a.1 b.1
@@ -140,7 +145,6 @@ public def collectAxioms [Monad m] [MonadEnv m] (constName : Name) : m (Array Na
   let env ← getEnv
   let privateEnv := env.setExporting false
   let s := exportedAxiomsExt.getState (asyncMode := .mainOnly) env
-  let (_, st) := ((CollectAxioms.collect s.find? constName).run privateEnv).run {}
-  pure (st.axioms.toArray.qsort Name.lt)
+  return (CollectAxioms.collectAndGet s.find? constName).run privateEnv |>.run' {}
 
 end Lean
