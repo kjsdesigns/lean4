@@ -135,16 +135,10 @@ private builtin_initialize exportedAxiomsExt :
               if exported.isAxiom && !private_.isAxiom then names.push name
               else names
             | _, _ => names) #[]
-        -- DEBUG: print stripped names and their axioms
-        let strippedNames := strippedNames.qsort Name.lt
-        dbg_trace "exportedAxiomsExt: {strippedNames.size} stripped names"
         -- Compute axioms for each stripped constant within a shared state (for caching).
         let entries := CollectAxioms.runM privateEnv do
           strippedNames.mapM fun name =>
             return (name, ← CollectAxioms.collectAndGet s.find? name)
-        -- DEBUG: print entries
-        let entries := entries.map fun (n, axs) =>
-          dbg_trace "  {n}: {axs.toList}"; (n, axs)
         -- Sort by name for binary search at import time.
         entries.qsort fun a b => Name.quickLt a.1 b.1
     asyncMode     := .mainOnly
