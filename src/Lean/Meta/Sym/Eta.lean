@@ -42,12 +42,12 @@ public def isEtaReducible (e : Expr) : Bool :=
   !isSameExpr e (etaReduce e)
 
 /-- Applies `etaReduce` to all subexpressions. Returns `e` unchanged if no subexpression is eta-reducible. -/
-public def etaReduceAll (e : Expr) : MetaM Expr := do
+public def etaReduceAll (e : Expr) : CoreM Expr := do
   unless Option.isSome <| e.find? isEtaReducible do return e
-  let pre (e : Expr) : MetaM TransformStep := do
+  let pre (e : Expr) : CoreM TransformStep := do
     let e' := etaReduce e
     if isSameExpr e e' then return .continue
     else return .visit e'
-  Meta.transform e (pre := pre)
+  Core.transform e (pre := pre)
 
 end Lean.Meta.Sym
