@@ -276,10 +276,7 @@ jobs:
       - name: Check rebootstrap
         run: |
           set -e
-          # clean rebuild in case of Makefile changes/Lake does not detect uncommited stage 0
-          # changes yet
-          make -C build update-stage0
-          make -C build/stage1 clean-stdlib
+          make -C build update-stage0-commit
           time make -C build -j$NPROC
           time ctest --preset ${{ matrix.CMAKE_PRESET || 'release' }} --test-dir build/stage1 -j$NPROC
         if: matrix.check-rebootstrap
