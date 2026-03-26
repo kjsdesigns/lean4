@@ -396,30 +396,15 @@ def mkHCongrWithArity (f : Expr) (numArgs : Nat) : GrindM CongrTheorem := do
   modify fun s => { s with congrThms := s.congrThms.insert key result }
   return result
 
-def reportIssue (msg : MessageData) : GrindM Unit := do
-  Sym.reportIssue msg
-  /-
-  We also add a trace message because we may want to know when
-  an issue happened relative to other trace messages.
-  -/
-  trace[grind.issues] msg
+/-- Reports an issue if both `verbose` and `grind.debug` are enabled. -/
+def reportDbgIssue (msg : MessageData) : GrindM Unit := do
+  if (← Sym.getConfig).verbose then
+    if grind.debug.get (← getOptions) then
+      Sym.reportIssue msg
 
-private meta def expandReportIssueMacro (s : Syntax) : MacroM (TSyntax `doElem) := do
-  let msg ← if s.getKind == interpolatedStrKind then `(m! $(⟨s⟩)) else `(($(⟨s⟩) : MessageData))
-  `(doElem| do
-    if (← getConfig).verbose then
-      reportIssue $msg)
-
-macro "reportIssue!" s:(interpolatedStr(term) <|> term) : doElem => do
-  expandReportIssueMacro s.raw
-
-/-- Similar to `expandReportIssueMacro`, but only reports issue if `grind.debug` is set to `true` -/
 meta def expandReportDbgIssueMacro (s : Syntax) : MacroM (TSyntax `doElem) := do
   let msg ← if s.getKind == interpolatedStrKind then `(m! $(⟨s⟩)) else `(($(⟨s⟩) : MessageData))
-  `(doElem| do
-    if (← getConfig).verbose then
-      if grind.debug.get (← getOptions) then
-        reportIssue $msg)
+  `(doElem| reportDbgIssue $msg)
 
 /-- Similar to `reportIssue!`, but only reports issue if `grind.debug` is set to `true` -/
 macro "reportDbgIssue!" s:(interpolatedStr(term) <|> term) : doElem => do

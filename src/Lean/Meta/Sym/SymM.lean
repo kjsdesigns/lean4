@@ -15,6 +15,8 @@ register_builtin_option sym.debug : Bool := {
   descr    := "check invariants"
 }
 
+builtin_initialize registerTraceClass `sym.issues
+
 /-!
 ## Sym Extensions
 
@@ -134,9 +136,16 @@ structure SharedExprs where
   ordEqExpr  : Expr
   intExpr    : Expr
 
+/-- Configuration options for the symbolic computation framework. -/
+structure Config where
+  /-- When `true`, issues are collected during proof search and reported on failure. -/
+  verbose : Bool := true
+  deriving Inhabited
+
 /-- Readonly context for the symbolic computation framework. -/
 structure Context where
   sharedExprs : SharedExprs
+  config      : Config := {}
 
 /-- Mutable state for the symbolic computation framework. -/
 structure State where
@@ -271,10 +280,27 @@ abbrev share (e : Expr) : SymM Expr :=
 @[inline] def isDebugEnabled : SymM Bool :=
   return (← get).debug
 
+def getConfig : SymM Config :=
+  return (← readThe Context).config
+
 /-- Adds an issue message to the issue tracker. -/
 def reportIssue (msg : MessageData) : SymM Unit := do
   let msg ← addMessageContext msg
   modify fun s => { s with issues := .trace { cls := `issue } msg #[] :: s.issues }
+  trace[sym.issues] msg
+
+/-- Reports an issue if `verbose` mode is enabled. Does nothing if `verbose` is `false`. -/
+@[inline] def reportIssueIfVerbose (msg : MessageData) : SymM Unit := do
+  if (← getConfig).verbose then
+    reportIssue msg
+
+private meta def expandReportIssueMacro (s : Syntax) : MacroM (TSyntax `doElem) := do
+  let msg ← if s.getKind == interpolatedStrKind then `(m! $(⟨s⟩)) else `(($(⟨s⟩) : MessageData))
+  `(doElem| Sym.reportIssueIfVerbose $msg)
+
+/-- Reports an issue if `verbose` mode is enabled. -/
+macro "reportIssue!" s:(interpolatedStr(term) <|> term) : doElem => do
+  expandReportIssueMacro s.raw
 
 /-- Returns all accumulated issues without clearing them. -/
 def getIssues : SymM (List MessageData) :=
