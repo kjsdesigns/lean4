@@ -28,7 +28,7 @@ private def insertArray (s : NameSet) (axs : Array Name) : NameSet :=
 
 /--
 Collect axioms reachable from constant `c`, using `extFind?` to look up pre-computed axioms
-for imported stripped declarations. Results are cached in `State.seen`.
+for imported declarations. Results are cached in `State.seen`.
 
 When processing a constant not found in `extFind?` or the cache, the function temporarily
 clears the axiom accumulator, recurses into the constant's dependencies, caches the result
@@ -38,7 +38,7 @@ private partial def collect
     (extFind? : Environment → Name → Option (Array Name))
     (c : Name) : M Unit := do
   let env ← read
-  -- Check extension for pre-computed axioms (imported stripped declarations)
+  -- Check extension for pre-computed axioms (imported declarations)
   if let some axs := extFind? env c then
     modify fun s => { s with axioms := insertArray s.axioms axs, seen := s.seen.insert c axs }
     return
@@ -85,8 +85,8 @@ end CollectAxioms
 
 /--
 Extension state holding imported module entries for efficient lookup of
-pre-computed axiom data for stripped declarations. Entries are stored per-module
-(not merged) and looked up via `getModuleIdxFor?` + binary search.
+pre-computed axiom data. Entries are stored per-module (not merged) and looked up
+via `getModuleIdxFor?` + binary search.
 
 We use `registerPersistentEnvExtension` with manual lookup instead of `MapDeclarationExtension`
 because `exportEntriesFnEx` needs to call `collect`, which needs the extension's `find?`, but
@@ -99,7 +99,7 @@ private structure ExportedAxiomsState where
 
 instance : Inhabited ExportedAxiomsState := ⟨{}⟩
 
-/-- Look up pre-computed axioms for an imported stripped declaration. -/
+/-- Look up pre-computed axioms for an imported declaration. -/
 private def ExportedAxiomsState.find? (s : ExportedAxiomsState) (env : Environment)
     (c : Name) : Option (Array Name) :=
   match env.getModuleIdxFor? c with
@@ -112,10 +112,11 @@ private def ExportedAxiomsState.find? (s : ExportedAxiomsState) (env : Environme
   | none => none
 
 /--
-Environment extension that records axiom dependencies for declarations whose bodies are stripped
-when exported under the module system. Entries are computed at olean export time by
-`exportEntriesFnEx`, not during elaboration. During elaboration, `collectAxioms` walks bodies
-directly. Downstream modules look up pre-computed entries for imported stripped declarations.
+Environment extension that records axiom dependencies for all declarations in a module.
+Entries are computed at olean export time by `exportEntriesFnEx`, not during elaboration.
+During elaboration, `collectAxioms` walks bodies directly. Downstream modules look up
+pre-computed entries for imported declarations, so axiom collection never crosses module
+boundaries.
 -/
 private builtin_initialize exportedAxiomsExt :
     PersistentEnvExtension (Name × Array Name) (Name × Array Name) ExportedAxiomsState ←
@@ -127,17 +128,17 @@ private builtin_initialize exportedAxiomsExt :
       if level == .private then #[]
       else
         let privateEnv := env.setExporting false
-        -- Find current-module constants whose bodies are stripped in the exported view.
-        let strippedNames := env.checked.get.constants.foldStage2
+        -- Collect current-module declarations visible in the exported view.
+        -- By pre-computing axiom data for every exported declaration, downstream modules can
+        -- look up any imported declaration without walking its body, keeping collection
+        -- module-local.
+        let allNames := env.checked.get.constants.foldStage2
           (fun names name _ =>
-            match env.find? name, privateEnv.find? name with
-            | some exported, some private_ =>
-              if exported.isAxiom && !private_.isAxiom then names.push name
-              else names
-            | _, _ => names) #[]
-        -- Compute axioms for each stripped constant within a shared state (for caching).
+            if (env.find? name).isSome then names.push name
+            else names) #[]
+        -- Compute axioms within a shared state (for caching across declarations).
         let entries := CollectAxioms.runM privateEnv do
-          strippedNames.mapM fun name =>
+          allNames.mapM fun name =>
             return (name, ← CollectAxioms.collectAndGet s.find? name)
         -- Sort by name for binary search at import time.
         entries.qsort fun a b => Name.quickLt a.1 b.1
