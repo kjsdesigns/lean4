@@ -27,7 +27,7 @@ lean_object* l_Lean_Meta_instMonadMetaM___lam__1___boxed(lean_object*, lean_obje
 lean_object* l_ReaderT_instMonad___redArg(lean_object*);
 extern lean_object* l_Lean_instInhabitedExpr;
 lean_object* l_instInhabitedOfMonad___redArg(lean_object*, lean_object*);
-lean_object* lean_panic_fn(lean_object*, lean_object*);
+lean_object* lean_panic_fn_borrowed(lean_object*, lean_object*);
 lean_object* l_Lean_Meta_Sym_Simp_mkRflResultCD(uint8_t);
 lean_object* l_Lean_Expr_cleanupAnnotations(lean_object*);
 uint8_t l_Lean_Expr_isApp(lean_object*);
@@ -1288,7 +1288,7 @@ _start:
 {
 lean_object* v___y_538_; lean_object* v___x_541_; uint8_t v_debug_542_; 
 v___x_541_ = lean_st_ref_get(v___y_531_);
-v_debug_542_ = lean_ctor_get_uint8(v___x_541_, sizeof(void*)*7);
+v_debug_542_ = lean_ctor_get_uint8(v___x_541_, sizeof(void*)*8);
 lean_dec(v___x_541_);
 if (v_debug_542_ == 0)
 {
@@ -1895,7 +1895,7 @@ _start:
 {
 lean_object* v___y_715_; lean_object* v___x_718_; uint8_t v_debug_719_; 
 v___x_718_ = lean_st_ref_get(v___y_708_);
-v_debug_719_ = lean_ctor_get_uint8(v___x_718_, sizeof(void*)*7);
+v_debug_719_ = lean_ctor_get_uint8(v___x_718_, sizeof(void*)*8);
 lean_dec(v___x_718_);
 if (v_debug_719_ == 0)
 {
@@ -2152,7 +2152,7 @@ _start:
 {
 lean_object* v___y_800_; lean_object* v___x_803_; uint8_t v_debug_804_; 
 v___x_803_ = lean_st_ref_get(v___y_793_);
-v_debug_804_ = lean_ctor_get_uint8(v___x_803_, sizeof(void*)*7);
+v_debug_804_ = lean_ctor_get_uint8(v___x_803_, sizeof(void*)*8);
 lean_dec(v___x_803_);
 if (v_debug_804_ == 0)
 {
@@ -5056,7 +5056,7 @@ _start:
 {
 lean_object* v___y_1587_; lean_object* v___x_1590_; uint8_t v_debug_1591_; 
 v___x_1590_ = lean_st_ref_get(v___y_1580_);
-v_debug_1591_ = lean_ctor_get_uint8(v___x_1590_, sizeof(void*)*7);
+v_debug_1591_ = lean_ctor_get_uint8(v___x_1590_, sizeof(void*)*8);
 lean_dec(v___x_1590_);
 if (v_debug_1591_ == 0)
 {
@@ -5462,7 +5462,8 @@ v___x_1722_ = l_ReaderT_instMonad___redArg(v___x_1721_);
 v___x_1723_ = l_ReaderT_instMonad___redArg(v___x_1722_);
 v___x_1724_ = l_Lean_instInhabitedExpr;
 v___x_1725_ = l_instInhabitedOfMonad___redArg(v___x_1723_, v___x_1724_);
-v___x_23189__overap_1726_ = lean_panic_fn(v___x_1725_, v_msg_1659_);
+v___x_23189__overap_1726_ = lean_panic_fn_borrowed(v___x_1725_, v_msg_1659_);
+lean_dec(v___x_1725_);
 lean_inc(v___y_1668_);
 lean_inc_ref(v___y_1667_);
 lean_inc(v___y_1666_);
