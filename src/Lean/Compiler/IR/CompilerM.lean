@@ -131,7 +131,7 @@ private def exportIREntries (env : Environment) : Array (Name × Array EnvExtens
   let initDecls : Array EnvExtensionEntry := unsafe unsafeCast initDecls
 
   -- needed during initialization via interpreter
-  let modPkg : Array (Option PkgId) := modPkgExt.exportEntriesFn env (modPkgExt.getState env) .private
+  let modPkg : Array (Option PkgId) := (modPkgExt.exportEntriesFn env (modPkgExt.getState env)).private
   -- safety: cast to erased type
   let modPkg : Array EnvExtensionEntry := unsafe unsafeCast modPkg
 
