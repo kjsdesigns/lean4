@@ -15643,6 +15643,7 @@ v___jp_4780_:
 {
 lean_object* v___x_4782_; lean_object* v___x_4783_; uint8_t v___x_4784_; lean_object* v___x_4785_; lean_object* v___x_4786_; 
 v___x_4782_ = ((lean_object*)(l_Lean_Parser_instReprLeadingIdentBehavior_repr___closed__1));
+lean_inc(v___y_4781_);
 v___x_4783_ = lean_alloc_ctor(4, 2, 0);
 lean_ctor_set(v___x_4783_, 0, v___y_4781_);
 lean_ctor_set(v___x_4783_, 1, v___x_4782_);
@@ -15657,6 +15658,7 @@ v___jp_4787_:
 {
 lean_object* v___x_4789_; lean_object* v___x_4790_; uint8_t v___x_4791_; lean_object* v___x_4792_; lean_object* v___x_4793_; 
 v___x_4789_ = ((lean_object*)(l_Lean_Parser_instReprLeadingIdentBehavior_repr___closed__3));
+lean_inc(v___y_4788_);
 v___x_4790_ = lean_alloc_ctor(4, 2, 0);
 lean_ctor_set(v___x_4790_, 0, v___y_4788_);
 lean_ctor_set(v___x_4790_, 1, v___x_4789_);
@@ -15671,6 +15673,7 @@ v___jp_4794_:
 {
 lean_object* v___x_4796_; lean_object* v___x_4797_; uint8_t v___x_4798_; lean_object* v___x_4799_; lean_object* v___x_4800_; 
 v___x_4796_ = ((lean_object*)(l_Lean_Parser_instReprLeadingIdentBehavior_repr___closed__5));
+lean_inc(v___y_4795_);
 v___x_4797_ = lean_alloc_ctor(4, 2, 0);
 lean_ctor_set(v___x_4797_, 0, v___y_4795_);
 lean_ctor_set(v___x_4797_, 1, v___x_4796_);
@@ -16124,12 +16127,10 @@ v_toParserModuleContext_4942_ = lean_ctor_get(v_ctx_4940_, 1);
 v_env_4943_ = lean_ctor_get(v_toParserModuleContext_4942_, 0);
 v___x_4944_ = l_Lean_Parser_categoryParserFnExtension;
 v_asyncMode_4945_ = lean_ctor_get(v___x_4944_, 2);
-lean_inc(v_asyncMode_4945_);
 v___f_4946_ = ((lean_object*)(l_Lean_Parser_categoryParserFn___closed__1));
 v___x_4947_ = lean_box(0);
 lean_inc_ref(v_env_4943_);
 v___x_11__overap_4948_ = l___private_Lean_Environment_0__Lean_EnvExtension_getStateUnsafe___redArg(v___f_4946_, v___x_4944_, v_env_4943_, v_asyncMode_4945_, v___x_4947_);
-lean_dec(v_asyncMode_4945_);
 v___x_4949_ = lean_apply_3(v___x_11__overap_4948_, v_catName_4939_, v_ctx_4940_, v_s_4941_);
 return v___x_4949_;
 }
@@ -16715,8 +16716,8 @@ lean_object* v___x_5143_; lean_object* v_fn_5144_; lean_object* v_iniSz_5145_; l
 lean_inc(v_pos_5139_);
 v___x_5143_ = lean_obj_once(&l_Lean_Parser_tokenAntiquotFn___closed__9, &l_Lean_Parser_tokenAntiquotFn___closed__9_once, _init_l_Lean_Parser_tokenAntiquotFn___closed__9);
 v_fn_5144_ = lean_ctor_get(v___x_5143_, 1);
-lean_inc_ref(v_fn_5144_);
 v_iniSz_5145_ = l_Lean_Parser_ParserState_stackSize(v_s_5138_);
+lean_inc_ref(v_fn_5144_);
 v_s_5146_ = lean_apply_2(v_fn_5144_, v_c_5137_, v_s_5138_);
 v_errorMsg_5147_ = lean_ctor_get(v_s_5146_, 4);
 lean_inc(v_errorMsg_5147_);

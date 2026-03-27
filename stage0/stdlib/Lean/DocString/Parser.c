@@ -4041,9 +4041,9 @@ _start:
 lean_object* v___x_637_; lean_object* v_fn_638_; lean_object* v___f_639_; lean_object* v___x_640_; 
 v___x_637_ = l_Lean_Parser_skip;
 v_fn_638_ = lean_ctor_get(v___x_637_, 1);
-lean_inc_ref(v_fn_638_);
 v___f_639_ = lean_alloc_closure((void*)(l___private_Lean_DocString_Parser_0__Lean_Doc_Parser_fakeAtomHere___lam__0___boxed), 4, 1);
 lean_closure_set(v___f_639_, 0, v_str_634_);
+lean_inc_ref(v_fn_638_);
 v___x_640_ = l___private_Lean_DocString_Parser_0__Lean_Doc_Parser_withInfoSyntaxFn(v_fn_638_, v___f_639_, v_a_635_, v_a_636_);
 return v___x_640_;
 }
@@ -4417,6 +4417,7 @@ v___jp_774_:
 {
 lean_object* v___x_776_; lean_object* v___x_777_; uint8_t v___x_778_; lean_object* v___x_779_; lean_object* v___x_780_; 
 v___x_776_ = ((lean_object*)(l_Lean_Doc_Parser_instReprOrderedListType_repr___closed__1));
+lean_inc(v___y_775_);
 v___x_777_ = lean_alloc_ctor(4, 2, 0);
 lean_ctor_set(v___x_777_, 0, v___y_775_);
 lean_ctor_set(v___x_777_, 1, v___x_776_);
@@ -4431,6 +4432,7 @@ v___jp_781_:
 {
 lean_object* v___x_783_; lean_object* v___x_784_; uint8_t v___x_785_; lean_object* v___x_786_; lean_object* v___x_787_; 
 v___x_783_ = ((lean_object*)(l_Lean_Doc_Parser_instReprOrderedListType_repr___closed__3));
+lean_inc(v___y_782_);
 v___x_784_ = lean_alloc_ctor(4, 2, 0);
 lean_ctor_set(v___x_784_, 0, v___y_782_);
 lean_ctor_set(v___x_784_, 1, v___x_783_);
@@ -4831,6 +4833,7 @@ v___jp_934_:
 {
 lean_object* v___x_936_; lean_object* v___x_937_; uint8_t v___x_938_; lean_object* v___x_939_; lean_object* v___x_940_; 
 v___x_936_ = ((lean_object*)(l_Lean_Doc_Parser_instReprUnorderedListType_repr___closed__1));
+lean_inc(v___y_935_);
 v___x_937_ = lean_alloc_ctor(4, 2, 0);
 lean_ctor_set(v___x_937_, 0, v___y_935_);
 lean_ctor_set(v___x_937_, 1, v___x_936_);
@@ -4845,6 +4848,7 @@ v___jp_941_:
 {
 lean_object* v___x_943_; lean_object* v___x_944_; uint8_t v___x_945_; lean_object* v___x_946_; lean_object* v___x_947_; 
 v___x_943_ = ((lean_object*)(l_Lean_Doc_Parser_instReprUnorderedListType_repr___closed__3));
+lean_inc(v___y_942_);
 v___x_944_ = lean_alloc_ctor(4, 2, 0);
 lean_ctor_set(v___x_944_, 0, v___y_942_);
 lean_ctor_set(v___x_944_, 1, v___x_943_);
@@ -4859,6 +4863,7 @@ v___jp_948_:
 {
 lean_object* v___x_950_; lean_object* v___x_951_; uint8_t v___x_952_; lean_object* v___x_953_; lean_object* v___x_954_; 
 v___x_950_ = ((lean_object*)(l_Lean_Doc_Parser_instReprUnorderedListType_repr___closed__5));
+lean_inc(v___y_949_);
 v___x_951_ = lean_alloc_ctor(4, 2, 0);
 lean_ctor_set(v___x_951_, 0, v___y_949_);
 lean_ctor_set(v___x_951_, 1, v___x_950_);

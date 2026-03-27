@@ -719,7 +719,7 @@ _start:
 lean_object* v___x_176_; lean_object* v___x_177_; lean_object* v___x_178_; lean_object* v___x_179_; lean_object* v___x_180_; lean_object* v___x_181_; 
 v___x_176_ = ((lean_object*)(l_Lean_Meta_Grind_getEqcLambdas___closed__3));
 v___x_177_ = lean_unsigned_to_nat(2u);
-v___x_178_ = lean_unsigned_to_nat(1567u);
+v___x_178_ = lean_unsigned_to_nat(1533u);
 v___x_179_ = ((lean_object*)(l_Lean_Meta_Grind_getEqcLambdas___closed__2));
 v___x_180_ = ((lean_object*)(l_Lean_Meta_Grind_getEqcLambdas___closed__1));
 v___x_181_ = l_mkPanicMessageWithDecl(v___x_180_, v___x_179_, v___x_178_, v___x_177_, v___x_176_);
@@ -1000,12 +1000,12 @@ uint8_t v___x_290_;
 v___x_290_ = lean_usize_dec_lt(v_i_288_, v_sz_287_);
 if (v___x_290_ == 0)
 {
+lean_inc_ref(v_b_289_);
 return v_b_289_;
 }
 else
 {
 lean_object* v___x_291_; lean_object* v_a_292_; uint8_t v___x_293_; 
-lean_dec_ref(v_b_289_);
 v___x_291_ = lean_box(0);
 v_a_292_ = lean_array_uget_borrowed(v_as_286_, v_i_288_);
 v___x_293_ = l___private_Lean_Meta_Sym_ExprPtr_0__Lean_Meta_Sym_isSameExpr_unsafe__1(v_a_292_, v___y_285_);
@@ -1044,6 +1044,7 @@ lean_dec(v_sz_303_);
 v_i_boxed_307_ = lean_unbox_usize(v_i_304_);
 lean_dec(v_i_304_);
 v_res_308_ = l___private_Init_Data_Array_Basic_0__Array_forIn_x27Unsafe_loop___at___00Lean_Meta_Grind_getFnRoots_spec__0(v___y_301_, v_as_302_, v_sz_boxed_306_, v_i_boxed_307_, v_b_305_);
+lean_dec_ref(v_b_305_);
 lean_dec_ref(v_as_302_);
 lean_dec_ref(v___y_301_);
 return v_res_308_;

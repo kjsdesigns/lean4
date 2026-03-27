@@ -160,8 +160,8 @@ LEAN_EXPORT lean_object* l___private_Init_Data_Range_Basic_0__Std_Legacy_Range_f
 LEAN_EXPORT lean_object* l___private_Init_Data_Range_Basic_0__Std_Legacy_Range_forIn_x27_loop___at___00__private_Lean_Compiler_NameDemangling_0__Lean_Name_Demangle_processSpecContext_spec__1___redArg___boxed(lean_object*, lean_object*, lean_object*, lean_object*);
 static const lean_array_object l___private_Lean_Compiler_NameDemangling_0__Lean_Name_Demangle_processSpecContext___closed__0_value = {.m_header = {.m_rc = 0, .m_cs_sz = sizeof(lean_array_object) + sizeof(void*)*0, .m_other = 0, .m_tag = 246}, .m_size = 0, .m_capacity = 0, .m_data = {}};
 static const lean_object* l___private_Lean_Compiler_NameDemangling_0__Lean_Name_Demangle_processSpecContext___closed__0 = (const lean_object*)&l___private_Lean_Compiler_NameDemangling_0__Lean_Name_Demangle_processSpecContext___closed__0_value;
-static lean_once_cell_t l___private_Lean_Compiler_NameDemangling_0__Lean_Name_Demangle_processSpecContext___closed__1_once = LEAN_ONCE_CELL_INITIALIZER;
-static lean_object* l___private_Lean_Compiler_NameDemangling_0__Lean_Name_Demangle_processSpecContext___closed__1;
+static const lean_ctor_object l___private_Lean_Compiler_NameDemangling_0__Lean_Name_Demangle_processSpecContext___closed__1_value = {.m_header = {.m_rc = 0, .m_cs_sz = sizeof(lean_ctor_object) + sizeof(void*)*2 + 0, .m_other = 2, .m_tag = 0}, .m_objs = {((lean_object*)&l___private_Lean_Compiler_NameDemangling_0__Lean_Name_Demangle_processSpecContext___closed__0_value),((lean_object*)&l___private_Lean_Compiler_NameDemangling_0__Lean_Name_Demangle_processSpecContext___closed__0_value)}};
+static const lean_object* l___private_Lean_Compiler_NameDemangling_0__Lean_Name_Demangle_processSpecContext___closed__1 = (const lean_object*)&l___private_Lean_Compiler_NameDemangling_0__Lean_Name_Demangle_processSpecContext___closed__1_value;
 LEAN_EXPORT lean_object* l___private_Lean_Compiler_NameDemangling_0__Lean_Name_Demangle_processSpecContext(lean_object*);
 LEAN_EXPORT lean_object* l___private_Lean_Compiler_NameDemangling_0__Lean_Name_Demangle_processSpecContext___boxed(lean_object*);
 LEAN_EXPORT lean_object* l___private_Init_Data_Range_Basic_0__Std_Legacy_Range_forIn_x27_loop___at___00__private_Lean_Compiler_NameDemangling_0__Lean_Name_Demangle_processSpecContext_spec__1(lean_object*, lean_object*, lean_object*, lean_object*, lean_object*, lean_object*);
@@ -1099,12 +1099,12 @@ if (v___x_254_ == 0)
 {
 lean_dec(v_i_251_);
 lean_dec(v_start_246_);
+lean_inc_ref(v_b_250_);
 return v_b_250_;
 }
 else
 {
 lean_object* v___x_255_; lean_object* v___x_256_; lean_object* v___x_257_; lean_object* v___x_258_; lean_object* v___y_260_; lean_object* v___x_275_; uint8_t v___x_276_; 
-lean_dec_ref(v_b_250_);
 v___x_255_ = lean_box(0);
 v___x_256_ = lean_box(0);
 v___x_257_ = ((lean_object*)(l___private_Init_Data_Range_Basic_0__Std_Legacy_Range_forIn_x27_loop___at___00__private_Lean_Compiler_NameDemangling_0__Lean_Name_Demangle_stripPrivate_spec__1___redArg___closed__0));
@@ -1188,6 +1188,7 @@ _start:
 uint8_t v___y_946__boxed_286_; lean_object* v_res_287_; 
 v___y_946__boxed_286_ = lean_unbox(v___y_281_);
 v_res_287_ = l___private_Init_Data_Range_Basic_0__Std_Legacy_Range_forIn_x27_loop___at___00__private_Lean_Compiler_NameDemangling_0__Lean_Name_Demangle_stripPrivate_spec__1___redArg(v_stop_279_, v_start_280_, v___y_946__boxed_286_, v_comps_282_, v_range_283_, v_b_284_, v_i_285_);
+lean_dec_ref(v_b_284_);
 lean_dec_ref(v_range_283_);
 lean_dec_ref(v_comps_282_);
 lean_dec(v_stop_279_);
@@ -1352,6 +1353,7 @@ _start:
 uint8_t v___y_1088__boxed_352_; lean_object* v_res_353_; 
 v___y_1088__boxed_352_ = lean_unbox(v___y_345_);
 v_res_353_ = l___private_Init_Data_Range_Basic_0__Std_Legacy_Range_forIn_x27_loop___at___00__private_Lean_Compiler_NameDemangling_0__Lean_Name_Demangle_stripPrivate_spec__1(v_stop_343_, v_start_344_, v___y_1088__boxed_352_, v_comps_346_, v_range_347_, v_b_348_, v_i_349_, v_hs_350_, v_hl_351_);
+lean_dec_ref(v_b_348_);
 lean_dec_ref(v_range_347_);
 lean_dec_ref(v_comps_346_);
 lean_dec(v_stop_343_);
@@ -1708,17 +1710,6 @@ lean_dec_ref(v_comps_453_);
 return v_res_457_;
 }
 }
-static lean_object* _init_l___private_Lean_Compiler_NameDemangling_0__Lean_Name_Demangle_processSpecContext___closed__1(void){
-_start:
-{
-lean_object* v_parts_460_; lean_object* v___x_461_; 
-v_parts_460_ = ((lean_object*)(l___private_Lean_Compiler_NameDemangling_0__Lean_Name_Demangle_processSpecContext___closed__0));
-v___x_461_ = lean_alloc_ctor(0, 2, 0);
-lean_ctor_set(v___x_461_, 0, v_parts_460_);
-lean_ctor_set(v___x_461_, 1, v_parts_460_);
-return v___x_461_;
-}
-}
 LEAN_EXPORT lean_object* l___private_Lean_Compiler_NameDemangling_0__Lean_Name_Demangle_processSpecContext(lean_object* v_comps_462_){
 _start:
 {
@@ -1764,7 +1755,7 @@ v___x_467_ = lean_alloc_ctor(0, 3, 0);
 lean_ctor_set(v___x_467_, 0, v_begin___464_);
 lean_ctor_set(v___x_467_, 1, v___x_465_);
 lean_ctor_set(v___x_467_, 2, v___x_466_);
-v___x_468_ = lean_obj_once(&l___private_Lean_Compiler_NameDemangling_0__Lean_Name_Demangle_processSpecContext___closed__1, &l___private_Lean_Compiler_NameDemangling_0__Lean_Name_Demangle_processSpecContext___closed__1_once, _init_l___private_Lean_Compiler_NameDemangling_0__Lean_Name_Demangle_processSpecContext___closed__1);
+v___x_468_ = ((lean_object*)(l___private_Lean_Compiler_NameDemangling_0__Lean_Name_Demangle_processSpecContext___closed__1));
 v___x_469_ = l___private_Init_Data_Range_Basic_0__Std_Legacy_Range_forIn_x27_loop___at___00__private_Lean_Compiler_NameDemangling_0__Lean_Name_Demangle_processSpecContext_spec__1___redArg(v_comps_462_, v___x_467_, v___x_468_, v_begin___464_);
 lean_dec_ref(v___x_467_);
 v_fst_470_ = lean_ctor_get(v___x_469_, 0);
@@ -4284,6 +4275,7 @@ v___jp_1239_:
 {
 lean_object* v___x_1241_; lean_object* v___x_1242_; 
 v___x_1241_ = lean_box(0);
+lean_inc(v___y_1240_);
 v___x_1242_ = l_WellFounded_opaqueFix_u2083___at___00__private_Lean_Compiler_NameDemangling_0__Lean_Name_Demangle_stripColdSuffix_spec__0___redArg(v_s_1235_, v___x_1238_, v___x_1237_, v___y_1240_, v___x_1241_);
 lean_dec_ref(v___x_1238_);
 if (lean_obj_tag(v___x_1242_) == 0)
@@ -6039,6 +6031,7 @@ return v___x_1764_;
 v___jp_1769_:
 {
 lean_object* v___x_1774_; 
+lean_inc(v___y_1773_);
 v___x_1774_ = l_WellFounded_opaqueFix_u2083___at___00__private_Lean_Compiler_NameDemangling_0__Lean_Name_Demangle_extractSymbol_tryMacOS_spec__0___redArg(v___y_1770_, v_line_1757_, v___y_1771_, v___x_1768_, v___y_1773_, v___y_1772_);
 lean_dec_ref(v___y_1771_);
 if (lean_obj_tag(v___x_1774_) == 0)
@@ -6064,6 +6057,7 @@ v___jp_1778_:
 {
 lean_object* v___x_1780_; lean_object* v___x_1781_; 
 v___x_1780_ = lean_box(0);
+lean_inc(v___y_1779_);
 v___x_1781_ = l_WellFounded_opaqueFix_u2083___at___00__private_Lean_Compiler_NameDemangling_0__Lean_Name_Demangle_stripColdSuffix_spec__0___redArg(v_line_1757_, v___x_1777_, v___x_1768_, v___y_1779_, v___x_1780_);
 lean_dec_ref(v___x_1777_);
 if (lean_obj_tag(v___x_1781_) == 0)

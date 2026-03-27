@@ -595,12 +595,12 @@ uint8_t v___x_216_;
 v___x_216_ = lean_usize_dec_lt(v_i_214_, v_sz_213_);
 if (v___x_216_ == 0)
 {
+lean_inc_ref(v_b_215_);
 return v_b_215_;
 }
 else
 {
 lean_object* v_a_217_; lean_object* v_baseName_218_; lean_object* v___x_219_; uint8_t v___x_220_; 
-lean_dec_ref(v_b_215_);
 v_a_217_ = lean_array_uget_borrowed(v_as_212_, v_i_214_);
 v_baseName_218_ = lean_ctor_get(v_a_217_, 1);
 v___x_219_ = lean_box(0);
@@ -640,6 +640,7 @@ lean_dec(v_sz_230_);
 v_i_boxed_234_ = lean_unbox_usize(v_i_231_);
 lean_dec(v_i_231_);
 v_res_235_ = l___private_Init_Data_Array_Basic_0__Array_forIn_x27Unsafe_loop___at___00Lake_Package_resolveDriver_spec__2(v___x_228_, v_as_229_, v_sz_boxed_233_, v_i_boxed_234_, v_b_232_);
+lean_dec_ref(v_b_232_);
 lean_dec_ref(v_as_229_);
 lean_dec(v___x_228_);
 return v_res_235_;

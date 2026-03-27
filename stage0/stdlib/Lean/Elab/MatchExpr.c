@@ -790,12 +790,12 @@ uint8_t v___x_101_;
 v___x_101_ = lean_usize_dec_lt(v_i_99_, v_sz_98_);
 if (v___x_101_ == 0)
 {
+lean_inc_ref(v_b_100_);
 return v_b_100_;
 }
 else
 {
 lean_object* v_funName_102_; lean_object* v___x_103_; lean_object* v_a_104_; lean_object* v___x_105_; lean_object* v___x_106_; uint8_t v___x_107_; 
-lean_dec_ref(v_b_100_);
 v_funName_102_ = lean_ctor_get(v_a_96_, 1);
 v___x_103_ = lean_box(0);
 v_a_104_ = lean_array_uget_borrowed(v_as_97_, v_i_99_);
@@ -839,6 +839,7 @@ lean_dec(v_sz_117_);
 v_i_boxed_121_ = lean_unbox_usize(v_i_118_);
 lean_dec(v_i_118_);
 v_res_122_ = l___private_Init_Data_Array_Basic_0__Array_forIn_x27Unsafe_loop___at___00Lean_Elab_Term_MatchExpr_getFunNamesToMatch_spec__0(v_a_115_, v_as_116_, v_sz_boxed_120_, v_i_boxed_121_, v_b_119_);
+lean_dec_ref(v_b_119_);
 lean_dec_ref(v_as_116_);
 lean_dec_ref(v_a_115_);
 return v_res_122_;

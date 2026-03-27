@@ -482,14 +482,10 @@ lean_inc_ref(v_env_67_);
 lean_dec(v___x_66_);
 v___x_68_ = l_Lean_Linter_linterSetsExt;
 v_toEnvExtension_69_ = lean_ctor_get(v___x_68_, 0);
-lean_inc_ref(v_toEnvExtension_69_);
 v_asyncMode_70_ = lean_ctor_get(v_toEnvExtension_69_, 2);
-lean_inc(v_asyncMode_70_);
-lean_dec_ref(v_toEnvExtension_69_);
 v___x_71_ = lean_box(1);
 v___x_72_ = lean_box(0);
 v_linterSets_73_ = l_Lean_SimplePersistentEnvExtension_getState___redArg(v___x_71_, v___x_68_, v_env_67_, v_asyncMode_70_, v___x_72_);
-lean_dec(v_asyncMode_70_);
 v___x_74_ = lean_alloc_ctor(0, 2, 0);
 lean_ctor_set(v___x_74_, 0, v_o_63_);
 lean_ctor_set(v___x_74_, 1, v_linterSets_73_);
@@ -1031,6 +1027,7 @@ lean_ctor_set(v___x_270_, 1, v_openDecls_255_);
 v___x_271_ = lean_alloc_ctor(4, 2, 0);
 lean_ctor_set(v___x_271_, 0, v___x_270_);
 lean_ctor_set(v___x_271_, 1, v___y_239_);
+lean_inc_ref(v___y_241_);
 lean_inc_ref(v___y_242_);
 v___x_272_ = lean_alloc_ctor(0, 5, 3);
 lean_ctor_set(v___x_272_, 0, v___y_242_);
@@ -1098,7 +1095,6 @@ else
 lean_object* v_a_284_; lean_object* v___x_286_; uint8_t v_isShared_287_; uint8_t v_isSharedCheck_291_; 
 lean_dec(v_a_247_);
 lean_dec_ref(v___y_243_);
-lean_dec_ref(v___y_241_);
 lean_dec(v___y_240_);
 lean_dec_ref(v___y_239_);
 v_a_284_ = lean_ctor_get(v___x_248_, 0);
@@ -1144,7 +1140,6 @@ else
 {
 lean_object* v_a_292_; lean_object* v___x_294_; uint8_t v_isShared_295_; uint8_t v_isSharedCheck_299_; 
 lean_dec_ref(v___y_243_);
-lean_dec_ref(v___y_241_);
 lean_dec(v___y_240_);
 lean_dec_ref(v___y_239_);
 v_a_292_ = lean_ctor_get(v___x_246_, 0);
@@ -2869,8 +2864,8 @@ else
 {
 lean_object* v___x_895_; 
 lean_dec_ref(v_str_806_);
-lean_dec(v_pre_805_);
 lean_dec_ref(v___x_804_);
+lean_dec(v_pre_805_);
 lean_del_object(v___x_784_);
 lean_del_object(v___x_772_);
 lean_dec(v_val_770_);
