@@ -16,29 +16,43 @@ import Init.Grind.Util
 namespace Lean.Meta.Sym
 namespace Canon
 /-!
-A targeted type normalizer for the `grind` canonicalizer. Normalizes expressions
-that appear in type positions (binder domains, type-former arguments, implicit arguments).
+# Type-directed canonicalizer
 
-Performs the following reductions:
-- Eta reduction: `fun x => f x` → `f`
-- Projection reduction: `⟨a, b⟩.1` → `a`
-- Match/ite reduction: `cond true β α` → `β`
-- Nat normalization: `n.succ + 1` → `n + 2`, `2 + 1` → `3`
+Canonicalizes expressions by normalizing types and instances. At the top level, it traverses
+applications, foralls, lambdas, and let-bindings, classifying each argument as a type, instance,
+implicit, or value using `shouldCanon`. Values are recursively visited but not normalized.
+Types and instances receive targeted reductions.
 
-Unlike WHNF, this only performs safe, targeted reductions that don't risk
-term blowup. Unlike `isDefEq`, it normalizes the term directly rather than
-comparing pairs.
+## Reductions (applied only in type positions)
+
+- **Eta**: `fun x => f x` → `f`
+- **Projection**: `⟨a, b⟩.1` → `a` (structure projections, not class projections)
+- **Match/ite/cond**: reduced when discriminant is a constructor or literal
+- **Nat arithmetic**: ground evaluation (`2 + 1` → `3`) and offset normalization
+  (`n.succ + 1` → `n + 2`)
+
+## Instance canonicalization
+
+Instances are re-synthesized via `synthInstance`. The instance type is first normalized
+using the type-level reductions above, so that `OfNat (Fin (2+1)) 0` and `OfNat (Fin 3) 0`
+produce the same canonical instance.
+
+## Two caches
+
+The canonicalizer maintains separate caches for type-level and value-level contexts.
+The same expression may canonicalize differently depending on whether it appears in a
+type position (where reductions are applied) or a value position (where it is only traversed).
+Caches are keyed by `Expr` (structural equality), not pointer equality, because
+the canonicalizer runs before `shareCommon` and enters binders using locally nameless
+representation.
 -/
 
-/--
-Caches for the canonicalizer.
-
-Remark: We currently don't use pointer-based keys because we apply the canonicalizer before
-`shareCommon`, and we go inside binders using locally nameless.
--/
 structure State where
+  /-- Cache for value-level canonicalization (no type reductions applied). -/
   cache       : Std.HashMap Expr Expr := {}
+  /-- Cache for type-level canonicalization (reductions applied). -/
   cacheInType : Std.HashMap Expr Expr := {}
+  /-- Cache mapping instance types to their canonical synthesized instances. -/
   cacheInst   : Std.HashMap Expr Expr := {}
 
 structure Context where
@@ -58,7 +72,7 @@ and its type is not exactly `Nat` or `Int`. For example, in issue #9477, we have
 structure T where
 upper_bound : Nat
 def T.range (a : T) := 0...a.upper_bound
-theorem range\_lower (a : T) : a.range.lower = 0 := by rfl
+theorem range_lower (a : T) : a.range.lower = 0 := by rfl
 ```
 Here, the `0` in `range_lower` is actually represented as:
 ```
@@ -164,9 +178,12 @@ def shouldCanon (pinfos : Array ParamInfo) (i : Nat) (arg : Expr) : MetaM Should
   else
     return .visit
 
+/--
+Reduce a projection function application (e.g., `@Sigma.fst _ _ ⟨a, b⟩` → `a`).
+Class projections are not reduced — they are support elements handled by instance synthesis.
+-/
 def reduceProjFn? (info : ProjectionFunctionInfo) (e : Expr) : SymM (Option Expr) := do
   if info.fromClass then
-    -- Remark: We do not reduce class projections.
     return none
   let some e ← unfoldDefinition? e | return none
   match (← reduceProj? e.getAppFn) with
@@ -175,7 +192,9 @@ def reduceProjFn? (info : ProjectionFunctionInfo) (e : Expr) : SymM (Option Expr
 
 def isNat (e : Expr) := e.isConstOf ``Nat
 
-def isToNormArithDecl (e : Expr) : Bool :=
+/-- Returns `true` if `e` is a Nat arithmetic expression that should be normalized
+(ground evaluation or offset normalization). -/
+def isNatArithApp (e : Expr) : Bool :=
   match_expr e with
   | Nat.zero => true
   | Nat.succ _ => true
@@ -186,13 +205,15 @@ def isToNormArithDecl (e : Expr) : Bool :=
   | HMod.hMod α _ _ _ _ _ => isNat α
   | _ => false
 
+/-- Check that `e` is definitionally equal to `inst` at instance transparency.
+Returns `inst` on success, `e` with a reported issue on failure. -/
 def checkDefEqInst (e : Expr) (inst : Expr) : SymM Expr := do
   unless (← isDefEqI e inst) do
     reportIssue! "failed to canonicalize instance{indentExpr e}\nsynthesized instance is not definitionally equal{indentExpr inst}"
     return e
   return inst
 
-/-- Normalize a type expression using targeted reductions. -/
+/-- Canonicalize `e`. Applies targeted reductions in type positions; recursively visits value positions. -/
 partial def canon (e : Expr) : CanonM Expr := do
   match e with
   | .forallE ..    => withCaching e <| canonForall #[] e
@@ -216,8 +237,8 @@ where
       withReader (fun ctx => { ctx with insideType := true }) <| canon e
 
   /--
-  Similar to `canonInsideType`, but doesn't check `isProp e`.
-  This function should be used only we know `e` is not a proposition.
+  Similar to `canonInsideType`, but skips the `isProp` check.
+  Use only when `e` is known not to be a proposition.
   -/
   canonInsideType' (e : Expr) : CanonM Expr := do
     if (← read).insideType then
@@ -337,7 +358,7 @@ where
     else return mkApp4 f (← canonInsideType α) c (← canon a) (← canon b)
 
   postReduce (e : Expr) : CanonM Expr := do
-    if isToNormArithDecl e then
+    if isNatArithApp e then
       if let some e ← evalNat e |>.run then
         return mkNatLit e
       else if let some (e, k) ← isOffset? e |>.run then
@@ -387,12 +408,18 @@ where
   canonProj (e : Expr) : CanonM Expr := do
     let e := e.updateProj! (← canon e.projExpr!)
     if (← read).insideType then
-      return  (← reduceProj? e).getD e
+      return (← reduceProj? e).getD e
     else
       return e
 
 end Canon
 
+/--
+Canonicalize `e` by normalizing types, instances, and support arguments.
+Types receive targeted reductions (eta, projection, match/ite, Nat arithmetic).
+Instances are re-synthesized. Values are traversed but not reduced.
+Runs at reducible transparency.
+-/
 public def canon (e : Expr) : SymM Expr :=
   withReducible do Canon.canon e {} |>.run' {}
 
