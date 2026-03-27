@@ -41,7 +41,6 @@ string(APPEND TEST_VARS " CXX='${CMAKE_CXX_COMPILER} ${LEANC_OPTS}'")
 set(WITH_TEST_ENV "${CMAKE_CURRENT_SOURCE_DIR}/with_stage${STAGE}_test_env.sh")
 set(WITH_BENCH_ENV "${CMAKE_CURRENT_SOURCE_DIR}/with_stage${STAGE}_bench_env.sh")
 
-string(APPEND TEST_VARS " TEST_BENCH=")
 configure_file(with_env.sh.in "${WITH_TEST_ENV}")
 
 block()
@@ -86,7 +85,7 @@ function(check_test_bench_scripts DIR)
 
   if(NOT RUN_TEST_EXISTS AND NOT RUN_BENCH_EXISTS)
     cmake_path(RELATIVE_PATH DIR)
-    message(FATAL_ERROR "${DIR}: Found neither a run_test nor a run_bench file")
+    message(AUTHOR_WARNING "${DIR}: Found neither a run_test nor a run_bench file")
     return()
   endif()
 
@@ -309,7 +308,7 @@ add_dir_of_test_dirs(misc_dir)
 add_dir_of_test_dirs(
   pkg
   EXCEPT
-    signal # Test appears to be broken
+    signal # Flaky
     test_extern # Flaky
     user_ext # Test started being nondeterministic
 )

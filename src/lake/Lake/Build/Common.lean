@@ -463,10 +463,12 @@ public def Cache.saveArtifact
       IO.setAccessRights file ⟨r, r, r⟩
       unless (← cacheFile.pathExists) do
         createParentDirs cacheFile
-        IO.FS.writeFile cacheFile normalized
-        IO.setAccessRights cacheFile ⟨r, r, r⟩
+        -- other functions can race to create the file
+        -- use `writeFileIfNew` to prevent errors on races
+        writeFileIfNew cacheFile normalized
+      IO.setAccessRights cacheFile ⟨r, r, r⟩
       writeFileHash file hash
-      let mtime := (← getMTime cacheFile |>.toBaseIO).toOption.getD 0
+      let mtime ← getMTime cacheFile
       let path := if useLocalFile then file else cacheFile
       return {descr, name := file.toString, path, mtime}
     else
@@ -480,11 +482,14 @@ public def Cache.saveArtifact
       IO.setAccessRights file ⟨r, r, r⟩
       unless (← cacheFile.pathExists) do
         createParentDirs cacheFile
-        if let .error _ ← (IO.FS.hardLink file cacheFile).toBaseIO then
-          IO.FS.writeBinFile cacheFile contents
-          IO.setAccessRights cacheFile ⟨r, r, r⟩
+        if let .error e ← (IO.FS.hardLink file cacheFile).toBaseIO then
+          -- other functions can race to create the file
+          unless e matches .alreadyExists .. do
+            -- use `writeBinFileIfNew` to prevent errors on races
+            writeBinFileIfNew cacheFile contents
+      IO.setAccessRights cacheFile ⟨r, r, r⟩
       writeFileHash file hash
-      let mtime := (← getMTime cacheFile |>.toBaseIO).toOption.getD 0
+      let mtime ← getMTime cacheFile
       let path := if useLocalFile then file else cacheFile
       return {descr, name := file.toString, path, mtime}
   catch e =>
@@ -574,7 +579,7 @@ public def resolveArtifact
   match (← getMTime path |>.toBaseIO) with
   | .ok mtime =>
     return {descr, path, mtime}
-  | .error (.noFileOrDirectory ..) =>
+  | .error (.noFileOrDirectory ..) => withLogErrorPos do
     -- we redownload artifacts on any error
     if let some service := service? then
       updateAction .fetch
@@ -660,10 +665,16 @@ If `text := true`, `file` is hashed as a text file rather than a binary file.
 If `restore := true`, if `file` is missing but the artifact is in the cache,
 it will be copied to the `file`. This function will also return `file` rather
 than the path to the cached artifact.
+
+If `exe := true`, the `file` will be marked executable.
+
+If `platformIndependent := true`, the artifact will be included in
+platform-independent caches.
 -/
 public def buildArtifactUnlessUpToDate
   (file : FilePath) (build : JobM PUnit)
   (text := false) (ext := "art") (restore := false) (exe := false)
+  (platformIndependent := false)
 : JobM Artifact := do
   let depTrace ← getTrace
   let traceFile := FilePath.mk <| file.toString ++ ".trace"
@@ -704,7 +715,7 @@ public def buildArtifactUnlessUpToDate
         doBuild depTrace traceFile
     if pkg.isRoot then
       if let some outputsRef := (← getBuildContext).outputsRef? then
-        outputsRef.insert inputHash art.descr
+        outputsRef.insert inputHash art.descr platformIndependent
     setTrace art.trace
     setMTime art traceFile
   else

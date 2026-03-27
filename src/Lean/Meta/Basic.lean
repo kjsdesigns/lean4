@@ -565,7 +565,7 @@ abbrev MetaM  := ReaderT Context $ StateRefT State CoreM
 -- Make the compiler generate specialized `pure`/`bind` so we do not have to optimize through the
 -- whole monad stack at every use site. May eventually be covered by `deriving`.
 @[always_inline]
-instance : Monad MetaM := let i := inferInstanceAs (Monad MetaM); { pure := i.pure, bind := i.bind }
+instance : Monad MetaM := let i : Monad MetaM := inferInstance; { pure := i.pure, bind := i.bind }
 
 instance : Inhabited (MetaM α) where
   default := fun _ _ => default
@@ -1321,7 +1321,7 @@ private def getDefInfoTemp (info : ConstantInfo) : MetaM (Option ConstantInfo) :
    `constName` is an instance. This difference should be irrelevant for `isClassQuickConst?`. -/
 private def getConstTemp? (constName : Name) : MetaM (Option ConstantInfo) := do
   match (← getEnv).find? constName with
-  | some (info@(ConstantInfo.thmInfo _))  => getTheoremInfo info
+  | some (ConstantInfo.thmInfo _)          => return none
   | some (info@(ConstantInfo.defnInfo _)) => getDefInfoTemp info
   | some info                             => pure (some info)
   | none                                  => throwUnknownConstantAt (← getRef) constName
@@ -2716,7 +2716,14 @@ where
         -- catch all exceptions
         let _ : MonadExceptOf _ MetaM := MonadAlwaysExcept.except
         observing do
-          withDeclNameForAuxNaming constName do
+          -- Re-privatize private `constName` under the current module so that auxiliary
+          -- declarations generated during realization get names scoped to the realizing module,
+          -- not the original defining module. This prevents name collisions when the same
+          -- constant is realized independently from two modules that are later imported together
+          -- (diamond import pattern).
+          let namePrefix :=
+            if isPrivateName constName then mkPrivateName env constName else constName
+          withDeclNameForAuxNaming namePrefix do
             withoutExporting (when := isPrivateName constName) do
               realize
           -- Meta code working on a non-exported declaration should usually do so inside

@@ -827,7 +827,7 @@ return v___x_120_;
 LEAN_EXPORT lean_object* l_Std_DHashMap_Internal_Raw_u2080_Const_alter___at___00Lean_initFn_00___x40_Lean_ExtraModUses_1766255300____hygCtx___hyg_2__spec__0(lean_object* v_val_121_, lean_object* v_m_122_, lean_object* v_a_123_){
 _start:
 {
-lean_object* v___y_125_; lean_object* v___y_126_; size_t v___y_127_; lean_object* v___y_128_; lean_object* v_size_131_; lean_object* v_buckets_132_; lean_object* v___x_134_; uint8_t v_isShared_135_; uint8_t v_isSharedCheck_179_; 
+lean_object* v___y_125_; size_t v___y_126_; lean_object* v___y_127_; lean_object* v___y_128_; lean_object* v_size_131_; lean_object* v_buckets_132_; lean_object* v___x_134_; uint8_t v_isShared_135_; uint8_t v_isSharedCheck_179_; 
 v_size_131_ = lean_ctor_get(v_m_122_, 0);
 v_buckets_132_ = lean_ctor_get(v_m_122_, 1);
 v_isSharedCheck_179_ = !lean_is_exclusive(v_m_122_);
@@ -849,7 +849,7 @@ goto v_resetjp_133_;
 v___jp_124_:
 {
 lean_object* v___x_129_; lean_object* v___x_130_; 
-v___x_129_ = lean_array_uset(v___y_125_, v___y_127_, v___y_126_);
+v___x_129_ = lean_array_uset(v___y_127_, v___y_126_, v___y_125_);
 v___x_130_ = lean_alloc_ctor(0, 2, 0);
 lean_ctor_set(v___x_130_, 0, v___y_128_);
 lean_ctor_set(v___x_130_, 1, v___x_129_);
@@ -978,17 +978,17 @@ lean_object* v___x_175_; lean_object* v___x_176_;
 v___x_175_ = lean_unsigned_to_nat(1u);
 v___x_176_ = lean_nat_sub(v_size_131_, v___x_175_);
 lean_dec(v_size_131_);
-v___y_125_ = v_buckets_x27_172_;
-v___y_126_ = v_bkt_x27_173_;
-v___y_127_ = v___x_149_;
+v___y_125_ = v_bkt_x27_173_;
+v___y_126_ = v___x_149_;
+v___y_127_ = v_buckets_x27_172_;
 v___y_128_ = v___x_176_;
 goto v___jp_124_;
 }
 else
 {
-v___y_125_ = v_buckets_x27_172_;
-v___y_126_ = v_bkt_x27_173_;
-v___y_127_ = v___x_149_;
+v___y_125_ = v_bkt_x27_173_;
+v___y_126_ = v___x_149_;
+v___y_127_ = v_buckets_x27_172_;
 v___y_128_ = v_size_131_;
 goto v___jp_124_;
 }
@@ -2828,12 +2828,8 @@ if (v___x_940_ == 0)
 {
 lean_object* v_toEnvExtension_941_; lean_object* v_asyncMode_942_; lean_object* v___x_943_; 
 v_toEnvExtension_941_ = lean_ctor_get(v___x_936_, 0);
-lean_inc_ref(v_toEnvExtension_941_);
 v_asyncMode_942_ = lean_ctor_get(v_toEnvExtension_941_, 2);
-lean_inc(v_asyncMode_942_);
-lean_dec_ref(v_toEnvExtension_941_);
 v___x_943_ = l_Lean_PersistentEnvExtension_addEntry___redArg(v___x_936_, v_b_932_, v_head_933_, v_asyncMode_942_, v___x_938_);
-lean_dec(v_asyncMode_942_);
 v_as_x27_931_ = v_tail_934_;
 v_b_932_ = v___x_943_;
 goto _start;
@@ -2975,6 +2971,7 @@ goto v___jp_1025_;
 v___jp_1025_:
 {
 lean_object* v___x_1027_; lean_object* v___x_1028_; lean_object* v___x_1029_; lean_object* v___x_1030_; 
+lean_inc_ref(v___y_1026_);
 v___x_1027_ = l_Lean_stringToMessageData(v___y_1026_);
 v___x_1028_ = lean_alloc_ctor(7, 2, 0);
 lean_ctor_set(v___x_1028_, 0, v___x_1024_);
@@ -3014,6 +3011,7 @@ return v___x_1008_;
 v___jp_1009_:
 {
 lean_object* v___x_1012_; lean_object* v___x_1013_; lean_object* v___x_1014_; lean_object* v___x_1015_; lean_object* v___x_1016_; lean_object* v___x_1017_; uint8_t v___x_1018_; 
+lean_inc_ref(v___y_1011_);
 v___x_1012_ = l_Lean_stringToMessageData(v___y_1011_);
 v___x_1013_ = lean_alloc_ctor(7, 2, 0);
 lean_ctor_set(v___x_1013_, 0, v___y_1010_);
@@ -3409,6 +3407,7 @@ _start:
 lean_object* v_res_1318_; 
 v_res_1318_ = l_Lean_recordExtraModUseFromDecl___redArg___lam__2(v_env_1304_, v___x_1305_, v_inst_1306_, v_inst_1307_, v_inst_1308_, v_inst_1309_, v_inst_1310_, v_inst_1311_, v_declName_1312_, v_toBind_1313_, v___f_1314_, v_a_1315_, v_x_1316_, v___y_1317_);
 lean_dec(v_a_1315_);
+lean_dec_ref(v___x_1305_);
 lean_dec_ref(v_env_1304_);
 return v_res_1318_;
 }

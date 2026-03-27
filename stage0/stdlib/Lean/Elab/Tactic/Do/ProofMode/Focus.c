@@ -26,7 +26,7 @@ lean_object* l_Lean_Elab_Tactic_Do_ProofMode_parseEmptyHyp_x3f(lean_object*);
 lean_object* lean_expr_dbg_to_string(lean_object*);
 lean_object* lean_string_append(lean_object*, lean_object*);
 lean_object* l_mkPanicMessageWithDecl(lean_object*, lean_object*, lean_object*, lean_object*, lean_object*);
-lean_object* lean_panic_fn(lean_object*, lean_object*);
+lean_object* lean_panic_fn_borrowed(lean_object*, lean_object*);
 lean_object* l_Lean_Name_mkStr5(lean_object*, lean_object*, lean_object*, lean_object*, lean_object*);
 lean_object* l_Lean_Elab_Tactic_Do_ProofMode_SPred_mkAnd_x21(lean_object*, lean_object*, lean_object*, lean_object*);
 lean_object* lean_st_ref_get(lean_object*);
@@ -182,7 +182,7 @@ _start:
 {
 lean_object* v___x_12_; lean_object* v___x_13_; 
 v___x_12_ = lean_box(0);
-v___x_13_ = lean_panic_fn(v___x_12_, v_msg_11_);
+v___x_13_ = lean_panic_fn_borrowed(v___x_12_, v_msg_11_);
 return v___x_13_;
 }
 }
@@ -1147,10 +1147,6 @@ lean_dec(v_name_308_);
 lean_dec_ref(v_goal_307_);
 v___x_339_ = lean_obj_once(&l_Lean_Elab_Tactic_Do_ProofMode_MGoal_focusHypWithInfo___closed__1, &l_Lean_Elab_Tactic_Do_ProofMode_MGoal_focusHypWithInfo___closed__1_once, _init_l_Lean_Elab_Tactic_Do_ProofMode_MGoal_focusHypWithInfo___closed__1);
 v___x_340_ = l_Lean_throwError___at___00Lean_Elab_Tactic_Do_ProofMode_MGoal_focusHypWithInfo_spec__0___redArg(v___x_339_, v_a_309_, v_a_310_, v_a_311_, v_a_312_);
-lean_dec(v_a_312_);
-lean_dec_ref(v_a_311_);
-lean_dec(v_a_310_);
-lean_dec_ref(v_a_309_);
 return v___x_340_;
 }
 }
@@ -1169,10 +1165,6 @@ v___x_345_ = lean_alloc_ctor(7, 2, 0);
 lean_ctor_set(v___x_345_, 0, v___x_343_);
 lean_ctor_set(v___x_345_, 1, v___x_344_);
 v___x_346_ = l_Lean_throwError___at___00Lean_Elab_Tactic_Do_ProofMode_MGoal_focusHypWithInfo_spec__0___redArg(v___x_345_, v_a_309_, v_a_310_, v_a_311_, v_a_312_);
-lean_dec(v_a_312_);
-lean_dec_ref(v_a_311_);
-lean_dec(v_a_310_);
-lean_dec_ref(v_a_309_);
 return v___x_346_;
 }
 }
@@ -1182,6 +1174,10 @@ _start:
 {
 lean_object* v_res_354_; 
 v_res_354_ = l_Lean_Elab_Tactic_Do_ProofMode_MGoal_focusHypWithInfo(v_goal_347_, v_name_348_, v_a_349_, v_a_350_, v_a_351_, v_a_352_);
+lean_dec(v_a_352_);
+lean_dec_ref(v_a_351_);
+lean_dec(v_a_350_);
+lean_dec_ref(v_a_349_);
 return v_res_354_;
 }
 }

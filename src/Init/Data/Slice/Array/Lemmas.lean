@@ -126,7 +126,7 @@ public theorem forIn_toList {α : Type u} {s : Subarray α}
     ForIn.forIn s.toList init f = ForIn.forIn s init f :=
   Slice.forIn_toList
 
-@[grind =]
+@[cbv_eval, grind =]
 public theorem forIn_eq_forIn_toList {α : Type u} {s : Subarray α}
     {m : Type v → Type w} [Monad m] [LawfulMonad m] {γ : Type v} {init : γ}
     {f : α → γ → m (ForInStep γ)} :
@@ -193,6 +193,7 @@ public theorem Array.toSubarray_eq_toSubarray_of_min_eq_min {xs : Array α}
         simp [*]; omega
       · simp
 
+@[cbv_eval]
 public theorem Array.toSubarray_eq_min {xs : Array α} {lo hi : Nat} :
     xs.toSubarray lo hi = ⟨⟨xs, min lo (min hi xs.size), min hi xs.size, Nat.min_le_right _ _,
       Nat.min_le_right _ _⟩⟩ := by
@@ -243,6 +244,7 @@ private theorem Std.Internal.List.extract_eq_drop_take' {l : List α} {start sto
       List.length_take, ge_iff_le, h₁]
     omega
 
+@[cbv_eval]
 public theorem Subarray.toList_eq_drop_take {xs : Subarray α} :
     xs.toList = (xs.array.toList.take xs.stop).drop xs.start := by
   rw [Subarray.toList_eq, Array.toList_extract, Std.Internal.List.extract_eq_drop_take']

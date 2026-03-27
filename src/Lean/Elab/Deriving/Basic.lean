@@ -9,6 +9,7 @@ prelude
 public import Lean.Elab.App
 public import Lean.Elab.DeclNameGen
 import Lean.Compiler.NoncomputableAttr
+import Lean.Meta.WrapInstance
 
 public section
 
@@ -187,7 +188,7 @@ def processDefDeriving (view : DerivingClassView) (decl : Expr) (isNoncomputable
   let ConstantInfo.defnInfo info ← getConstInfo declName
     | throwError "Failed to delta derive instance, `{.ofConstName declName}` is not a definition."
   let value := info.value.beta decl.getAppArgs
-  let result : Closure.MkValueTypeClosureResult ←
+  let (result, preNormValue, instName) : Closure.MkValueTypeClosureResult × Expr × Name ←
     -- Assumption: users intend delta deriving to apply to the body of a definition, even if in the source code
     -- the function is written as a lambda expression.
     -- Furthermore, we don't use `forallTelescope` because users want to derive instances for monads.
@@ -210,22 +211,34 @@ def processDefDeriving (view : DerivingClassView) (decl : Expr) (isNoncomputable
           -- We don't reduce because of abbreviations such as `DecidableEq`
           forallTelescope classExpr fun _ classExpr => do
             let result ← mkInst classExpr declName decl value
-            Closure.mkValueTypeClosure result.instType result.instVal (zetaDelta := true)
+            -- Save the pre-wrapping value for the noncomputable check below,
+            -- since `wrapInstance` may inline noncomputable constants.
+            let preNormClosure ← Closure.mkValueTypeClosure result.instType result.instVal (zetaDelta := true)
+            -- Compute instance name early so `wrapInstance` can use it for aux def naming.
+            let env ← getEnv
+            let mut instName := (← getCurrNamespace) ++ (← NameGen.mkBaseNameWithSuffix "inst" preNormClosure.type)
+            instName ← liftMacroM <| mkUnusedBaseName instName
+            if isPrivateName declName then
+              instName := mkPrivateName env instName
+            let isMeta := (← read).declName?.any (isMarkedMeta (← getEnv))
+            let inst ← if backward.inferInstanceAs.wrap.get (← getOptions) then
+              withDeclNameForAuxNaming instName <| withNewMCtxDepth <|
+                wrapInstance result.instVal result.instType
+                  (logCompileErrors := false)  -- covered by noncomputable check below
+                  (isMeta := isMeta)
+            else
+              pure result.instVal
+            let closure ← Closure.mkValueTypeClosure result.instType inst (zetaDelta := true)
+            return (closure, preNormClosure.value, instName)
         finally
           Core.setMessageLog (msgLog ++ (← Core.getMessageLog))
   let env ← getEnv
-  let mut instName := (← getCurrNamespace) ++ (← NameGen.mkBaseNameWithSuffix "inst" result.type)
-  -- We don't have a facility to let users override derived names, so make an unused name if needed.
-  instName ← liftMacroM <| mkUnusedBaseName instName
-  -- Make the instance private if the declaration is private.
-  if isPrivateName declName then
-    instName := mkPrivateName env instName
   let hints := ReducibilityHints.regular (getMaxHeight env result.value + 1)
   let decl ← mkDefinitionValInferringUnsafe instName result.levelParams.toList result.type result.value hints
   -- Pre-check: if the instance value depends on noncomputable definitions and the user didn't write
   -- `noncomputable`, give an actionable error with a `Try this:` suggestion.
   unless isNoncomputable || (← read).isNoncomputableSection || (← isProp result.type) do
-    let noncompRef? := result.value.foldConsts none fun n acc =>
+    let noncompRef? := preNormValue.foldConsts none fun n acc =>
       acc <|> if Lean.isNoncomputable (asyncMode := .local) env n then some n else none
     if let some noncompRef := noncompRef? then
       if let some cmdRef := cmdRef? then

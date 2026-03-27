@@ -233,6 +233,7 @@ goto v___jp_24_;
 v___jp_24_:
 {
 lean_object* v___x_26_; uint8_t v___x_27_; lean_object* v___x_28_; lean_object* v___x_29_; lean_object* v___x_30_; lean_object* v___x_31_; uint8_t v___x_32_; lean_object* v___x_33_; lean_object* v___x_34_; lean_object* v___x_35_; lean_object* v___x_36_; lean_object* v___x_37_; lean_object* v___x_38_; lean_object* v___x_39_; lean_object* v___x_40_; lean_object* v___x_41_; lean_object* v___x_42_; lean_object* v___x_43_; lean_object* v___x_44_; uint8_t v___x_45_; lean_object* v___x_46_; 
+lean_inc_ref(v___y_25_);
 v___x_26_ = lean_alloc_ctor(3, 1, 0);
 lean_ctor_set(v___x_26_, 0, v___y_25_);
 v___x_27_ = 1;
@@ -292,7 +293,6 @@ lean_dec(v___x_69_);
 if (v___x_71_ == 0)
 {
 uint8_t v___x_72_; lean_object* v___x_73_; lean_object* v___x_74_; 
-lean_dec_ref(v_a_63_);
 v___x_72_ = 1;
 v___x_73_ = lean_box(v___x_72_);
 v___x_74_ = lean_alloc_ctor(0, 2, 0);
@@ -303,7 +303,6 @@ return v___x_74_;
 else
 {
 lean_object* v___x_75_; 
-lean_inc_ref(v_a_63_);
 v___x_75_ = l_Lean_Macro_getCurrNamespace(v_a_63_, v_a_64_);
 if (lean_obj_tag(v___x_75_) == 0)
 {
@@ -334,7 +333,6 @@ lean_dec(v_a_76_);
 if (v___x_81_ == 0)
 {
 uint8_t v___x_82_; lean_object* v___x_83_; lean_object* v___x_85_; 
-lean_dec_ref(v_a_63_);
 v___x_82_ = 2;
 v___x_83_ = lean_box(v___x_82_);
 if (v_isShared_80_ == 0)
@@ -361,9 +359,8 @@ else
 {
 lean_object* v_ref_87_; lean_object* v___x_88_; lean_object* v___x_89_; lean_object* v___x_91_; 
 v_ref_87_ = lean_ctor_get(v_a_63_, 5);
-lean_inc(v_ref_87_);
-lean_dec_ref(v_a_63_);
 v___x_88_ = ((lean_object*)(l_Lean_Elab_toAttributeKind___closed__5));
+lean_inc(v_ref_87_);
 v___x_89_ = lean_alloc_ctor(0, 2, 0);
 lean_ctor_set(v___x_89_, 0, v_ref_87_);
 lean_ctor_set(v___x_89_, 1, v___x_88_);
@@ -393,7 +390,6 @@ return v___x_91_;
 else
 {
 lean_object* v_a_94_; lean_object* v_a_95_; lean_object* v___x_97_; uint8_t v_isShared_98_; uint8_t v_isSharedCheck_102_; 
-lean_dec_ref(v_a_63_);
 v_a_94_ = lean_ctor_get(v___x_75_, 0);
 v_a_95_ = lean_ctor_get(v___x_75_, 1);
 v_isSharedCheck_102_ = !lean_is_exclusive(v___x_75_);
@@ -441,7 +437,6 @@ else
 {
 uint8_t v___x_103_; lean_object* v___x_104_; lean_object* v___x_105_; 
 lean_dec(v___x_66_);
-lean_dec_ref(v_a_63_);
 v___x_103_ = 0;
 v___x_104_ = lean_box(v___x_103_);
 v___x_105_ = lean_alloc_ctor(0, 2, 0);
@@ -456,6 +451,7 @@ _start:
 {
 lean_object* v_res_109_; 
 v_res_109_ = l_Lean_Elab_toAttributeKind(v_attrKindStx_106_, v_a_107_, v_a_108_);
+lean_dec_ref(v_a_107_);
 lean_dec(v_attrKindStx_106_);
 return v_res_109_;
 }

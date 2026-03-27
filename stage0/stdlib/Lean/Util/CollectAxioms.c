@@ -13,8 +13,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-lean_object* lean_mk_empty_array_with_capacity(lean_object*);
-extern lean_object* l_Lean_NameSet_empty;
 uint8_t l_Lean_NameSet_contains(lean_object*, lean_object*);
 lean_object* l_Lean_NameSet_insert(lean_object*, lean_object*);
 lean_object* lean_task_get_own(lean_object*);
@@ -28,16 +26,22 @@ size_t lean_usize_of_nat(lean_object*);
 uint8_t lean_usize_dec_eq(size_t, size_t);
 lean_object* lean_array_uget_borrowed(lean_object*, size_t);
 size_t lean_usize_add(size_t, size_t);
+lean_object* lean_mk_empty_array_with_capacity(lean_object*);
+extern lean_object* l_Lean_NameSet_empty;
 LEAN_EXPORT lean_object* l___private_Init_Data_Array_Basic_0__Array_foldlMUnsafe_fold___at___00Lean_CollectAxioms_collect_spec__0(lean_object*, size_t, size_t, lean_object*, lean_object*, lean_object*);
 LEAN_EXPORT lean_object* l_Lean_CollectAxioms_collect___lam__0(lean_object*, lean_object*, lean_object*);
 LEAN_EXPORT lean_object* l_Lean_CollectAxioms_collect(lean_object*, lean_object*, lean_object*);
 LEAN_EXPORT lean_object* l_List_forM___at___00Lean_CollectAxioms_collect_spec__1(lean_object*, lean_object*, lean_object*);
+LEAN_EXPORT lean_object* l_List_forM___at___00Lean_CollectAxioms_collect_spec__1___boxed(lean_object*, lean_object*, lean_object*);
 LEAN_EXPORT lean_object* l___private_Init_Data_Array_Basic_0__Array_foldlMUnsafe_fold___at___00Lean_CollectAxioms_collect_spec__0___boxed(lean_object*, lean_object*, lean_object*, lean_object*, lean_object*, lean_object*);
+LEAN_EXPORT lean_object* l_Lean_CollectAxioms_collect___lam__0___boxed(lean_object*, lean_object*, lean_object*);
+LEAN_EXPORT lean_object* l_Lean_CollectAxioms_collect___boxed(lean_object*, lean_object*, lean_object*);
 static const lean_array_object l_Lean_collectAxioms___redArg___lam__0___closed__0_value = {.m_header = {.m_rc = 0, .m_cs_sz = sizeof(lean_array_object) + sizeof(void*)*0, .m_other = 0, .m_tag = 246}, .m_size = 0, .m_capacity = 0, .m_data = {}};
 static const lean_object* l_Lean_collectAxioms___redArg___lam__0___closed__0 = (const lean_object*)&l_Lean_collectAxioms___redArg___lam__0___closed__0_value;
 static lean_once_cell_t l_Lean_collectAxioms___redArg___lam__0___closed__1_once = LEAN_ONCE_CELL_INITIALIZER;
 static lean_object* l_Lean_collectAxioms___redArg___lam__0___closed__1;
 LEAN_EXPORT lean_object* l_Lean_collectAxioms___redArg___lam__0(lean_object*, lean_object*, lean_object*);
+LEAN_EXPORT lean_object* l_Lean_collectAxioms___redArg___lam__0___boxed(lean_object*, lean_object*, lean_object*);
 LEAN_EXPORT lean_object* l_Lean_collectAxioms___redArg(lean_object*, lean_object*, lean_object*);
 LEAN_EXPORT lean_object* l_Lean_collectAxioms(lean_object*, lean_object*, lean_object*, lean_object*);
 LEAN_EXPORT lean_object* l___private_Init_Data_Array_Basic_0__Array_foldlMUnsafe_fold___at___00Lean_CollectAxioms_collect_spec__0(lean_object* v_as_1_, size_t v_i_2_, size_t v_stop_3_, lean_object* v_b_4_, lean_object* v___y_5_, lean_object* v___y_6_){
@@ -49,7 +53,6 @@ if (v___x_7_ == 0)
 {
 lean_object* v___x_8_; lean_object* v___x_9_; lean_object* v_fst_10_; lean_object* v_snd_11_; size_t v___x_12_; size_t v___x_13_; 
 v___x_8_ = lean_array_uget_borrowed(v_as_1_, v_i_2_);
-lean_inc_ref(v___y_5_);
 lean_inc(v___x_8_);
 v___x_9_ = l_Lean_CollectAxioms_collect(v___x_8_, v___y_5_, v___y_6_);
 v_fst_10_ = lean_ctor_get(v___x_9_, 0);
@@ -67,7 +70,6 @@ goto _start;
 else
 {
 lean_object* v___x_15_; 
-lean_dec_ref(v___y_5_);
 v___x_15_ = lean_alloc_ctor(0, 2, 0);
 lean_ctor_set(v___x_15_, 0, v_b_4_);
 lean_ctor_set(v___x_15_, 1, v___y_6_);
@@ -88,7 +90,6 @@ if (v___x_23_ == 0)
 {
 lean_object* v___x_24_; 
 lean_dec_ref(v___x_19_);
-lean_dec_ref(v___y_17_);
 v___x_24_ = lean_alloc_ctor(0, 2, 0);
 lean_ctor_set(v___x_24_, 0, v___x_22_);
 lean_ctor_set(v___x_24_, 1, v___y_18_);
@@ -104,7 +105,6 @@ if (v___x_23_ == 0)
 {
 lean_object* v___x_26_; 
 lean_dec_ref(v___x_19_);
-lean_dec_ref(v___y_17_);
 v___x_26_ = lean_alloc_ctor(0, 2, 0);
 lean_ctor_set(v___x_26_, 0, v___x_22_);
 lean_ctor_set(v___x_26_, 1, v___y_18_);
@@ -198,7 +198,6 @@ if (lean_obj_tag(v___x_47_) == 0)
 lean_object* v___x_48_; lean_object* v___x_49_; 
 lean_dec(v___x_43_);
 lean_dec_ref(v_axioms_37_);
-lean_dec_ref(v_a_34_);
 lean_dec(v_c_33_);
 v___x_48_ = lean_box(0);
 v___x_49_ = lean_alloc_ctor(0, 2, 0);
@@ -240,7 +239,6 @@ lean_object* v___x_57_; lean_object* v___x_58_;
 lean_dec_ref(v_val_50_);
 lean_dec(v___x_43_);
 lean_dec_ref(v_axioms_37_);
-lean_dec_ref(v_a_34_);
 lean_dec(v_c_33_);
 v___x_57_ = lean_box(0);
 v___x_58_ = lean_alloc_ctor(0, 2, 0);
@@ -265,7 +263,6 @@ lean_dec_ref(v_val_59_);
 v_type_62_ = lean_ctor_get(v_toConstantVal_60_, 2);
 lean_inc_ref(v_type_62_);
 lean_dec_ref(v_toConstantVal_60_);
-lean_inc_ref(v_a_34_);
 v___x_63_ = l_Lean_CollectAxioms_collect___lam__0(v_type_62_, v_a_34_, v___x_45_);
 v_snd_64_ = lean_ctor_get(v___x_63_, 1);
 lean_inc(v_snd_64_);
@@ -326,7 +323,6 @@ lean_dec_ref(v_val_74_);
 v_type_77_ = lean_ctor_get(v_toConstantVal_75_, 2);
 lean_inc_ref(v_type_77_);
 lean_dec_ref(v_toConstantVal_75_);
-lean_inc_ref(v_a_34_);
 v___x_78_ = l_Lean_CollectAxioms_collect___lam__0(v_type_77_, v_a_34_, v___x_45_);
 v_snd_79_ = lean_ctor_get(v___x_78_, 1);
 lean_inc(v_snd_79_);
@@ -342,7 +338,6 @@ return v___x_80_;
 else
 {
 lean_object* v___x_85_; lean_object* v___x_86_; 
-lean_dec_ref(v_a_34_);
 lean_dec(v_c_33_);
 v___x_85_ = lean_box(0);
 v___x_86_ = lean_alloc_ctor(0, 2, 0);
@@ -358,7 +353,6 @@ _start:
 if (lean_obj_tag(v_as_87_) == 0)
 {
 lean_object* v___x_90_; lean_object* v___x_91_; 
-lean_dec_ref(v___y_88_);
 v___x_90_ = lean_box(0);
 v___x_91_ = lean_alloc_ctor(0, 2, 0);
 lean_ctor_set(v___x_91_, 0, v___x_90_);
@@ -373,7 +367,6 @@ lean_inc(v_head_92_);
 v_tail_93_ = lean_ctor_get(v_as_87_, 1);
 lean_inc(v_tail_93_);
 lean_dec_ref(v_as_87_);
-lean_inc_ref(v___y_88_);
 v___x_94_ = l_Lean_CollectAxioms_collect(v_head_92_, v___y_88_, v___y_89_);
 v_snd_95_ = lean_ctor_get(v___x_94_, 1);
 lean_inc(v_snd_95_);
@@ -384,75 +377,112 @@ goto _start;
 }
 }
 }
-LEAN_EXPORT lean_object* l___private_Init_Data_Array_Basic_0__Array_foldlMUnsafe_fold___at___00Lean_CollectAxioms_collect_spec__0___boxed(lean_object* v_as_97_, lean_object* v_i_98_, lean_object* v_stop_99_, lean_object* v_b_100_, lean_object* v___y_101_, lean_object* v___y_102_){
+LEAN_EXPORT lean_object* l_List_forM___at___00Lean_CollectAxioms_collect_spec__1___boxed(lean_object* v_as_97_, lean_object* v___y_98_, lean_object* v___y_99_){
 _start:
 {
-size_t v_i_boxed_103_; size_t v_stop_boxed_104_; lean_object* v_res_105_; 
-v_i_boxed_103_ = lean_unbox_usize(v_i_98_);
-lean_dec(v_i_98_);
-v_stop_boxed_104_ = lean_unbox_usize(v_stop_99_);
-lean_dec(v_stop_99_);
-v_res_105_ = l___private_Init_Data_Array_Basic_0__Array_foldlMUnsafe_fold___at___00Lean_CollectAxioms_collect_spec__0(v_as_97_, v_i_boxed_103_, v_stop_boxed_104_, v_b_100_, v___y_101_, v___y_102_);
-lean_dec_ref(v_as_97_);
-return v_res_105_;
+lean_object* v_res_100_; 
+v_res_100_ = l_List_forM___at___00Lean_CollectAxioms_collect_spec__1(v_as_97_, v___y_98_, v___y_99_);
+lean_dec_ref(v___y_98_);
+return v_res_100_;
+}
+}
+LEAN_EXPORT lean_object* l___private_Init_Data_Array_Basic_0__Array_foldlMUnsafe_fold___at___00Lean_CollectAxioms_collect_spec__0___boxed(lean_object* v_as_101_, lean_object* v_i_102_, lean_object* v_stop_103_, lean_object* v_b_104_, lean_object* v___y_105_, lean_object* v___y_106_){
+_start:
+{
+size_t v_i_boxed_107_; size_t v_stop_boxed_108_; lean_object* v_res_109_; 
+v_i_boxed_107_ = lean_unbox_usize(v_i_102_);
+lean_dec(v_i_102_);
+v_stop_boxed_108_ = lean_unbox_usize(v_stop_103_);
+lean_dec(v_stop_103_);
+v_res_109_ = l___private_Init_Data_Array_Basic_0__Array_foldlMUnsafe_fold___at___00Lean_CollectAxioms_collect_spec__0(v_as_101_, v_i_boxed_107_, v_stop_boxed_108_, v_b_104_, v___y_105_, v___y_106_);
+lean_dec_ref(v___y_105_);
+lean_dec_ref(v_as_101_);
+return v_res_109_;
+}
+}
+LEAN_EXPORT lean_object* l_Lean_CollectAxioms_collect___lam__0___boxed(lean_object* v_e_110_, lean_object* v___y_111_, lean_object* v___y_112_){
+_start:
+{
+lean_object* v_res_113_; 
+v_res_113_ = l_Lean_CollectAxioms_collect___lam__0(v_e_110_, v___y_111_, v___y_112_);
+lean_dec_ref(v___y_111_);
+return v_res_113_;
+}
+}
+LEAN_EXPORT lean_object* l_Lean_CollectAxioms_collect___boxed(lean_object* v_c_114_, lean_object* v_a_115_, lean_object* v_a_116_){
+_start:
+{
+lean_object* v_res_117_; 
+v_res_117_ = l_Lean_CollectAxioms_collect(v_c_114_, v_a_115_, v_a_116_);
+lean_dec_ref(v_a_115_);
+return v_res_117_;
 }
 }
 static lean_object* _init_l_Lean_collectAxioms___redArg___lam__0___closed__1(void){
 _start:
 {
-lean_object* v___x_108_; lean_object* v___x_109_; lean_object* v___x_110_; 
-v___x_108_ = ((lean_object*)(l_Lean_collectAxioms___redArg___lam__0___closed__0));
-v___x_109_ = l_Lean_NameSet_empty;
-v___x_110_ = lean_alloc_ctor(0, 2, 0);
-lean_ctor_set(v___x_110_, 0, v___x_109_);
-lean_ctor_set(v___x_110_, 1, v___x_108_);
-return v___x_110_;
+lean_object* v___x_120_; lean_object* v___x_121_; lean_object* v___x_122_; 
+v___x_120_ = ((lean_object*)(l_Lean_collectAxioms___redArg___lam__0___closed__0));
+v___x_121_ = l_Lean_NameSet_empty;
+v___x_122_ = lean_alloc_ctor(0, 2, 0);
+lean_ctor_set(v___x_122_, 0, v___x_121_);
+lean_ctor_set(v___x_122_, 1, v___x_120_);
+return v___x_122_;
 }
 }
-LEAN_EXPORT lean_object* l_Lean_collectAxioms___redArg___lam__0(lean_object* v_constName_111_, lean_object* v_toPure_112_, lean_object* v_env_113_){
+LEAN_EXPORT lean_object* l_Lean_collectAxioms___redArg___lam__0(lean_object* v_constName_123_, lean_object* v_toPure_124_, lean_object* v_env_125_){
 _start:
 {
-lean_object* v___x_114_; lean_object* v___x_115_; lean_object* v_snd_116_; lean_object* v_axioms_117_; lean_object* v___x_118_; 
-v___x_114_ = lean_obj_once(&l_Lean_collectAxioms___redArg___lam__0___closed__1, &l_Lean_collectAxioms___redArg___lam__0___closed__1_once, _init_l_Lean_collectAxioms___redArg___lam__0___closed__1);
-v___x_115_ = l_Lean_CollectAxioms_collect(v_constName_111_, v_env_113_, v___x_114_);
-v_snd_116_ = lean_ctor_get(v___x_115_, 1);
-lean_inc(v_snd_116_);
-lean_dec_ref(v___x_115_);
-v_axioms_117_ = lean_ctor_get(v_snd_116_, 1);
-lean_inc_ref(v_axioms_117_);
-lean_dec(v_snd_116_);
-v___x_118_ = lean_apply_2(v_toPure_112_, lean_box(0), v_axioms_117_);
-return v___x_118_;
+lean_object* v___x_126_; lean_object* v___x_127_; lean_object* v_snd_128_; lean_object* v_axioms_129_; lean_object* v___x_130_; 
+v___x_126_ = lean_obj_once(&l_Lean_collectAxioms___redArg___lam__0___closed__1, &l_Lean_collectAxioms___redArg___lam__0___closed__1_once, _init_l_Lean_collectAxioms___redArg___lam__0___closed__1);
+v___x_127_ = l_Lean_CollectAxioms_collect(v_constName_123_, v_env_125_, v___x_126_);
+v_snd_128_ = lean_ctor_get(v___x_127_, 1);
+lean_inc(v_snd_128_);
+lean_dec_ref(v___x_127_);
+v_axioms_129_ = lean_ctor_get(v_snd_128_, 1);
+lean_inc_ref(v_axioms_129_);
+lean_dec(v_snd_128_);
+v___x_130_ = lean_apply_2(v_toPure_124_, lean_box(0), v_axioms_129_);
+return v___x_130_;
 }
 }
-LEAN_EXPORT lean_object* l_Lean_collectAxioms___redArg(lean_object* v_inst_119_, lean_object* v_inst_120_, lean_object* v_constName_121_){
+LEAN_EXPORT lean_object* l_Lean_collectAxioms___redArg___lam__0___boxed(lean_object* v_constName_131_, lean_object* v_toPure_132_, lean_object* v_env_133_){
 _start:
 {
-lean_object* v_toApplicative_122_; lean_object* v_toBind_123_; lean_object* v_getEnv_124_; lean_object* v_toPure_125_; lean_object* v___f_126_; lean_object* v___x_127_; 
-v_toApplicative_122_ = lean_ctor_get(v_inst_119_, 0);
-lean_inc_ref(v_toApplicative_122_);
-v_toBind_123_ = lean_ctor_get(v_inst_119_, 1);
-lean_inc(v_toBind_123_);
-lean_dec_ref(v_inst_119_);
-v_getEnv_124_ = lean_ctor_get(v_inst_120_, 0);
-lean_inc(v_getEnv_124_);
-lean_dec_ref(v_inst_120_);
-v_toPure_125_ = lean_ctor_get(v_toApplicative_122_, 1);
-lean_inc(v_toPure_125_);
-lean_dec_ref(v_toApplicative_122_);
-v___f_126_ = lean_alloc_closure((void*)(l_Lean_collectAxioms___redArg___lam__0), 3, 2);
-lean_closure_set(v___f_126_, 0, v_constName_121_);
-lean_closure_set(v___f_126_, 1, v_toPure_125_);
-v___x_127_ = lean_apply_4(v_toBind_123_, lean_box(0), lean_box(0), v_getEnv_124_, v___f_126_);
-return v___x_127_;
+lean_object* v_res_134_; 
+v_res_134_ = l_Lean_collectAxioms___redArg___lam__0(v_constName_131_, v_toPure_132_, v_env_133_);
+lean_dec_ref(v_env_133_);
+return v_res_134_;
 }
 }
-LEAN_EXPORT lean_object* l_Lean_collectAxioms(lean_object* v_m_128_, lean_object* v_inst_129_, lean_object* v_inst_130_, lean_object* v_constName_131_){
+LEAN_EXPORT lean_object* l_Lean_collectAxioms___redArg(lean_object* v_inst_135_, lean_object* v_inst_136_, lean_object* v_constName_137_){
 _start:
 {
-lean_object* v___x_132_; 
-v___x_132_ = l_Lean_collectAxioms___redArg(v_inst_129_, v_inst_130_, v_constName_131_);
-return v___x_132_;
+lean_object* v_toApplicative_138_; lean_object* v_toBind_139_; lean_object* v_getEnv_140_; lean_object* v_toPure_141_; lean_object* v___f_142_; lean_object* v___x_143_; 
+v_toApplicative_138_ = lean_ctor_get(v_inst_135_, 0);
+lean_inc_ref(v_toApplicative_138_);
+v_toBind_139_ = lean_ctor_get(v_inst_135_, 1);
+lean_inc(v_toBind_139_);
+lean_dec_ref(v_inst_135_);
+v_getEnv_140_ = lean_ctor_get(v_inst_136_, 0);
+lean_inc(v_getEnv_140_);
+lean_dec_ref(v_inst_136_);
+v_toPure_141_ = lean_ctor_get(v_toApplicative_138_, 1);
+lean_inc(v_toPure_141_);
+lean_dec_ref(v_toApplicative_138_);
+v___f_142_ = lean_alloc_closure((void*)(l_Lean_collectAxioms___redArg___lam__0___boxed), 3, 2);
+lean_closure_set(v___f_142_, 0, v_constName_137_);
+lean_closure_set(v___f_142_, 1, v_toPure_141_);
+v___x_143_ = lean_apply_4(v_toBind_139_, lean_box(0), lean_box(0), v_getEnv_140_, v___f_142_);
+return v___x_143_;
+}
+}
+LEAN_EXPORT lean_object* l_Lean_collectAxioms(lean_object* v_m_144_, lean_object* v_inst_145_, lean_object* v_inst_146_, lean_object* v_constName_147_){
+_start:
+{
+lean_object* v___x_148_; 
+v___x_148_ = l_Lean_collectAxioms___redArg(v_inst_145_, v_inst_146_, v_constName_147_);
+return v___x_148_;
 }
 }
 lean_object* runtime_initialize_Lean_MonadEnv(uint8_t builtin);
