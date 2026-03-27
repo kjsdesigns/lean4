@@ -7,10 +7,9 @@ module
 
 prelude
 public import Std.Do'.WP
+@[expose] public section
 
 set_option linter.missingDocs true
-
-@[expose] public section
 
 open Lean.Order
 
@@ -33,7 +32,7 @@ variable {m : Type u → Type v} {l : Type u} {e : Type u}
 /-- A Hoare triple for reasoning about monadic programs. A Hoare triple `Triple pre x post epost`
 is a *specification* for `x`: if assertion `pre` holds before `x`, then postcondition `post` holds
 after running `x` (and `epost` handles any errors). -/
-inductive Triple [Monad m] [WPMonad m l e] (pre : l) (x : m α) (post : α → l) (epost : e) : Prop
+inductive Triple [Monad m] [AssertionLang l] [ExceptAssertionLang e] [WPMonad m l e] (pre : l) (x : m α) (post : α → l) (epost : e) : Prop
   /-- Construct a triple from a weakest precondition entailment. -/
   | intro (hwp : pre ⊑ wp x post epost)
 
@@ -43,7 +42,7 @@ notation:60 "⦃ " pre " ⦄ " x " ⦃ " post " ⦄" => Triple pre x post ⊥
 notation:60 "⦃ " pre " ⦄ " x " ⦃ " v ", " post " ⦄" => Triple pre x (fun v => post) ⊥
 namespace Triple
 
-variable [Monad m] [WPMonad m l e]
+variable [Monad m] [AssertionLang l] [ExceptAssertionLang e] [WPMonad m l e]
 
 theorem iff {x : m α} {pre : l} {post : α → l} {epost : e} :
     Triple pre x post epost ↔ (pre ⊑ wp x post epost) :=
