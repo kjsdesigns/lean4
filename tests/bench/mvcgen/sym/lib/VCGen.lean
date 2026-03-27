@@ -674,12 +674,8 @@ open Sym Sym.Internal
 meta def mkAppNS [Monad m] [Internal.MonadShareCommon m] (f : Expr) (args : Array Expr) : m Expr :=
   mkAppRangeS f 0 args.size args
 
-/--
-Simplify the forall telescope of the target using `Sym.Simp.simpTelescope`,
-then introduce all binders via `Sym.intros`.
--/
-meta def introsSimp (mvarId : MVarId) : VCGenM IntrosResult := do
-  let some methods := (← read).hypSimpMethods | return ← Sym.intros mvarId
+meta def simpTargetTelescope (mvarId : MVarId) : VCGenM MVarId := do
+  let some methods := (← read).hypSimpMethods | return mvarId
   let target ← mvarId.getType
   let simpState := (← get).simpState
   let methods := { methods with pre := Sym.Simp.simpTelescope }
@@ -688,6 +684,13 @@ meta def introsSimp (mvarId : MVarId) : VCGenM IntrosResult := do
   let mvarId ← match result with
     | .rfl .. => pure mvarId
     | .step newTarget proof .. => mvarId.replaceTargetEq newTarget proof
+
+/--
+Simplify the forall telescope of the target using `Sym.Simp.simpTelescope`,
+then introduce all binders via `Sym.intros`.
+-/
+meta def introsSimp (mvarId : MVarId) : VCGenM IntrosResult := do
+  let mvarId ← simpTargetTelescope mvarId
   Sym.intros mvarId
 
 /-- Internalize pending hypotheses into the E-graph for sharing before forking to multiple subgoals.
