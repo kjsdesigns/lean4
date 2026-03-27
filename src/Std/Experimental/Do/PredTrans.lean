@@ -6,8 +6,8 @@ Authors: Vladimir Gladshtein, Sebastian Graf
 module
 
 prelude
-public import Std.Do'.LatticeExt
-public import Std.Do'.ExceptPost
+public import Std.Experimental.Do.LatticeExt
+public import Std.Experimental.Do.ExceptPost
 universe u v w z
 @[expose] public section
 
@@ -35,7 +35,7 @@ an exception postcondition `epost : EPred`, and returns a precondition of type `
 - Instances for `Monad`, `LawfulMonad`, `MonadStateOf`, `MonadExceptOf`, etc.
 -/
 
-namespace Std.Do'
+namespace Std.Experimental.Do
 
 /-- A monotone predicate transformer from postconditions to preconditions.
 
@@ -290,4 +290,4 @@ instance {ε : Type u} {Pred : Type v} {EPred : Type w} {ε' : Type u}
       (fun e => ⟨fun post' epost' => (handle e).apply post' ⟨epost.head, epost'⟩⟩)).apply
       post epost.tail⟩
 
-end Std.Do'
+end Std.Experimental.Do

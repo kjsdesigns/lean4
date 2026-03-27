@@ -6,7 +6,7 @@ Authors: Vladimir Gladshtein, Sebastian Graf
 module
 
 prelude
-public import Std.Do'.Triple.Basic
+public import Std.Experimental.Do.Triple.Basic
 public import Init.Data.Range.Polymorphic.Iterators
 import Init.Data.Range.Polymorphic
 public import Init.Data.Slice.Array
@@ -177,7 +177,7 @@ theorem lt_of_range'_eq_append_cons (h : range' s n step = xs ++ i :: ys) (hstep
 end List
 
 
-namespace Std.Do'
+namespace Std.Experimental.Do
 
 open Lean.Order
 
@@ -693,11 +693,11 @@ theorem Spec.restoreM_trans
       (MonadControlT.restoreM (m:=n₂) x : m α) post epost :=
   Triple.iff.mpr (by rw [WP.restoreM_trans_wp])
 
-end Std.Do'
+end Std.Experimental.Do
 
 -- /-! # `ForIn` -/
 
-namespace Std.Do'
+namespace Std.Experimental.Do
 
 universe u₁ u₂ v
 
@@ -2393,4 +2393,4 @@ theorem Spec.forIn_stringSlice
     simp only [String.toList_empty, List.forIn_nil]
     exact Triple.pure init Lean.Order.PartialOrder.rel_refl
 
-end Std.Do'
+end Std.Experimental.Do

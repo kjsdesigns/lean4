@@ -6,7 +6,7 @@ Authors: Vladimir Gladshtein, Sebastian Graf
 module
 
 prelude
-public import Std.Do'.Triple.Basic
-public import Std.Do'.Triple.SpecLemmas
+public import Std.Experimental.Do.WP.Basic
+public import Std.Experimental.Do.WP.Lemmas
 
 set_option linter.missingDocs true

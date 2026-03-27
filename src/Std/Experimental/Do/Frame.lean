@@ -7,7 +7,7 @@ module
 
 prelude
 import Lean
-public import Std.Do'.LatticeExt
+public import Std.Experimental.Do.LatticeExt
 
 public section
 

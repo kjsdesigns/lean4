@@ -6,7 +6,7 @@ Authors: Vladimir Gladshtein, Sebastian Graf
 module
 
 prelude
-public import Std.Do'.WP.Basic
+public import Std.Experimental.Do.WP.Basic
 @[expose] public section
 
 set_option linter.missingDocs true
@@ -21,7 +21,7 @@ Some lemmas prove only one direction (`⊑`) instead of equality because our `wp
 only provides one direction.
 -/
 
-namespace Std.Do'.WP
+namespace Std.Experimental.Do.WP
 
 open Lean.Order WP
 
@@ -684,4 +684,4 @@ theorem orElse_OptionT_wp [Monad m] [Assertion Pred] [Assertion EPred] [WP m Pre
     simp [EPost.cons.pushOption]; exact PartialOrder.rel_refl
   | none => exact PartialOrder.rel_refl
 
-end Std.Do'.WP
+end Std.Experimental.Do.WP
