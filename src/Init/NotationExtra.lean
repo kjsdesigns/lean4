@@ -358,25 +358,3 @@ meta def insertUnexpander : Lean.PrettyPrinter.Unexpander
   | _ => throw ()
 
 end Lean
-
-namespace Lean.Parser.Tactic
-
-/-- An invariant alternative of the form `· term`, one per invariant goal. -/
-syntax goalDotAlt := ppDedent(ppLine) cdotTk (colGe term)
-
-/-- An invariant alternative of the form `| inv<n> a b c => term`, one per invariant goal. -/
-syntax goalCaseAlt := ppDedent(ppLine) "| " caseArg " => " (colGe term)
-
-/-- Either the contextual keyword ` invariants ` or its tracing form ` invariants? `. -/
-syntax invariantsKW := &"invariants " <|> &"invariants? "
-
-/-- After `mvcgen [...]`, the optional `invariants` section. See the `mvcgen` docstring. -/
-syntax invariantAlts := invariantsKW withPosition((colGe (goalDotAlt <|> goalCaseAlt))*)
-
-/-- A VC alternative of the form `| case1 | case2 => tacticSeq`. -/
-syntax vcAlt := "| " sepBy1(caseArg, " | ") " => " tacticSeq
-
-/-- After `with`, an optional tactic and then a list of alternatives. -/
-syntax vcAlts := "with " (ppSpace colGt tactic)? withPosition((colGe vcAlt)*)
-
-end Lean.Parser.Tactic

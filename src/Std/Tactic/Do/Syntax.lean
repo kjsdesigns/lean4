@@ -363,6 +363,44 @@ macro "mvcgen_trivial" : tactic =>
     | try mvcgen_trivial_extensible
   )
 
+/--
+An invariant alternative of the form `· term`, one per invariant goal.
+-/
+syntax goalDotAlt := ppDedent(ppLine) cdotTk (colGe term)
+
+/--
+An invariant alternative of the form `| inv<n> a b c => term`, one per invariant goal.
+-/
+syntax goalCaseAlt := ppDedent(ppLine) "| " caseArg " => " (colGe term)
+
+/--
+Either the contextual keyword ` invariants ` or its tracing form ` invariants? ` which suggests
+skeletons for missing invariants as a hint.
+-/
+syntax invariantsKW := &"invariants " <|> &"invariants? "
+
+/--
+After `mvcgen [...]`, there can be an optional `invariants` followed by either
+* a bulleted list of invariants `· term; · term`.
+* a labelled list of invariants `| inv1 => term; inv2 a b c => term`, which is useful for naming
+  inaccessibles.
+The tracing variant ` invariants? ` will suggest a skeleton for missing invariants; see the
+docstring for `mvcgen`.
+-/
+syntax invariantAlts := invariantsKW withPosition((colGe (goalDotAlt <|> goalCaseAlt))*)
+
+/--
+In induction alternative, which can have 1 or more cases on the left
+and `_`, `?_`, or a tactic sequence after the `=>`.
+-/
+syntax vcAlt := "| " sepBy1(caseArg, " | ") " => " tacticSeq -- `case` tactic has "case " instead of "| "
+
+/--
+After `with`, there is an optional tactic that runs on all branches, and
+then a list of alternatives.
+-/
+syntax vcAlts := "with " (ppSpace colGt tactic)? withPosition((colGe vcAlt)*)
+
 @[tactic_alt Lean.Parser.Tactic.mvcgenMacro]
 syntax (name := mvcgen) "mvcgen" optConfig
   (" [" withoutPosition((simpStar <|> simpErase <|> simpLemma),*,?) "] ")?
