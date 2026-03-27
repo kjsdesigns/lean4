@@ -68,6 +68,7 @@ uint8_t l_Lean_Expr_isApp(lean_object*);
 lean_object* l_Lean_Expr_appFnCleanup___redArg(lean_object*);
 uint8_t l_Lean_Expr_isConstOf(lean_object*, lean_object*);
 lean_object* l_Lean_Meta_Simp_removeUnnecessaryCasts(lean_object*, lean_object*, lean_object*, lean_object*, lean_object*);
+lean_object* lean_array_get(lean_object*, lean_object*, lean_object*);
 lean_object* l_Array_reverse___redArg(lean_object*);
 lean_object* l_Lean_Meta_Sym_Simp_Result_withContextDependent(lean_object*);
 lean_object* lean_array_fget_borrowed(lean_object*, lean_object*);
@@ -273,7 +274,7 @@ _start:
 {
 lean_object* v___y_11_; lean_object* v___x_14_; uint8_t v_debug_15_; 
 v___x_14_ = lean_st_ref_get(v___y_4_);
-v_debug_15_ = lean_ctor_get_uint8(v___x_14_, sizeof(void*)*8);
+v_debug_15_ = lean_ctor_get_uint8(v___x_14_, sizeof(void*)*9);
 lean_dec(v___x_14_);
 if (v_debug_15_ == 0)
 {
@@ -2918,7 +2919,7 @@ _start:
 {
 lean_object* v___y_902_; lean_object* v___x_905_; uint8_t v_debug_906_; 
 v___x_905_ = lean_st_ref_get(v___y_895_);
-v_debug_906_ = lean_ctor_get_uint8(v___x_905_, sizeof(void*)*8);
+v_debug_906_ = lean_ctor_get_uint8(v___x_905_, sizeof(void*)*9);
 lean_dec(v___x_905_);
 if (v_debug_906_ == 0)
 {
@@ -5170,9 +5171,10 @@ lean_inc_ref(v_arg_1598_);
 lean_dec_ref(v_e_1582_);
 v___x_1612_ = 0;
 v___x_1613_ = lean_box(v___x_1612_);
-v___x_1614_ = lean_array_get_borrowed(v___x_1613_, v_argKinds_1580_, v_i_1583_);
+v___x_1614_ = lean_array_get(v___x_1613_, v_argKinds_1580_, v_i_1583_);
 lean_dec(v___x_1613_);
 v___x_1615_ = lean_unbox(v___x_1614_);
+lean_dec(v___x_1614_);
 switch(v___x_1615_)
 {
 case 5:

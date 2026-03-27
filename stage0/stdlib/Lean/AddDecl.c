@@ -1453,6 +1453,7 @@ lean_ctor_set(v___x_302_, 1, v_openDecls_289_);
 v___x_303_ = lean_alloc_ctor(4, 2, 0);
 lean_ctor_set(v___x_303_, 0, v___x_302_);
 lean_ctor_set(v___x_303_, 1, v___y_279_);
+lean_inc_ref(v___y_278_);
 lean_inc_ref(v___y_282_);
 v___x_304_ = lean_alloc_ctor(0, 5, 3);
 lean_ctor_set(v___x_304_, 0, v___y_282_);
@@ -1805,12 +1806,12 @@ uint8_t v___x_434_;
 v___x_434_ = lean_usize_dec_lt(v_i_432_, v_sz_431_);
 if (v___x_434_ == 0)
 {
+lean_inc_ref(v_b_433_);
 return v_b_433_;
 }
 else
 {
 lean_object* v_a_435_; lean_object* v_fst_436_; lean_object* v___x_437_; uint8_t v___x_438_; 
-lean_dec_ref(v_b_433_);
 v_a_435_ = lean_array_uget_borrowed(v_as_430_, v_i_432_);
 v_fst_436_ = lean_ctor_get(v_a_435_, 0);
 v___x_437_ = lean_box(0);
@@ -1850,6 +1851,7 @@ lean_dec(v_sz_447_);
 v_i_boxed_451_ = lean_unbox_usize(v_i_448_);
 lean_dec(v_i_448_);
 v_res_452_ = l___private_Init_Data_Array_Basic_0__Array_forIn_x27Unsafe_loop___at___00Lean_warnIfUsesSorry_spec__3(v_as_446_, v_sz_boxed_450_, v_i_boxed_451_, v_b_449_);
+lean_dec_ref(v_b_449_);
 lean_dec_ref(v_as_446_);
 return v_res_452_;
 }
@@ -8628,7 +8630,6 @@ v_env_3041_ = lean_ctor_get(v___x_3040_, 0);
 lean_inc_ref(v_env_3041_);
 lean_dec(v___x_3040_);
 v___x_3042_ = l_Lean_Environment_containsOnBranch(v_env_3041_, v_fst_2932_);
-lean_dec_ref(v_env_3041_);
 if (v___x_3042_ == 0)
 {
 lean_del_object(v___x_2934_);
@@ -9906,7 +9907,6 @@ v_env_3448_ = lean_ctor_get(v___x_3447_, 0);
 lean_inc_ref(v_env_3448_);
 lean_dec(v___x_3447_);
 v___x_3449_ = l_Lean_Environment_containsOnBranch(v_env_3448_, v_fst_3337_);
-lean_dec_ref(v_env_3448_);
 if (v___x_3449_ == 0)
 {
 lean_del_object(v___x_3339_);
@@ -11334,7 +11334,6 @@ v_env_3853_ = lean_ctor_get(v___x_3852_, 0);
 lean_inc_ref(v_env_3853_);
 lean_dec(v___x_3852_);
 v___x_3854_ = l_Lean_Environment_containsOnBranch(v_env_3853_, v_fst_3846_);
-lean_dec_ref(v_env_3853_);
 if (v___x_3854_ == 0)
 {
 v___y_3796_ = v_fst_3846_;
@@ -12279,7 +12278,6 @@ v_env_4537_ = lean_ctor_get(v___x_4536_, 0);
 lean_inc_ref(v_env_4537_);
 lean_dec(v___x_4536_);
 v___x_4538_ = l_Lean_Environment_containsOnBranch(v_env_4537_, v_fst_4530_);
-lean_dec_ref(v_env_4537_);
 if (v___x_4538_ == 0)
 {
 v___y_4501_ = v_snd_4532_;

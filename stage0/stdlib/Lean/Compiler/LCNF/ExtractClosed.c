@@ -4262,8 +4262,8 @@ goto v___jp_1051_;
 }
 else
 {
-lean_dec(v_pre_1083_);
 lean_dec_ref(v_declName_1082_);
+lean_dec(v_pre_1083_);
 lean_dec_ref(v_value_1081_);
 lean_dec(v_val_1080_);
 lean_dec_ref(v_k_1040_);
@@ -5210,7 +5210,7 @@ _start:
 lean_object* v___x_1407_; lean_object* v___x_1408_; lean_object* v___x_1409_; lean_object* v___x_1410_; lean_object* v___x_1411_; lean_object* v___x_1412_; 
 v___x_1407_ = ((lean_object*)(l_Lean_Compiler_LCNF_ExtractClosed_visitCode___closed__2));
 v___x_1408_ = lean_unsigned_to_nat(9u);
-v___x_1409_ = lean_unsigned_to_nat(635u);
+v___x_1409_ = lean_unsigned_to_nat(640u);
 v___x_1410_ = ((lean_object*)(l_Lean_Compiler_LCNF_ExtractClosed_visitCode___closed__1));
 v___x_1411_ = ((lean_object*)(l_Lean_Compiler_LCNF_ExtractClosed_visitCode___closed__0));
 v___x_1412_ = l_mkPanicMessageWithDecl(v___x_1411_, v___x_1410_, v___x_1409_, v___x_1408_, v___x_1407_);

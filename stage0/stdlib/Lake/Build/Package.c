@@ -475,12 +475,12 @@ uint8_t v___x_9_;
 v___x_9_ = lean_usize_dec_lt(v_i_7_, v_sz_6_);
 if (v___x_9_ == 0)
 {
+lean_inc_ref(v_b_8_);
 return v_b_8_;
 }
 else
 {
 lean_object* v_a_10_; lean_object* v_baseName_11_; lean_object* v___x_12_; uint8_t v___x_13_; 
-lean_dec_ref(v_b_8_);
 v_a_10_ = lean_array_uget_borrowed(v_as_5_, v_i_7_);
 v_baseName_11_ = lean_ctor_get(v_a_10_, 1);
 v___x_12_ = lean_box(0);
@@ -520,6 +520,7 @@ lean_dec(v_sz_23_);
 v_i_boxed_27_ = lean_unbox_usize(v_i_24_);
 lean_dec(v_i_24_);
 v_res_28_ = l___private_Init_Data_Array_Basic_0__Array_forIn_x27Unsafe_loop___at___00__private_Lake_Build_Package_0__Lake_Package_recFetchDeps_spec__0(v___x_21_, v_as_22_, v_sz_boxed_26_, v_i_boxed_27_, v_b_25_);
+lean_dec_ref(v_b_25_);
 lean_dec_ref(v_as_22_);
 lean_dec(v___x_21_);
 return v_res_28_;

@@ -3741,6 +3741,7 @@ return v___x_831_;
 v___jp_832_:
 {
 lean_object* v___x_843_; lean_object* v___x_844_; lean_object* v___x_845_; lean_object* v___x_846_; 
+lean_inc_ref(v___y_842_);
 v___x_843_ = lean_alloc_ctor(3, 1, 0);
 lean_ctor_set(v___x_843_, 0, v___y_842_);
 v___x_844_ = l_Lean_MessageData_ofFormat(v___x_843_);
@@ -5250,6 +5251,7 @@ v___jp_1523_:
 size_t v___x_1525_; size_t v___x_1526_; 
 v___x_1525_ = ((size_t)1ULL);
 v___x_1526_ = lean_usize_add(v_i_1521_, v___x_1525_);
+lean_inc_ref(v_a_1524_);
 v_i_1521_ = v___x_1526_;
 v_b_1522_ = v_a_1524_;
 goto _start;
@@ -8701,12 +8703,14 @@ lean_dec_ref(v___x_2771_);
 lean_inc(v_instName_2754_);
 v___x_2773_ = l___private_Lean_Meta_MethodSpecs_0__Lean_mkSpecTheoremName(v_env_2766_, v_instName_2754_, v___x_2755_, v___x_2772_);
 lean_dec_ref(v_env_2766_);
+lean_inc_ref(v___x_2756_);
 v___x_2774_ = l_Lean_Environment_containsOnBranch(v___x_2756_, v___x_2773_);
 if (v___x_2774_ == 0)
 {
 lean_object* v___x_2776_; 
 lean_dec(v___x_2773_);
 lean_dec(v___x_2770_);
+lean_dec_ref(v___x_2756_);
 lean_dec(v_instName_2754_);
 lean_dec_ref(v_op_2753_);
 if (v_isShared_2765_ == 0)
@@ -8768,7 +8772,6 @@ uint8_t v___x_1804__boxed_2792_; lean_object* v_res_2793_;
 v___x_1804__boxed_2792_ = lean_unbox(v___x_2787_);
 v_res_2793_ = l___private_Init_While_0__Lean_Loop_forIn_loop___at___00Lean_getMethodSpecTheorems_spec__0___redArg(v_op_2785_, v_instName_2786_, v___x_1804__boxed_2792_, v___x_2788_, v_b_2789_, v___y_2790_);
 lean_dec(v___y_2790_);
-lean_dec_ref(v___x_2788_);
 return v_res_2793_;
 }
 }
@@ -8829,7 +8832,6 @@ lean_inc_ref(v_env_2823_);
 lean_dec(v___x_2822_);
 v___x_2824_ = ((lean_object*)(l_Lean_getMethodSpecTheorems___closed__1));
 v___x_2825_ = l___private_Init_While_0__Lean_Loop_forIn_loop___at___00Lean_getMethodSpecTheorems_spec__0___redArg(v_op_2800_, v_instName_2799_, v_privateSpecs_2817_, v_env_2823_, v___x_2824_, v_a_2804_);
-lean_dec_ref(v_env_2823_);
 if (lean_obj_tag(v___x_2825_) == 0)
 {
 lean_object* v_a_2826_; lean_object* v___x_2828_; uint8_t v_isShared_2829_; uint8_t v_isSharedCheck_2837_; 
@@ -9025,7 +9027,6 @@ lean_dec(v___y_2884_);
 lean_dec_ref(v___y_2883_);
 lean_dec(v___y_2882_);
 lean_dec_ref(v___y_2881_);
-lean_dec_ref(v___x_2879_);
 return v_res_2887_;
 }
 }
