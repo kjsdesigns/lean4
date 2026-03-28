@@ -289,7 +289,7 @@ builtin_initialize registerBuiltinAttribute {
 
 /-- Elaborate `register_try?_tactic` command -/
 @[builtin_command_elab registerTryTactic]
-meta def elabRegisterTryTactic : Command.CommandElab := fun stx => do
+def elabRegisterTryTactic : Command.CommandElab := fun stx => do
   if `Lean.Elab.Tactic.Try ∉ (← getEnv).header.moduleNames then
     logWarning "Add `import Lean.Elab.Tactic.Try` before using the `register_try?_tactic` command."
     return
@@ -787,6 +787,7 @@ where
           throw ex
 
 -- `evalSuggest` implementation
+set_option compiler.ignoreBorrowAnnotation true in
 @[export lean_eval_suggest_tactic]
 private partial def evalSuggestImpl : TryTactic := fun tac => do
   trace[try.debug] "{tac}"

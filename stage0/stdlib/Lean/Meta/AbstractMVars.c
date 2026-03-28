@@ -2307,10 +2307,9 @@ uint8_t v___x_686_; uint8_t v___x_687_; lean_object* v___x_688_; lean_object* v_
 v___x_686_ = 0;
 v___x_687_ = 0;
 v___x_688_ = l_Lean_LocalContext_mkLocalDecl(v_lctx_674_, v_fst_665_, v_userName_672_, v_fst_662_, v___x_686_, v___x_687_);
-lean_inc_ref(v___x_670_);
+lean_inc_ref_n(v___x_670_, 2);
 v___x_689_ = lean_array_push(v_fvars_678_, v___x_670_);
 v___x_690_ = lean_array_push(v_mvars_679_, v_e_643_);
-lean_inc_ref(v___x_670_);
 v___x_691_ = l_Std_DHashMap_Internal_Raw_u2080_insert___at___00Lean_Meta_AbstractMVars_abstractExprMVars_spec__2___redArg(v_emap_681_, v_mvarId_647_, v___x_670_);
 if (v_isShared_685_ == 0)
 {
@@ -3847,7 +3846,6 @@ return v___x_1147_;
 else
 {
 lean_object* v_a_1148_; lean_object* v___x_1150_; uint8_t v_isShared_1151_; uint8_t v_isSharedCheck_1155_; 
-lean_dec_ref(v_a_1133_);
 lean_dec_ref(v_a_1132_);
 v_a_1148_ = lean_ctor_get(v___x_1142_, 0);
 v_isSharedCheck_1155_ = !lean_is_exclusive(v___x_1142_);
@@ -3897,6 +3895,7 @@ v_res_1162_ = l_Lean_Meta_openAbstractMVarsResult(v_a_1156_, v_a_1157_, v_a_1158
 lean_dec(v_a_1160_);
 lean_dec_ref(v_a_1159_);
 lean_dec(v_a_1158_);
+lean_dec_ref(v_a_1157_);
 return v_res_1162_;
 }
 }

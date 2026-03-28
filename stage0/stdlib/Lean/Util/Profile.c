@@ -80,6 +80,8 @@ LEAN_EXPORT lean_object* l_Lean_profileitM___redArg___lam__0(lean_object*, lean_
 LEAN_EXPORT lean_object* l_Lean_profileitM___redArg___lam__0___boxed(lean_object*, lean_object*, lean_object*, lean_object*, lean_object*, lean_object*);
 LEAN_EXPORT lean_object* l_Lean_profileitM___redArg(lean_object*, lean_object*, lean_object*, lean_object*, lean_object*);
 LEAN_EXPORT lean_object* l_Lean_profileitM(lean_object*, lean_object*, lean_object*, lean_object*, lean_object*, lean_object*, lean_object*, lean_object*);
+lean_object* lean_display_cumulative_profiling_times();
+LEAN_EXPORT lean_object* l_Lean_displayCumulativeProfilingTimes___boxed(lean_object*);
 LEAN_EXPORT lean_object* l_Lean_Option_register___at___00Lean_initFn_00___x40_Lean_Util_Profile_2256275618____hygCtx___hyg_4__spec__0(lean_object* v_name_1_, lean_object* v_decl_2_, lean_object* v_ref_3_){
 _start:
 {
@@ -108,13 +110,12 @@ lean_object* v___x_10_; uint8_t v___x_11_; lean_object* v___x_12_; lean_object* 
 v___x_10_ = lean_alloc_ctor(1, 0, 1);
 v___x_11_ = lean_unbox(v_defValue_5_);
 lean_ctor_set_uint8(v___x_10_, 0, v___x_11_);
-lean_inc(v_name_1_);
+lean_inc_n(v_name_1_, 2);
 v___x_12_ = lean_alloc_ctor(0, 4, 0);
 lean_ctor_set(v___x_12_, 0, v_name_1_);
 lean_ctor_set(v___x_12_, 1, v_ref_3_);
 lean_ctor_set(v___x_12_, 2, v___x_10_);
 lean_ctor_set(v___x_12_, 3, v_descr_6_);
-lean_inc(v_name_1_);
 v___x_13_ = lean_register_option(v_name_1_, v___x_12_);
 if (lean_obj_tag(v___x_13_) == 0)
 {
@@ -281,13 +282,12 @@ lean_object* v___x_67_; lean_object* v___x_68_; lean_object* v___x_69_;
 lean_inc(v_defValue_62_);
 v___x_67_ = lean_alloc_ctor(3, 1, 0);
 lean_ctor_set(v___x_67_, 0, v_defValue_62_);
-lean_inc(v_name_58_);
+lean_inc_n(v_name_58_, 2);
 v___x_68_ = lean_alloc_ctor(0, 4, 0);
 lean_ctor_set(v___x_68_, 0, v_name_58_);
 lean_ctor_set(v___x_68_, 1, v_ref_60_);
 lean_ctor_set(v___x_68_, 2, v___x_67_);
 lean_ctor_set(v___x_68_, 3, v_descr_63_);
-lean_inc(v_name_58_);
 v___x_69_ = lean_register_option(v_name_58_, v___x_68_);
 if (lean_obj_tag(v___x_69_) == 0)
 {
@@ -846,6 +846,14 @@ _start:
 lean_object* v___x_267_; 
 v___x_267_ = l_Lean_profileitM___redArg(v_inst_261_, v_category_263_, v_opts_264_, v_act_265_, v_decl_266_);
 return v___x_267_;
+}
+}
+LEAN_EXPORT lean_object* l_Lean_displayCumulativeProfilingTimes___boxed(lean_object* v_a_00___x40___internal___hyg_269_){
+_start:
+{
+lean_object* v_res_270_; 
+v_res_270_ = lean_display_cumulative_profiling_times();
+return v_res_270_;
 }
 }
 lean_object* runtime_initialize_Init_Data_OfScientific(uint8_t builtin);

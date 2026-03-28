@@ -421,19 +421,6 @@ public def getArtifact (cache : Cache) (descr : ArtifactDescr) : EIO String Arti
   | .error e =>
     error s!"failed to retrieve artifact from cache: {e}"
 
-/--
-**For internal use only.**
-Returns path to the artifact for each output. Errors if any are missing.
--/
-public def getArtifactPaths
-  (cache : Cache) (descrs : Array ArtifactDescr)
-: LogIO (Vector FilePath descrs.size) := throwIfLogs do
-  (Vector.mk descrs rfl).mapM fun out => do
-    let art := cache.artifactDir / out.relPath
-    unless (← art.pathExists) do
-      logError s!"artifact not found in cache: {art}"
-    return art
-
 /-- The directory where input-to-output mappings are stored in the Lake cache. -/
 @[inline] public def outputsDir (cache : Cache) : FilePath :=
   cache.dir / "outputs"
@@ -558,9 +545,10 @@ public def downloadArtifactCore (hash : Hash) (url : String) (path : FilePath) :
   download url path
   let actualHash ← computeFileHash path
   if actualHash != hash then
-    logError s!"{path}: downloaded artifact does not have the expected hash"
+    let errPos ← getLogPos
+    logError s!"{path}: downloaded artifact hash mismatch, got {actualHash}"
     IO.FS.removeFile path
-    failure
+    throw errPos
 
 /-- Uploads a file to an online bucket using the Amazon S3 protocol. -/
 def uploadS3
@@ -682,33 +670,10 @@ public def downloadArtifact
   let path := cache.artifactDir / descr.relPath
   if (← path.pathExists) && !force then
     return
-  logInfo s!"\
-    {scope}: downloading artifact {descr.hash}\
+  logInfo s!"{scope}: downloading artifact {descr.hash}\
     \n  local path: {path}\
     \n  remote URL: {url}"
   downloadArtifactCore descr.hash url path
-
-public def downloadArtifacts
-   (descrs : Array ArtifactDescr) (cache : Cache)
-   (service : CacheService) (scope : CacheServiceScope) (force := false)
-: LoggerIO Unit := do
-  let ok ← descrs.foldlM (init := true) fun ok descr =>
-    try
-      service.downloadArtifact descr cache scope force
-      return ok
-    catch _ =>
-      return false
-  unless ok do
-    error s!"{scope}: failed to download some artifacts"
-
-@[deprecated "Deprecated without replacement." (since := "2026-02-27")]
-public def downloadOutputArtifacts
-  (map : CacheMap) (cache : Cache) (service : CacheService)
-  (localScope : String) (remoteScope : CacheServiceScope) (force := false)
-: LoggerIO Unit := do
-  cache.writeMap localScope map service.name? remoteScope
-  let descrs ← map.collectOutputDescrs
-  service.downloadArtifacts descrs cache remoteScope force
 
 public def uploadArtifact
   (contentHash : Hash) (art : FilePath) (service : CacheService) (scope : CacheServiceScope)
@@ -720,10 +685,188 @@ public def uploadArtifact
     \n  remote URL: {url}"
   uploadS3 art artifactContentType url service.impl.key
 
+/-! ## Multi-Artifact Transfer -/
+
+private inductive TransferKind
+  | get
+  | put
+  deriving DecidableEq
+
+private structure TransferInfo where
+  url : String
+  path : FilePath
+  descr : ArtifactDescr
+
+private structure TransferConfig where
+  kind : TransferKind
+  scope : CacheServiceScope
+  infos : Array TransferInfo
+  key : String := ""
+
+private structure TransferState where
+  didError : Bool := false
+  numSuccesses : Nat := 0
+
+private partial def monitorTransfer
+  (cfg : TransferConfig) (h hOut : IO.FS.Handle) (s : TransferState)
+: LoggerIO TransferState := do
+  let line ← h.getLine
+  if line.trimAscii.isEmpty then
+    return s
+  else
+    let s ← (·.2) <$> StateT.run (s := s) do
+      match Json.parse line >>= fromJson? with
+      | .ok (out : JsonObject) =>
+        let some info@{url, path, descr} := getInfo? out
+          | logError s!"{cfg.scope}: unidentifiable transfer completed: {line.trimAscii}"
+            modify ({· with didError := true})
+            return
+        match out.get "http_code" with
+        | .ok 200
+        | .ok 201 =>
+          match cfg.kind with
+          | .get =>
+            logInfo s!"{cfg.scope}: downloaded artifact {descr.hash}\
+              \n  local path: {path}\
+              \n  remote URL: {url}"
+            let actualHash ← computeFileHash path
+            if actualHash != descr.hash then
+              logError s!"{path}: downloaded artifact hash mismatch, got {actualHash}"
+              IO.FS.removeFile path
+              modify ({· with didError := true})
+            else
+              modify fun s => {s with numSuccesses := s.numSuccesses + 1}
+          | .put =>
+            logInfo s!"{cfg.scope}: uploaded artifact {descr.hash}\
+              \n  local path: {path}\
+              \n  remote URL: {url}"
+            modify fun s => {s with numSuccesses := s.numSuccesses + 1}
+        | code? =>
+          handleFailure info code? out line
+          modify ({· with didError := true})
+      | .error e =>
+        logError s!"curl produced invalid JSON: {e}; received: {line.trimAscii}"
+        modify ({· with didError := true})
+    monitorTransfer cfg h hOut s
+where
+  getInfo? out :=
+    match out.getAs Nat "urlnum" with
+    | .ok i => cfg.infos[i]?
+    | _ => none
+  handleFailure info code? out line : LoggerIO Unit := do
+    let action := match cfg.kind with | .get => "download" | .put => "upload"
+    let mut msg := s!"{cfg.scope}: failed to {action} artifact {info.descr.hash}"
+    if let .ok code := code? then
+      msg := s!"{msg} (status code: {code})"
+    if let .ok errMsg := out.getAs String "errormsg" then
+      msg := s!"{msg}\n  curl error: {errMsg}"
+    msg := s!"{msg}\
+      \n  local path: {info.path}\
+      \n  remote URL: {info.url}"
+    match cfg.kind with
+    | .get =>
+      if let .ok size := out.getAs Nat "size_download" then
+        if size > 0 then
+          if let .ok contentType := out.getAs String "content_type" then
+            if contentType != artifactContentType then
+              if let .ok resp ← IO.FS.readFile info.path |>.toBaseIO then
+                msg := s!"{msg}\nunexpected response:\n{resp}"
+      removeFileIfExists info.path
+    | .put =>
+      if let .ok size := out.getAs Nat "size_download" then
+        if size > 0 then
+          if let some resp := String.fromUTF8? (← hOut.read size.toUSize) then
+            msg := s!"{msg}\nunexpected response:\n{resp}"
+    logError msg
+    logVerbose s!"curl JSON: {line.trimAsciiEnd}"
+
+private def transferArtifacts
+  (cfg : TransferConfig)
+: LoggerIO Unit := IO.FS.withTempFile fun h path => do
+  let args ← id do
+    match cfg.kind with
+    | .get =>
+      cfg.infos.forM fun info => do
+        h.putStrLn s!"url = {info.url}"
+        h.putStrLn s!"-o {info.path.toString.quote}"
+      h.flush
+      return #[
+        "-Z", "-X", "GET", "-L",
+        "--retry", "3", -- intermittent network errors can occur
+        "-s", "-w", "%{stderr}%{json}\n", "--config", path.toString
+      ]
+    | .put =>
+      cfg.infos.forM fun info => do
+        h.putStrLn s!"-T {info.path.toString.quote}"
+        h.putStrLn s!"url = {info.url}"
+      h.flush
+      return #[
+        "-Z", "-X", "PUT", "-L",
+        "-H", s!"Content-Type: {artifactContentType}",
+        "--retry", "3", -- intermittent network errors can occur
+        "--aws-sigv4", "aws:amz:auto:s3", "--user", cfg.key,
+        "-s", "-w", "%{stderr}%{json}\n", "--config", path.toString
+      ]
+  let child ← IO.Process.spawn {
+    cmd := "curl", args
+    stdout := .piped, stderr := .piped
+  }
+  let s ← monitorTransfer cfg child.stderr child.stdout {}
+  let rc ← child.wait
+  let stdout ← child.stdout.readToEnd
+  let mut didError := s.didError
+  if s.numSuccesses < cfg.infos.size then
+    let action := match cfg.kind with | .get => "download" | .put => "upload"
+    logError s!"{cfg.scope}: failed to {action} some artifacts"
+    didError := true
+  unless stdout.isEmpty do
+    logWarning s!"{cfg.scope}: curl produced unexpected output:\n{stdout.trimAsciiEnd}"
+  if rc != 0 then
+    logError s!"{cfg.scope}: curl exited with code {rc}"
+    didError := true
+  if s.didError then
+    failure
+
+public def downloadArtifacts
+   (descrs : Array ArtifactDescr) (cache : Cache)
+   (service : CacheService) (scope : CacheServiceScope) (force := false)
+: LoggerIO Unit := do
+  if descrs.isEmpty then
+    logWarning "no artifacts to download"
+    return
+  let infos ← descrs.foldlM (init := #[]) fun s descr => do
+    let path := cache.artifactDir / descr.relPath
+    if force then
+      removeFileIfExists path
+    else if (← path.pathExists) then
+      return s
+    let url := service.artifactUrl descr.hash scope
+    return s.push {url, path, descr}
+  if infos.isEmpty then
+    return
+  IO.FS.createDirAll cache.artifactDir
+  transferArtifacts {scope, infos, kind := .get}
+
+@[deprecated "Deprecated without replacement." (since := "2026-02-27")]
+public def downloadOutputArtifacts
+  (map : CacheMap) (cache : Cache) (service : CacheService)
+  (localScope : String) (remoteScope : CacheServiceScope) (force := false)
+: LoggerIO Unit := do
+  cache.writeMap localScope map service.name? remoteScope
+  let descrs ← map.collectOutputDescrs
+  service.downloadArtifacts descrs cache remoteScope force
+
 public def uploadArtifacts
   (descrs : Vector ArtifactDescr n) (paths : Vector FilePath n)
   (service : CacheService) (scope : CacheServiceScope)
-: LoggerIO Unit := n.forM fun n h => service.uploadArtifact descrs[n].hash paths[n] scope
+: LoggerIO Unit := do
+  if n = 0 then
+    logWarning "no artifacts to upload"
+    return
+  let infos ← n.foldM (init := #[]) fun i _ s => do
+    let url := service.artifactUrl descrs[i].hash scope
+    return s.push {url, path := paths[i], descr := descrs[i]}
+  transferArtifacts {scope, infos, kind := .put, key := service.impl.key}
 
 /-! ### Output Transfer -/
 
