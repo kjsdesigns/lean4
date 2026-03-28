@@ -40,7 +40,7 @@ static inline lean_ssl_session_object * lean_to_ssl_session_object(lean_object *
 
 extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_mk_server(b_obj_arg ctx);
 extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_mk_client(b_obj_arg ctx);
-extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_set_server_name(b_obj_arg _role, b_obj_arg ssl, b_obj_arg host);
+extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_set_server_name(b_obj_arg ssl, b_obj_arg host);
 extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_verify_result(b_obj_arg _role, b_obj_arg ssl);
 extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_handshake(b_obj_arg _role, b_obj_arg ssl);
 extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_write(b_obj_arg _role, b_obj_arg ssl, b_obj_arg data);

@@ -51,7 +51,7 @@ def handshakeStep {rc rs : Role} (c : Session rc) (s : Session rs) : IO (Bool ×
   let sOut ← s.drainEncrypted
   if sOut.size > 0 then
     discard <| c.feedEncrypted sOut
-  return (cd, sd)
+  return (cd.isNone, sd.isNone)
 
 partial def runHandshake {rc rs : Role} (c : Session rc) (s : Session rs) : IO Unit := do
   let (cd, sd) ← handshakeStep c s
@@ -128,16 +128,19 @@ def testDataTransfer (certFile keyFile : String) : IO Unit := do
   -- Pipe to server and read back.
   pipeEncrypted clientSess serverSess
   let received ← serverSess.read? 1024
-  assertEqStr (String.fromUTF8! (received.getD ByteArray.empty)) "hello, tls!"
+  match received with
+  | .data bytes => assertEqStr (String.fromUTF8! bytes) "hello, tls!"
+  | _ => throw <| IO.userError "expected data from server session"
 
   -- After draining, pendingEncrypted drops to 0.
   let pendingAfter ← clientSess.pendingEncrypted
   assertEqN pendingAfter 0 "pendingEncrypted after drain"
 
-  -- read? returns none when no data is available.
+  -- read? returns wantIO when no data is available.
   let empty ← clientSess.read? 1024
-  unless empty == none do
-    throw <| IO.userError "expected none when no data available"
+  match empty with
+  | .wantIO _ => return ()
+  | _ => throw <| IO.userError "expected wantIO when no data available"
 
 -- ---------------------------------------------------------------------------
 -- Test 4: pendingPlaintext — write 100 bytes, read 10, rest stays buffered
@@ -210,6 +213,334 @@ def testTCPSSL (addr : SocketAddress) (certFile keyFile : String) : IO Unit := d
   cliTask.block
 
 -- ---------------------------------------------------------------------------
+-- Test 6: Multiple sequential round-trips (no hang between messages)
+-- ---------------------------------------------------------------------------
+
+def testMultipleRoundTrips (addr : SocketAddress) (certFile keyFile : String) : IO Unit := do
+  let serverCtx ← Context.Server.mk
+  serverCtx.configure certFile keyFile
+  let clientCtx ← Context.Client.mk
+  Client.configureContext clientCtx "" false
+
+  let server ← Server.mk serverCtx
+  server.bind addr
+  server.listen 128
+
+  let srvTask ← (do
+    let conn ← server.accept
+    for _ in List.range 5 do
+      let msg ← conn.recv? 1024
+      conn.send (msg.getD ByteArray.empty)
+    conn.shutdown
+  : Async Unit).toIO
+
+  let cliTask ← (do
+    let client ← Client.mk clientCtx
+    client.setServerName "localhost"
+    client.connect addr
+    for i in List.range 5 do
+      let payload := s!"msg{i}".toUTF8
+      client.send payload
+      let resp ← client.recv? 1024
+      let got := String.fromUTF8! (resp.getD ByteArray.empty)
+      unless got == s!"msg{i}" do
+        throw <| IO.userError s!"round-trip {i} mismatch: '{got}'"
+    client.shutdown
+  : Async Unit).toIO
+
+  srvTask.block
+  cliTask.block
+
+-- ---------------------------------------------------------------------------
+-- Test 7: Large payload (> one TLS record = 16 KB), no hang on fragmentation
+-- ---------------------------------------------------------------------------
+
+def testLargePayload (addr : SocketAddress) (certFile keyFile : String) : IO Unit := do
+  let serverCtx ← Context.Server.mk
+  serverCtx.configure certFile keyFile
+  let clientCtx ← Context.Client.mk
+  Client.configureContext clientCtx "" false
+
+  let payloadSize := 64 * 1024  -- 64 KB: spans multiple TLS records
+  let payload := ByteArray.mk (List.replicate payloadSize 0x42).toArray
+
+  let server ← Server.mk serverCtx
+  server.bind addr
+  server.listen 128
+
+  let srvTask ← (do
+    let conn ← server.accept
+    -- Accumulate until we have all bytes, then echo back.
+    let mut buf := ByteArray.empty
+    while buf.size < payloadSize do
+      let chunk ← conn.recv? (payloadSize - buf.size).toUInt64
+      buf := buf ++ chunk.getD ByteArray.empty
+    conn.send buf
+    conn.shutdown
+  : Async Unit).toIO
+
+  let cliTask ← (do
+    let client ← Client.mk clientCtx
+    client.setServerName "localhost"
+    client.connect addr
+    client.send payload
+    let mut buf := ByteArray.empty
+    while buf.size < payloadSize do
+      let chunk ← client.recv? (payloadSize - buf.size).toUInt64
+      buf := buf ++ chunk.getD ByteArray.empty
+    unless buf.size == payloadSize do
+      throw <| IO.userError s!"large payload size mismatch: {buf.size}"
+    client.shutdown
+  : Async Unit).toIO
+
+  srvTask.block
+  cliTask.block
+
+-- ---------------------------------------------------------------------------
+-- Test 8: recv? returns none after peer shutdown (no hang on closed conn)
+-- ---------------------------------------------------------------------------
+
+def testRecvAfterShutdown (addr : SocketAddress) (certFile keyFile : String) : IO Unit := do
+  let serverCtx ← Context.Server.mk
+  serverCtx.configure certFile keyFile
+  let clientCtx ← Context.Client.mk
+  Client.configureContext clientCtx "" false
+
+  let server ← Server.mk serverCtx
+  server.bind addr
+  server.listen 128
+
+  let srvTask ← (do
+    let conn ← server.accept
+    let msg ← conn.recv? 1024
+    conn.send (msg.getD ByteArray.empty)
+    conn.shutdown  -- server closes write side first
+  : Async Unit).toIO
+
+  let cliTask ← (do
+    let client ← Client.mk clientCtx
+    client.setServerName "localhost"
+    client.connect addr
+    client.send "ping".toUTF8
+    -- Receive the echo
+    let resp ← client.recv? 1024
+    let got := String.fromUTF8! (resp.getD ByteArray.empty)
+    unless got == "ping" do
+      throw <| IO.userError s!"echo mismatch: '{got}'"
+    -- After server shutdown, recv? must return none, not hang
+    let closed ← client.recv? 1024
+    unless closed.isNone do
+      throw <| IO.userError "expected none after server shutdown"
+    client.shutdown
+  : Async Unit).toIO
+
+  srvTask.block
+  cliTask.block
+
+-- ---------------------------------------------------------------------------
+-- Test 9: acceptSelector delivers a fully-handshaked connection
+-- ---------------------------------------------------------------------------
+
+def testAcceptSelector (addr : SocketAddress) (certFile keyFile : String) : IO Unit := do
+  let serverCtx ← Context.Server.mk
+  serverCtx.configure certFile keyFile
+  let clientCtx ← Context.Client.mk
+  Client.configureContext clientCtx "" false
+
+  let server ← Server.mk serverCtx
+  server.bind addr
+  server.listen 128
+
+  let srvTask ← (do
+    let conn ← Selectable.one #[
+      .case (selector := server.acceptSelector) (cont := fun c => return c)
+    ]
+    let msg ← conn.recv? 1024
+    conn.send (msg.getD ByteArray.empty)
+    conn.shutdown
+  : Async Unit).toIO
+
+  let cliTask ← (do
+    let client ← Client.mk clientCtx
+    client.setServerName "localhost"
+    client.connect addr
+    client.send "via selector".toUTF8
+    let resp ← client.recv? 1024
+    let got := String.fromUTF8! (resp.getD ByteArray.empty)
+    unless got == "via selector" do
+      throw <| IO.userError s!"selector round-trip mismatch: '{got}'"
+    client.shutdown
+  : Async Unit).toIO
+
+  srvTask.block
+  cliTask.block
+
+-- ---------------------------------------------------------------------------
+-- Test 10: sendAll — multiple buffers are fully delivered and echoed
+-- ---------------------------------------------------------------------------
+
+def testSendAll (addr : SocketAddress) (certFile keyFile : String) : IO Unit := do
+  let serverCtx ← Context.Server.mk
+  serverCtx.configure certFile keyFile
+  let clientCtx ← Context.Client.mk
+  Client.configureContext clientCtx "" false
+
+  -- Three chunks whose concatenation we can verify.
+  let chunks  := #["alpha".toUTF8, "beta".toUTF8, "gamma".toUTF8]
+  let expected := "alphabetagamma"
+  let total    := expected.length
+
+  let server ← Server.mk serverCtx
+  server.bind addr
+  server.listen 128
+
+  let srvTask ← (do
+    let conn ← server.accept
+    let mut buf := ByteArray.empty
+    while buf.size < total do
+      let chunk ← conn.recv? total.toUInt64
+      buf := buf ++ chunk.getD ByteArray.empty
+    conn.send buf
+    conn.shutdown
+  : Async Unit).toIO
+
+  let cliTask ← (do
+    let client ← Client.mk clientCtx
+    client.setServerName "localhost"
+    client.connect addr
+    client.sendAll chunks
+    let mut buf := ByteArray.empty
+    while buf.size < total do
+      let chunk ← client.recv? total.toUInt64
+      buf := buf ++ chunk.getD ByteArray.empty
+    assertEqStr (String.fromUTF8! buf) expected
+    client.shutdown
+  : Async Unit).toIO
+
+  srvTask.block
+  cliTask.block
+
+-- ---------------------------------------------------------------------------
+-- Test 11: recvSelector — server pushes data, client receives via selector
+-- ---------------------------------------------------------------------------
+
+def testRecvSelector (addr : SocketAddress) (certFile keyFile : String) : IO Unit := do
+  let serverCtx ← Context.Server.mk
+  serverCtx.configure certFile keyFile
+  let clientCtx ← Context.Client.mk
+  Client.configureContext clientCtx "" false
+
+  let server ← Server.mk serverCtx
+  server.bind addr
+  server.listen 128
+
+  let srvTask ← (do
+    let conn ← server.accept
+    conn.send "pushed".toUTF8
+    let ack ← conn.recv? 1024
+    let got := String.fromUTF8! (ack.getD ByteArray.empty)
+    unless got == "ack" do
+      throw <| IO.userError s!"server: expected 'ack', got '{got}'"
+    conn.shutdown
+  : Async Unit).toIO
+
+  let cliTask ← (do
+    let client ← Client.mk clientCtx
+    client.setServerName "localhost"
+    client.connect addr
+    -- Block until the server's push arrives, using recvSelector.
+    let result ← Selectable.one #[
+      .case (selector := client.recvSelector 1024) (cont := fun r => return r)
+    ]
+    let got := String.fromUTF8! (result.getD ByteArray.empty)
+    unless got == "pushed" do
+      throw <| IO.userError s!"recvSelector mismatch: '{got}'"
+    client.send "ack".toUTF8
+    client.shutdown
+  : Async Unit).toIO
+
+  srvTask.block
+  cliTask.block
+
+-- ---------------------------------------------------------------------------
+-- Test 12: Sequential reuse — same server socket handles N clients in a row
+-- ---------------------------------------------------------------------------
+
+def testSequentialConnections (addr : SocketAddress) (certFile keyFile : String) : IO Unit := do
+  let serverCtx ← Context.Server.mk
+  serverCtx.configure certFile keyFile
+  let clientCtx ← Context.Client.mk
+  Client.configureContext clientCtx "" false
+
+  let server ← Server.mk serverCtx
+  server.bind addr
+  server.listen 128
+
+  for i in List.range 3 do
+    let srvTask ← (do
+      let conn ← server.accept
+      let msg ← conn.recv? 1024
+      conn.send (msg.getD ByteArray.empty)
+      conn.shutdown
+    : Async Unit).toIO
+
+    let cliTask ← (do
+      let client ← Client.mk clientCtx
+      client.setServerName "localhost"
+      client.connect addr
+      let payload := s!"conn-{i}".toUTF8
+      client.send payload
+      let resp ← client.recv? 1024
+      let got := String.fromUTF8! (resp.getD ByteArray.empty)
+      unless got == s!"conn-{i}" do
+        throw <| IO.userError s!"connection {i} echo mismatch: '{got}'"
+      client.shutdown
+    : Async Unit).toIO
+
+    srvTask.block
+    cliTask.block
+
+-- ---------------------------------------------------------------------------
+-- Test 13: Simultaneous bidirectional — both sides send before either reads,
+--          verifying no deadlock occurs.
+-- ---------------------------------------------------------------------------
+
+def testBidirectional (addr : SocketAddress) (certFile keyFile : String) : IO Unit := do
+  let serverCtx ← Context.Server.mk
+  serverCtx.configure certFile keyFile
+  let clientCtx ← Context.Client.mk
+  Client.configureContext clientCtx "" false
+
+  let server ← Server.mk serverCtx
+  server.bind addr
+  server.listen 128
+
+  let srvTask ← (do
+    let conn ← server.accept
+    conn.send "from-server".toUTF8        -- send without waiting for client first
+    let msg ← conn.recv? 1024
+    let got := String.fromUTF8! (msg.getD ByteArray.empty)
+    unless got == "from-client" do
+      throw <| IO.userError s!"server recv mismatch: '{got}'"
+    conn.shutdown
+  : Async Unit).toIO
+
+  let cliTask ← (do
+    let client ← Client.mk clientCtx
+    client.setServerName "localhost"
+    client.connect addr
+    client.send "from-client".toUTF8      -- send without waiting for server first
+    let msg ← client.recv? 1024
+    let got := String.fromUTF8! (msg.getD ByteArray.empty)
+    unless got == "from-server" do
+      throw <| IO.userError s!"client recv mismatch: '{got}'"
+    client.shutdown
+  : Async Unit).toIO
+
+  srvTask.block
+  cliTask.block
+
+-- ---------------------------------------------------------------------------
 -- Run all tests
 -- ---------------------------------------------------------------------------
 
@@ -236,3 +567,35 @@ def testTCPSSL (addr : SocketAddress) (certFile keyFile : String) : IO Unit := d
 #eval do
   let (certFile, keyFile) ← setupTestCerts
   testTCPSSL (SocketAddressV6.mk (.ofParts 0 0 0 0 0 0 0 1) 18444) certFile keyFile
+
+#eval do
+  let (certFile, keyFile) ← setupTestCerts
+  testMultipleRoundTrips (SocketAddressV4.mk (.ofParts 127 0 0 1) 18445) certFile keyFile
+
+#eval do
+  let (certFile, keyFile) ← setupTestCerts
+  testLargePayload (SocketAddressV4.mk (.ofParts 127 0 0 1) 18446) certFile keyFile
+
+#eval do
+  let (certFile, keyFile) ← setupTestCerts
+  testRecvAfterShutdown (SocketAddressV4.mk (.ofParts 127 0 0 1) 18447) certFile keyFile
+
+#eval do
+  let (certFile, keyFile) ← setupTestCerts
+  testAcceptSelector (SocketAddressV4.mk (.ofParts 127 0 0 1) 18448) certFile keyFile
+
+#eval do
+  let (certFile, keyFile) ← setupTestCerts
+  testSendAll (SocketAddressV4.mk (.ofParts 127 0 0 1) 18449) certFile keyFile
+
+#eval do
+  let (certFile, keyFile) ← setupTestCerts
+  testRecvSelector (SocketAddressV4.mk (.ofParts 127 0 0 1) 18450) certFile keyFile
+
+#eval do
+  let (certFile, keyFile) ← setupTestCerts
+  testSequentialConnections (SocketAddressV4.mk (.ofParts 127 0 0 1) 18451) certFile keyFile
+
+#eval do
+  let (certFile, keyFile) ← setupTestCerts
+  testBidirectional (SocketAddressV4.mk (.ofParts 127 0 0 1) 18452) certFile keyFile

@@ -35,14 +35,7 @@ static inline lean_obj_res mk_ssl_ctx_io_error(char const * where) {
 }
 
 static void configure_ctx_options(SSL_CTX * ctx) {
-    SSL_CTX_set_mode(ctx, SSL_MODE_AUTO_RETRY);
-
-    #ifdef SSL_OP_NO_RENEGOTIATION
     SSL_CTX_clear_options(ctx, SSL_OP_NO_RENEGOTIATION);
-    #endif
-    #ifdef SSL_OP_ALLOW_CLIENT_RENEGOTIATION
-    SSL_CTX_set_options(ctx, SSL_OP_ALLOW_CLIENT_RENEGOTIATION);
-    #endif
 }
 
 static void lean_ssl_context_finalizer(void * ptr) {

@@ -79,6 +79,26 @@ end Context
 private opaque SessionImpl : Role → NonemptyType.{0}
 
 /--
+Indicates what kind of socket I/O OpenSSL needs before the current operation can proceed.
+-/
+inductive IOWant where
+  /-- OpenSSL needs more encrypted bytes from the socket (`SSL_ERROR_WANT_READ`). -/
+  | read
+  /-- OpenSSL needs to flush encrypted bytes to the socket (`SSL_ERROR_WANT_WRITE`). -/
+  | write
+
+/--
+Result of a `Session.read?` call.
+-/
+inductive ReadResult where
+  /-- Plaintext data was successfully decrypted. -/
+  | data (bytes : ByteArray)
+  /-- OpenSSL needs socket I/O before it can produce plaintext. -/
+  | wantIO (want : IOWant)
+  /-- The peer closed the TLS session cleanly (`SSL_ERROR_ZERO_RETURN`). -/
+  | closed
+
+/--
 Represents an OpenSSL SSL session parameterized by role.
 Use `Session.Server` or `Session.Client` for the concrete aliases.
 -/
@@ -131,23 +151,26 @@ Gets the X.509 verify result code after handshake.
 opaque verifyResult {r : Role} (ssl : @& Session r) : IO UInt64
 
 /--
-Runs one handshake step. Returns `true` when the handshake is complete.
+Runs one handshake step.
+Returns `none` when the handshake is complete, or `some w` when OpenSSL needs socket I/O of
+kind `w` before the handshake can proceed.
 -/
 @[extern "lean_uv_ssl_handshake"]
-opaque handshake {r : Role} (ssl : @& Session r) : IO Bool
+opaque handshake {r : Role} (ssl : @& Session r) : IO (Option IOWant)
 
 /--
 Attempts to write plaintext application data into SSL.
-Returns `true` when accepted, `false` when OpenSSL needs more I/O first.
+Returns `none` when the data was accepted, or `some w` when OpenSSL needs socket I/O of kind
+`w` before the write can complete (the data is queued internally and retried after the next read).
 -/
 @[extern "lean_uv_ssl_write"]
-opaque write {r : Role} (ssl : @& Session r) (data : @& ByteArray) : IO Bool
+opaque write {r : Role} (ssl : @& Session r) (data : @& ByteArray) : IO (Option IOWant)
 
 /--
-Attempts to read decrypted plaintext data. Returns `none` when OpenSSL needs more I/O.
+Attempts to read decrypted plaintext data.
 -/
 @[extern "lean_uv_ssl_read"]
-opaque read? {r : Role} (ssl : @& Session r) (maxBytes : UInt64) : IO (Option ByteArray)
+opaque read? {r : Role} (ssl : @& Session r) (maxBytes : UInt64) : IO ReadResult
 
 /--
 Feeds encrypted TLS bytes into the SSL input BIO.

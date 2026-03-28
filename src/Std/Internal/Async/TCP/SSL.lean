@@ -52,26 +52,21 @@ Runs the TLS handshake loop to completion, interleaving SSL state machine steps
 with TCP I/O.
 -/
 private partial def doHandshake (native : Socket) (ssl : Session r) (chunkSize : UInt64) : Async Unit := do
-  dbg_trace "start handshake"
-
-  dbg_trace "checking :D"
-  if ← ssl.handshake then
-    flushEncrypted native ssl
-    dbg_trace "handshaked :D"
-    return ()
-
-  dbg_trace "flush :D"
+  let want ← ssl.handshake
   flushEncrypted native ssl
-
-  dbg_trace "receiving more data"
-  let encrypted? ← Async.ofPromise <| native.recv? chunkSize
-  match encrypted? with
+  match want with
   | none =>
-    throw <| IO.userError "connection closed during TLS handshake"
-  | some encrypted =>
-    dbg_trace "feeding more data"
-    feedEncryptedChunk ssl encrypted
+    return ()
+  | some .write =>
     doHandshake native ssl chunkSize
+  | some .read =>
+    let encrypted? ← Async.ofPromise <| native.recv? chunkSize
+    match encrypted? with
+    | none =>
+      throw <| IO.userError "connection closed during TLS handshake"
+    | some encrypted =>
+      feedEncryptedChunk ssl encrypted
+      doHandshake native ssl chunkSize
 
 -- ## Types
 
@@ -149,42 +144,39 @@ def accept (s : Server) (chunkSize : UInt64 := ioChunkSize) : Async ServerConn :
   return conn
 
 /--
-Tries to accept an incoming TLS connection without blocking.
--/
-@[inline]
-def tryAccept (s : Server) : IO (Option ServerConn) := do
-  let res ← s.native.tryAccept
-  let socket ← IO.ofExcept res
-  match socket with
-  | none => return none
-  | some native => return some (← mkServerConn native s.serverCtx)
-
-/--
-Creates a `Selector` that resolves once `s` has a connection available.
+Creates a `Selector` that resolves once `s` has a connection available and the TLS handshake
+has completed.
 -/
 def acceptSelector (s : Server) : Selector ServerConn :=
   {
-    tryFn :=
-      s.tryAccept
+    tryFn := do
+      let res ← s.native.tryAccept
+      match ← IO.ofExcept res with
+      | none => return none
+      | some native =>
+        let conn ← mkServerConn native s.serverCtx
+        doHandshake conn.native conn.ssl ioChunkSize
+        return some conn
 
     registerFn waiter := do
-      let task ← s.native.accept
+      let connTask ← (do
+        let native ← Async.ofPromise <| s.native.accept
+        let ssl ← Session.Server.mk s.serverCtx
+        let conn : ServerConn := ⟨native, ssl⟩
+        doHandshake conn.native conn.ssl ioChunkSize
+        return conn
+      ).asTask
 
       -- If we get cancelled the promise will be dropped so prepare for that
-      IO.chainTask (t := task.result?) fun res => do
-        match res with
-        | none => return ()
-        | some res =>
-          let lose := return ()
-          let win promise := do
-            try
-              let native ← IO.ofExcept res
-              let ssl ← Session.Server.mk s.serverCtx
-              let conn : ServerConn := ⟨native, ssl⟩
-              promise.resolve (.ok conn)
-            catch e =>
-              promise.resolve (.error e)
-          waiter.race lose win
+      discard <| IO.mapTask (t := connTask) fun res => do
+        let lose := return ()
+        let win promise := do
+          try
+            let conn ← IO.ofExcept res
+            promise.resolve (.ok conn)
+          catch e =>
+            promise.resolve (.error e)
+        waiter.race lose win
 
     unregisterFn := s.native.cancelAccept
   }
@@ -197,7 +189,7 @@ def getSockName (s : Server) : IO SocketAddress :=
   s.native.getSockName
 
 /--
-Enables the Nagle algorithm for all client sockets accepted by this server socket.
+Disables the Nagle algorithm for all client sockets accepted by this server socket.
 -/
 @[inline]
 def noDelay (s : Server) : IO Unit :=
@@ -212,8 +204,6 @@ def keepAlive (s : Server) (enable : Bool) (delay : Std.Time.Second.Offset) (_ :
 
 end Server
 
--- ## Connection (shared read/write operations for both roles)
-
 namespace Connection
 
 /--
@@ -222,9 +212,14 @@ Any encrypted TLS output generated is flushed to the socket.
 -/
 @[inline]
 def write {r : Role} (s : Connection r) (data : ByteArray) : Async Bool := do
-  let accepted ← s.ssl.write data
-  flushEncrypted s.native s.ssl
-  return accepted
+  match ← s.ssl.write data with
+  | none =>
+    flushEncrypted s.native s.ssl
+    return true
+  | some _ =>
+    -- Data was queued internally; flush whatever the SSL engine produced.
+    flushEncrypted s.native s.ssl
+    return false
 
 /--
 Sends data through a TLS-enabled socket.
@@ -246,14 +241,17 @@ def sendAll {r : Role} (s : Connection r) (data : Array ByteArray) : Async Unit 
 
 /--
 Receives decrypted plaintext data from TLS.
-If no plaintext is immediately available, this function pulls encrypted data from TCP first.
+If no plaintext is immediately available, this function performs the required socket I/O
+(flush or receive) and retries until data arrives or the connection is closed.
 -/
 partial def recv? {r : Role} (s : Connection r) (size : UInt64) (chunkSize : UInt64 := ioChunkSize) : Async (Option ByteArray) := do
   match ← s.ssl.read? size with
-  | some plain =>
+  | .data plain =>
     flushEncrypted s.native s.ssl
     return some plain
-  | none =>
+  | .closed =>
+    return none
+  | .wantIO _ =>
     flushEncrypted s.native s.ssl
     let encrypted? ← Async.ofPromise <| s.native.recv? chunkSize
     match encrypted? with
@@ -294,31 +292,30 @@ partial def tryRecv {r : Role} (s : Connection r) (size : UInt64) (chunkSize : U
 Feeds encrypted socket data into SSL until plaintext is pending.
 Resolves the returned promise once plaintext is available.
 -/
-partial def waitReadable {r : Role} (s : Connection r) (chunkSize : UInt64 := ioChunkSize) : Async Unit := do
+partial def waitReadable {r : Role} (s : Connection r) : Async Unit := do
+  flushEncrypted s.native s.ssl
+
+  let pending ← s.ssl.pendingPlaintext
+  if pending > 0 then
+    return ()
+
   if (← s.ssl.pendingPlaintext) > 0 then
     return ()
 
-  let rec go : Async Unit := do
-    let readable ← Async.ofPromise <| s.native.waitReadable
-
-    if !readable then
-      return ()
-
-    let encrypted? ← Async.ofPromise <| s.native.recv? chunkSize
-
+  match ← s.ssl.read? 0 with
+  | .data _ =>
+    flushEncrypted s.native s.ssl
+    return ()
+  | .closed =>
+    return ()
+  | .wantIO _ =>
+    flushEncrypted s.native s.ssl
+    let encrypted? ← Async.ofPromise <| s.native.recv? ioChunkSize
     match encrypted? with
-    | none =>
-      return ()
+    | none => return ()
     | some encrypted =>
       feedEncryptedChunk s.ssl encrypted
-      flushEncrypted s.native s.ssl
-
-      if (← s.ssl.pendingPlaintext) > 0 then
-        return ()
-      else
-        go
-
-  go
+      waitReadable s
 
 /--
 Creates a `Selector` that resolves once `s` has plaintext data available.
@@ -377,7 +374,7 @@ def verifyResult {r : Role} (s : Connection r) : IO UInt64 :=
   s.ssl.verifyResult
 
 /--
-Enables the Nagle algorithm for the socket.
+Disables the Nagle algorithm for the socket.
 -/
 @[inline]
 def noDelay {r : Role} (s : Connection r) : IO Unit :=

@@ -8,6 +8,7 @@ module
 prelude
 public import Std.Time
 public import Std.Internal.UV.TCP
+public import Std.Internal.Async.IO
 public import Std.Internal.Async.Select
 
 public section
@@ -253,6 +254,10 @@ Enables TCP keep-alive with a specified delay for the client socket.
 @[inline]
 def keepAlive (s : Client) (enable : Bool) (delay : Std.Time.Second.Offset) (_ : delay.val ≥ 0 := by decide) : IO Unit :=
   s.native.keepAlive enable.toInt8 delay.val.toNat.toUInt32
+
+instance : Async.IO.AsyncStream Client ByteArray where
+  write := send
+  read := recv?
 
 end Client
 end Socket
