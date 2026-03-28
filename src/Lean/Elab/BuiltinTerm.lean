@@ -7,7 +7,7 @@ module
 
 prelude
 public import Lean.Meta.Diagnostics
-public import Lean.Meta.InstanceNormalForm
+public import Lean.Meta.WrapInstance
 public import Lean.Elab.Open
 public import Lean.Elab.SetOption
 public import Lean.Elab.Eval
@@ -315,9 +315,16 @@ private def mkSilentAnnotationIfHole (e : Expr) : TermElabM Expr := do
   | _ => panic! "resolveId? returned an unexpected expression"
 
 @[builtin_term_elab Lean.Parser.Term.inferInstanceAs] def elabInferInstanceAs : TermElab := fun stx expectedType? => do
-  let expectedType ← tryPostponeIfHasMVars expectedType? "`inferInstanceAs` failed"
   -- The type argument is the last child (works for both `inferInstanceAs T` and `inferInstanceAs <| T`)
   let typeStx := stx[stx.getNumArgs - 1]!
+  if !backward.inferInstanceAs.wrap.get (← getOptions) then
+    return (← elabTerm (← `(_root_.inferInstanceAs $(⟨typeStx⟩))) expectedType?)
+
+  let some expectedType ← tryPostponeIfHasMVars? expectedType? |
+    throwError (m!"`inferInstanceAs` failed, expected type contains metavariables{indentD expectedType?}" ++
+      .note "`inferInstanceAs` requires full knowledge of the expected (\"target\") type to do its \
+        instance translation. If you do not intend to transport instances between two types, \
+        consider using `inferInstance` or `(inferInstance : expectedType)` instead.")
   let type ← withSynthesize (postpone := .yes) <| elabType typeStx
   -- Unify with expected type to resolve metavariables (e.g., `_` placeholders)
   discard <| isDefEq type expectedType
@@ -327,10 +334,10 @@ private def mkSilentAnnotationIfHole (e : Expr) : TermElabM Expr := do
   let type ← abstractInstImplicitArgs type
   let inst ← synthInstance type
   let inst ← if backward.inferInstanceAs.wrap.get (← getOptions) then
-    -- Normalize to instance normal form.
+    -- Wrap instance so its type matches the expected type exactly.
     let logCompileErrors := !(← read).isNoncomputableSection && !(← read).declName?.any (Lean.isNoncomputable (← getEnv))
-    let isMeta := (← read).isMetaSection
-    withNewMCtxDepth <| normalizeInstance inst expectedType (logCompileErrors := logCompileErrors) (isMeta := isMeta)
+    let isMeta := (← read).declName?.any (isMarkedMeta (← getEnv))
+    withNewMCtxDepth <| wrapInstance inst expectedType (logCompileErrors := logCompileErrors) (isMeta := isMeta)
   else
     pure inst
   ensureHasType expectedType? inst
