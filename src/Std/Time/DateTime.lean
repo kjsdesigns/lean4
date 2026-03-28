@@ -12,8 +12,7 @@ import all Std.Time.Date.Unit.Month
 
 public section
 
-namespace Std
-namespace Time
+namespace Std.Time
 
 namespace Timestamp
 
@@ -106,4 +105,4 @@ def toPlainTime (pdt : PlainDateTime) : PlainTime :=
 instance : HSub PlainDateTime PlainDateTime Duration where
   hSub x y := x.toTimestampAssumingUTC - y.toTimestampAssumingUTC
 
-end PlainDateTime
+end Std.Time.PlainDateTime

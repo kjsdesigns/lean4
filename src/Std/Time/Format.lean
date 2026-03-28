@@ -12,10 +12,8 @@ import all Std.Time.Format.Basic
 
 public section
 
-namespace Std
-namespace Time
-namespace Formats
-open Internal
+namespace Std.Time.Formats
+open Std.Time (Format)
 
 set_option linter.all true
 
