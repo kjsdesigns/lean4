@@ -255,10 +255,6 @@ Enables TCP keep-alive with a specified delay for the client socket.
 def keepAlive (s : Client) (enable : Bool) (delay : Std.Time.Second.Offset) (_ : delay.val ≥ 0 := by decide) : IO Unit :=
   s.native.keepAlive enable.toInt8 delay.val.toNat.toUInt32
 
-instance : Async.IO.AsyncStream Client ByteArray where
-  write := send
-  read := recv?
-
 end Client
 end Socket
 end TCP

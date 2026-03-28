@@ -25,7 +25,7 @@ This module provides buffered asynchronous I/O operations for efficient reading 
 Interface for asynchronous reading operations.
 -/
 class AsyncRead (α : Type) (β : Type) where
-  read : α → UInt64 → Async β
+  read : α → Async β
 
 /--
 Interface for asynchronous writing operations.
@@ -42,7 +42,7 @@ class AsyncWrite (α : Type) (β : Type) where
 /--
 Interface for asynchronous streaming with selector-based iteration.
 -/
-class AsyncStream (α : Type) (β : outParam Type) extends AsyncWrite α β, AsyncRead α β where
+class AsyncStream (α : Type) (β : outParam Type) where
   next : α → Selector β
 
   stop : α → IO Unit :=
