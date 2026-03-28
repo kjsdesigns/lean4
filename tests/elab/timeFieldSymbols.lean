@@ -10,6 +10,11 @@ def tdUTC := zoned("2002-07-14T23:13:12.324354679+00:00")
 -- AM hour (09:13:12 for AM/PM tests)
 def tdAM := zoned("2002-07-14T09:13:12.000000000+09:00")
 
+-- Exact noon and midnight (for day-period tests)
+def tdNoon := zoned("2002-07-14T12:00:00.000000000+09:00")
+def tdMidnight := zoned("2002-07-14T00:00:00.000000000+09:00")
+def tdWeekMonth := zoned("2002-08-05T23:13:12.324354679+09:00")
+
 -- Named timezone (for z/V name tests)
 def tokyoTZ : TimeZone := { offset := { second := 32400 }, name := "Asia/Tokyo", abbreviation := "JST", isDST := false }
 
@@ -18,12 +23,52 @@ def tdNamed := ZonedDateTime.ofPlainDateTime td.toPlainDateTime (TimeZone.ZoneRu
 -- Week-based year boundary: Dec 31, 2018 is in ISO week 1 of 2019
 def tdWeekBound := ZonedDateTime.ofPlainDateTime datetime("2018-12-31T12:00:00") (TimeZone.ZoneRules.ofTimeZone TimeZone.UTC)
 
+-- Additional week-based year boundary cases
+-- Jan 1, 2017 (Sunday) → ISO week 52 of 2016
+def tdWeekBound2 := ZonedDateTime.ofPlainDateTime datetime("2017-01-01T12:00:00") (TimeZone.ZoneRules.ofTimeZone TimeZone.UTC)
+-- Jan 2, 2017 (Monday) → ISO week 1 of 2017
+def tdWeekBound3 := ZonedDateTime.ofPlainDateTime datetime("2017-01-02T12:00:00") (TimeZone.ZoneRules.ofTimeZone TimeZone.UTC)
+-- Dec 31, 2019 (Tuesday) → ISO week 1 of 2020
+def tdWeekBound4 := ZonedDateTime.ofPlainDateTime datetime("2019-12-31T12:00:00") (TimeZone.ZoneRules.ofTimeZone TimeZone.UTC)
+-- Jan 1, 2021 (Friday) → ISO week 53 of 2020
+def tdWeekBound5 := ZonedDateTime.ofPlainDateTime datetime("2021-01-01T12:00:00") (TimeZone.ZoneRules.ofTimeZone TimeZone.UTC)
+-- Jan 4, 2021 (Monday) → ISO week 1 of 2021
+def tdWeekBound6 := ZonedDateTime.ofPlainDateTime datetime("2021-01-04T12:00:00") (TimeZone.ZoneRules.ofTimeZone TimeZone.UTC)
+
+-- Jan 1 (day 1) for D zero-padding tests
+def tdJan1 := zoned("2002-01-01T12:00:00.000000000+09:00")
+
+-- Exact noon/midnight with sub-second nanos (b bug fix verification)
+def tdNoonNano     := zoned("2002-07-14T12:00:00.000000001+09:00")
+def tdMidnightNano := zoned("2002-07-14T00:00:00.000000001+09:00")
+
+-- Small fractional-second values (S truncation fix verification)
+-- 10ms = 10_000_000 ns  →  "010..." not "100..."
+def tdTenMs  := zoned("2002-07-14T23:13:12.010000000+09:00")
+-- 1ms = 1_000_000 ns   →  "001..."
+def tdOneMs  := zoned("2002-07-14T23:13:12.001000000+09:00")
+-- 1ns = 1 ns           →  "000000001"
+def tdOneNs  := zoned("2002-07-14T23:13:12.000000001+09:00")
+
+-- PlainTime values for b-on-PlainTime tests
+def ptNoon         := time("12:00:00.000000000")
+def ptMidnight     := time("00:00:00.000000000")
+def ptAM           := time("09:13:12.000000000")
+def ptPM           := time("23:13:12.000000000")
+def ptNoonNano     := time("12:00:00.000000001")
+def ptMidnightNano := time("00:00:00.000000001")
+
+-- Aligned week-of-month edge cases: Aug 1/4/5/11/12 2002
+def tdAug1  := zoned("2002-08-01T12:00:00.000000000+09:00")  -- Thu, W=1
+def tdAug4  := zoned("2002-08-04T12:00:00.000000000+09:00")  -- Sun, W=1
+def tdAug12 := zoned("2002-08-12T12:00:00.000000000+09:00")  -- Mon, W=3
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- G  Era
 -- ─────────────────────────────────────────────────────────────────────────────
 
 /--
-info: "CE CE CE Common Era C"
+info: "AD AD AD Anno Domini A"
 -/
 #guard_msgs in
 #eval td.format "G GG GGG GGGG GGGGG"
@@ -102,30 +147,30 @@ info: "7 07 Jul July J"
 -- ─────────────────────────────────────────────────────────────────────────────
 
 /--
-info: "28 28 028 0028"
+info: "28 28"
 -/
 #guard_msgs in
-#eval td.format "w ww www wwww"
+#eval td.format "w ww"
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- W  Week of month
+-- W  Week of month (Monday-first)
 -- ─────────────────────────────────────────────────────────────────────────────
 
 /--
-info: "2 02 002 0002"
+info: "2"
 -/
 #guard_msgs in
-#eval td.format "W WW WWW WWWW"
+#eval td.format "W"
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- d  Day of month
 -- ─────────────────────────────────────────────────────────────────────────────
 
 /--
-info: "14 14 014 0014 00014"
+info: "14 14"
 -/
 #guard_msgs in
-#eval td.format "d dd ddd dddd ddddd"
+#eval td.format "d dd"
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- D  Day of year
@@ -138,48 +183,66 @@ info: "195 195 195"
 #eval td.format "D DD DDD"
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- F  Day of week in month
+-- F  Day-of-week-in-month / occurrence within the month
 -- ─────────────────────────────────────────────────────────────────────────────
 
 /--
-info: "2 02 002 0002"
+info: "2"
 -/
 #guard_msgs in
-#eval td.format "F FF FFF FFFF"
+#eval td.format "F"
+
+/--
+info: "2 1"
+-/
+#guard_msgs in
+#eval tdWeekMonth.format "W F"
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- E  Day of week (text only; count 6 = two-letter short)
+-- E  Day of week (text only)
 -- ─────────────────────────────────────────────────────────────────────────────
 
 /--
-info: "Sun Sun Sun Sunday S Su"
+info: "Sun Sun Sun Sunday S"
 -/
 #guard_msgs in
-#eval td.format "E EE EEE EEEE EEEEE EEEEEE"
+#eval td.format "E EE EEE EEEE EEEEE"
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- e  Localized day of week (count 1-2 = numeric ordinal, 3-6 = text)
+-- e  Localized day of week (count 1-2 = numeric ordinal, 3-5 = text)
 -- ─────────────────────────────────────────────────────────────────────────────
 
 /--
-info: "7 07 Sun Sunday S Su"
+info: "7 07 Sun Sunday S"
 -/
 #guard_msgs in
-#eval td.format "e ee eee eeee eeeee eeeeee"
+#eval td.format "e ee eee eeee eeeee"
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- c  Standalone day of week (same output as e here)
+-- c  Standalone day of week (count 1 = numeric, 3-5 = text)
 -- ─────────────────────────────────────────────────────────────────────────────
 
 /--
-info: "7 07 Sun Sunday S Su"
+info: "7 Sun Sunday S"
 -/
 #guard_msgs in
-#eval td.format "c cc ccc cccc ccccc cccccc"
+#eval td.format "c ccc cccc ccccc"
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- a  AM/PM marker (counts 1-4 = short, 5 = narrow)
+-- a  AM/PM marker (counts 1-3 = short, 4 = full, 5 = narrow)
 -- ─────────────────────────────────────────────────────────────────────────────
+
+/--
+info: "PM"
+-/
+#guard_msgs in
+#eval td.format "a"
+
+/--
+info: "AM"
+-/
+#guard_msgs in
+#eval tdAM.format "a"
 
 /--
 info: "PM PM PM PM p"
@@ -194,64 +257,92 @@ info: "AM AM AM AM a"
 #eval tdAM.format "a aa aaa aaaa aaaaa"
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- b  Day period (counts 1-3 = short, 4 = full, 5 = narrow)
+-- ─────────────────────────────────────────────────────────────────────────────
+
+/--
+info: "PM PM PM PM p"
+-/
+#guard_msgs in
+#eval td.format "b bb bbb bbbb bbbbb"
+
+/--
+info: "AM AM AM AM a"
+-/
+#guard_msgs in
+#eval tdAM.format "b bb bbb bbbb bbbbb"
+
+/--
+info: "noon noon noon noon n"
+-/
+#guard_msgs in
+#eval tdNoon.format "b bb bbb bbbb bbbbb"
+
+/--
+info: "midnight midnight midnight midnight mi"
+-/
+#guard_msgs in
+#eval tdMidnight.format "b bb bbb bbbb bbbbb"
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- H  Hour of day (0-23)
 -- ─────────────────────────────────────────────────────────────────────────────
 
 /--
-info: "23 23 023 0023 00023"
+info: "23 23"
 -/
 #guard_msgs in
-#eval td.format "H HH HHH HHHH HHHHH"
+#eval td.format "H HH"
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- h  Clock hour of AM/PM (1-12)
 -- ─────────────────────────────────────────────────────────────────────────────
 
 /--
-info: "11 11 011 0011 0011"
+info: "11 11"
 -/
 #guard_msgs in
-#eval td.format "h hh hhh hhhh hhhh"
+#eval td.format "h hh"
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- K  Hour of AM/PM (0-11)
 -- ─────────────────────────────────────────────────────────────────────────────
 
 /--
-info: "11 11 011 0011 000011"
+info: "11 11"
 -/
 #guard_msgs in
-#eval td.format "K KK KKK KKKK KKKKKK"
+#eval td.format "K KK"
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- k  Clock hour of day (1-24)
 -- ─────────────────────────────────────────────────────────────────────────────
 
 /--
-info: "23 23 023 0023 000023"
+info: "23 23"
 -/
 #guard_msgs in
-#eval td.format "k kk kkk kkkk kkkkkk"
+#eval td.format "k kk"
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- m  Minute
 -- ─────────────────────────────────────────────────────────────────────────────
 
 /--
-info: "13 13 013 0013 00013"
+info: "13 13"
 -/
 #guard_msgs in
-#eval td.format "m mm mmm mmmm mmmmm"
+#eval td.format "m mm"
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- s  Second
 -- ─────────────────────────────────────────────────────────────────────────────
 
 /--
-info: "12 12 012 0012 00012"
+info: "12 12"
 -/
 #guard_msgs in
-#eval td.format "s ss sss ssss sssss"
+#eval td.format "s ss"
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- S  Fractional seconds (truncated from nanoseconds)
@@ -274,7 +365,7 @@ info: "83592324 83592324 83592324 83592324 083592324"
 #eval td.format "A AA AAA AAAA AAAAAAAAA"
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- n  Nanosecond (Lean extension)
+-- n  Nanosecond (Lean/Java extension; minimum width, no truncation)
 -- ─────────────────────────────────────────────────────────────────────────────
 
 /--
@@ -284,7 +375,7 @@ info: "324354679 324354679 324354679 324354679 324354679"
 #eval td.format "n nn nnn nnnn nnnnnnnnn"
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- N  Nanoseconds since midnight (Lean extension)
+-- N  Nanoseconds since midnight (Lean/Java extension; minimum width, no truncation)
 -- ─────────────────────────────────────────────────────────────────────────────
 
 /--
@@ -348,27 +439,105 @@ info: "GMT GMT"
 #eval tdUTC.format "O OOOO"
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- V  Zone ID (VV+ = raw timezone ID; single V unsupported, like Java)
+-- V  Zone ID (`VV` only; other widths rejected to match Java)
 -- ─────────────────────────────────────────────────────────────────────────────
 
 /--
-info: "+09:00 +09:00 +09:00"
+info: "+09:00"
 -/
 #guard_msgs in
-#eval td.format "VV VVV VVVV"
+#eval td.format "VV"
 
 -- UTC offset-only zone: raw "+00:00", not normalized to "UTC"
 /--
-info: "+00:00 +00:00 +00:00"
+info: "+00:00"
 -/
 #guard_msgs in
-#eval tdUTC.format "VV VVV VVVV"
+#eval tdUTC.format "VV"
 
 /--
-info: "Asia/Tokyo Asia/Tokyo Asia/Tokyo"
+info: "Asia/Tokyo"
 -/
 #guard_msgs in
-#eval tdNamed.format "VV VVV VVVV"
+#eval tdNamed.format "VV"
+
+/--
+info: "error: offset 1: invalid quantity of characters for 'V': must be 2"
+-/
+#guard_msgs in
+#eval td.format "V"
+
+/--
+info: "error: offset 3: invalid quantity of characters for 'V': must be 2"
+-/
+#guard_msgs in
+#eval td.format "VVV"
+
+/--
+info: "error: offset 4: invalid quantity of characters for 'V': must be 2"
+-/
+#guard_msgs in
+#eval td.format "VVVV"
+
+/--
+info: "error: offset 3: invalid quantity of characters for 'd'"
+-/
+#guard_msgs in
+#eval td.format "ddd"
+
+/--
+info: "error: offset 3: invalid quantity of characters for 'w'"
+-/
+#guard_msgs in
+#eval td.format "www"
+
+/--
+info: "error: offset 2: invalid quantity of characters for 'W'"
+-/
+#guard_msgs in
+#eval td.format "WW"
+
+/--
+info: "error: offset 2: invalid quantity of characters for 'F'"
+-/
+#guard_msgs in
+#eval td.format "FF"
+
+/--
+info: "Su"
+-/
+#guard_msgs in
+#eval td.format "EEEEEE"
+
+/--
+info: "Su"
+-/
+#guard_msgs in
+#eval td.format "eeeeee"
+
+/--
+info: "error: offset 2: invalid quantity of characters for 'c'"
+-/
+#guard_msgs in
+#eval td.format "cc"
+
+/--
+info: "Su"
+-/
+#guard_msgs in
+#eval td.format "cccccc"
+
+/--
+info: "error: offset 6: invalid quantity of characters for 'a'"
+-/
+#guard_msgs in
+#eval td.format "aaaaaa"
+
+/--
+info: "error: offset 3: invalid quantity of characters for 'H'"
+-/
+#guard_msgs in
+#eval td.format "HHH"
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- v  Generic timezone name (no DST distinction; short = abbreviation, full = name)
@@ -426,3 +595,239 @@ info: "+00 +0000 +00:00 +0000 +00:00"
 -/
 #guard_msgs in
 #eval tdUTC.format "x xx xxx xxxx xxxxx"
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Y  Week-based year: extended boundary cases
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- Jan 1, 2017 is Sunday → belongs to ISO week 52 of 2016
+/--
+info: "2016 16 2016"
+-/
+#guard_msgs in
+#eval tdWeekBound2.format "Y YY YYYY"
+
+-- Jan 2, 2017 is Monday → first day of ISO week 1 of 2017
+/--
+info: "2017 17 2017"
+-/
+#guard_msgs in
+#eval tdWeekBound3.format "Y YY YYYY"
+
+-- Dec 31, 2019 is Tuesday → belongs to ISO week 1 of 2020
+/--
+info: "2020 20 2020"
+-/
+#guard_msgs in
+#eval tdWeekBound4.format "Y YY YYYY"
+
+-- Jan 1, 2021 is Friday → belongs to ISO week 53 of 2020
+/--
+info: "2020 20 2020"
+-/
+#guard_msgs in
+#eval tdWeekBound5.format "Y YY YYYY"
+
+-- Jan 4, 2021 is Monday → first day of ISO week 1 of 2021
+/--
+info: "2021 21 2021"
+-/
+#guard_msgs in
+#eval tdWeekBound6.format "Y YY YYYY"
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- w  Week of year paired with Y: check they agree at boundaries
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- Jan 1, 2017 → Y=2016 w=52
+/--
+info: "2016 52"
+-/
+#guard_msgs in
+#eval tdWeekBound2.format "Y w"
+
+-- Jan 2, 2017 → Y=2017 w=1
+/--
+info: "2017 1"
+-/
+#guard_msgs in
+#eval tdWeekBound3.format "Y w"
+
+-- Dec 31, 2019 → Y=2020 w=1
+/--
+info: "2020 1"
+-/
+#guard_msgs in
+#eval tdWeekBound4.format "Y w"
+
+-- Jan 1, 2021 → Y=2020 w=53
+/--
+info: "2020 53"
+-/
+#guard_msgs in
+#eval tdWeekBound5.format "Y w"
+
+-- Jan 4, 2021 → Y=2021 w=1
+/--
+info: "2021 1"
+-/
+#guard_msgs in
+#eval tdWeekBound6.format "Y w"
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- D  Day of year: zero-padding with count 1/2/3 for day 1
+-- ─────────────────────────────────────────────────────────────────────────────
+
+/--
+info: "1 01 001"
+-/
+#guard_msgs in
+#eval tdJan1.format "D DD DDD"
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- W  Aligned week-of-month edge cases (Monday-first blocks)
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- Aug 1 (Thu): first of month is Thu → W=1
+/--
+info: "1"
+-/
+#guard_msgs in
+#eval tdAug1.format "W"
+
+-- Aug 4 (Sun): still in the first Mon-Sun block → W=1
+/--
+info: "1"
+-/
+#guard_msgs in
+#eval tdAug4.format "W"
+
+-- Aug 5 (Mon): starts a new Mon-Sun block → W=2
+/--
+info: "2"
+-/
+#guard_msgs in
+#eval tdWeekMonth.format "W"
+
+-- Aug 12 (Mon): starts the third Mon-Sun block → W=3
+/--
+info: "3"
+-/
+#guard_msgs in
+#eval tdAug12.format "W"
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- h / K / k  Hour edge cases: midnight (H=0) and noon (H=12)
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- midnight: H=0, h=12, K=0, k=24
+/--
+info: "0 12 0 24"
+-/
+#guard_msgs in
+#eval tdMidnight.format "H h K k"
+
+-- noon: H=12, h=12, K=0, k=12
+/--
+info: "12 12 0 12"
+-/
+#guard_msgs in
+#eval tdNoon.format "H h K k"
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- S  Fractional seconds: truncation for values < 10^8 nanoseconds
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- 10ms = 10_000_000 ns → left-pad to 9 → "010000000"
+/--
+info: "0 01 010 0100 010000000"
+-/
+#guard_msgs in
+#eval tdTenMs.format "S SS SSS SSSS SSSSSSSSS"
+
+-- 1ms = 1_000_000 ns → "001000000"
+/--
+info: "0 00 001 0010 001000000"
+-/
+#guard_msgs in
+#eval tdOneMs.format "S SS SSS SSSS SSSSSSSSS"
+
+-- 1ns → "000000001"
+/--
+info: "0 00 000 0000 000000001"
+-/
+#guard_msgs in
+#eval tdOneNs.format "S SS SSS SSSS SSSSSSSSS"
+
+-- zero nanoseconds → "000000000"
+/--
+info: "0 00 000 0000 000000000"
+-/
+#guard_msgs in
+#eval tdNoon.format "S SS SSS SSSS SSSSSSSSS"
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- b  Day period: nanoseconds prevent noon/midnight classification
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- 12:00:00.000000001 → PM, not noon (non-zero nanosecond)
+/--
+info: "PM"
+-/
+#guard_msgs in
+#eval tdNoonNano.format "b"
+
+-- 00:00:00.000000001 → AM, not midnight
+/--
+info: "AM"
+-/
+#guard_msgs in
+#eval tdMidnightNano.format "b"
+
+-- exact noon and midnight still work
+/--
+info: "noon midnight"
+-/
+#guard_msgs in
+#eval s!"{tdNoon.format "b"} {tdMidnight.format "b"}"
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- b  Day period on PlainTime
+-- ─────────────────────────────────────────────────────────────────────────────
+
+/--
+info: "noon"
+-/
+#guard_msgs in
+#eval ptNoon.format "b"
+
+/--
+info: "midnight"
+-/
+#guard_msgs in
+#eval ptMidnight.format "b"
+
+/--
+info: "AM"
+-/
+#guard_msgs in
+#eval ptAM.format "b"
+
+/--
+info: "PM"
+-/
+#guard_msgs in
+#eval ptPM.format "b"
+
+-- non-zero nano at noon/midnight → falls back to AM/PM
+/--
+info: "PM"
+-/
+#guard_msgs in
+#eval ptNoonNano.format "b"
+
+/--
+info: "AM"
+-/
+#guard_msgs in
+#eval ptMidnightNano.format "b"

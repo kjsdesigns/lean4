@@ -129,12 +129,15 @@ Represents spans of time and the difference between two points in time.
 # Formats
 
 Format strings are used to convert between `String` representations and date/time types, like `yyyy-MM-dd'T'HH:mm:ss.sssZ`.
-The table below shows the available format specifiers. Some specifiers can be repeated to control truncation or offsets.
-When a character is repeated `n` times, it usually truncates the value to `n` characters.
+The table below shows the available format specifiers. Repeating a pattern character may change the
+text style, minimum width, or offset/fraction form, depending on the field.
 
-The `number` type format specifiers, such as `h` and `K`, are parsed based on the number of repetitions.
-If the repetition count is one, the format allows values ranging from 1 up to the maximum capacity of
-the respective data type.
+The current Lean implementation follows Java's pattern language where practical, but it is not fully
+locale-sensitive. Text forms currently use English data, and localized weekday/week-of-month fields use
+the library's fixed Monday-first interpretation.
+
+For numeric fields that accept both one- and two-letter forms, the single-letter form parses a
+non-padded number and the two-letter form parses a zero-padded width of two.
 
 The supported formats include:
 - `G`: Represents the era, such as BCE (Before Common Era) or CE (Common Era).
@@ -155,65 +158,75 @@ The supported formats include:
   - `uu`: Two-digit year format, showing the last two digits (e.g., "04" for 2004).
   - `uuuu`: Displays the year in a four-digit format (e.g., "2004" or "-1000").
   - `uuuu+`: Extended format for handling years with more than four digits (e.g., "12345" or "-12345"). Useful for historical dates far into the past or future!
-- `U`: Alias for extended year formatting in this library (same behavior as `u`).
-- `r`: Alias for Gregorian year formatting in this library (same behavior as `u`).
 - `D`: Represents the day of the year.
 - `M`: Represents the month of the year, displayed as either a number or text.
   - `M`, `MM`: Displays the month as a number, with `MM` zero-padded (e.g., "7" for July, "07" for July with padding).
   - `MMM`: Displays the abbreviated month name (e.g., "Jul").
   - `MMMM`: Displays the full month name (e.g., "July").
   - `MMMMM`: Displays the month in a narrow form (e.g., "J" for July).
+- `L`: Represents the standalone month of the year.
+  - Supports the same widths as `M`; in the current English data it formats the same values.
 - `d`: Represents the day of the month.
 - `Q`: Represents the quarter of the year.
   - `Q`, `QQ`: Displays the quarter as a number (e.g., "3", "03").
   - `QQQ` (short): Displays the quarter as an abbreviated text (e.g., "Q3").
   - `QQQQ` (full): Displays the full quarter text (e.g., "3rd quarter").
   - `QQQQQ` (narrow): Displays the quarter as a short number (e.g., "3").
+- `q`: Represents the standalone quarter of the year.
+  - Supports the same widths as `Q`; in the current English data it formats the same values.
 - `w`: Represents the week of the week-based year, each week starts on Monday (e.g., "27").
-- `W`: Represents the week of the month in 7-day blocks starting at day 1 (e.g., "1").
+- `W`: Represents the week of the month using the library's fixed Monday-first week model (e.g., "2").
 - `E`: Represents the day of the week as text.
   - `E`, `EE`, `EEE`: Displays the abbreviated weekday name (e.g., "Tue").
   - `EEEE`: Displays the full day name (e.g., "Tuesday").
   - `EEEEE`: Displays the narrow day name (e.g., "T" for Tuesday).
-  - `EEEEEE`: Displays a two-letter weekday form (e.g., "Tu").
+  - `EEEEEE`: Displays the short two-letter weekday name (e.g., "Tu").
 - `e`: Represents the weekday as number or text.
   - `e`, `ee`: Displays the weekday as a number, starting from 1 (Monday) to 7 (Sunday).
   - `eee`, `eeee`, `eeeee`: Displays the weekday as text (same format as `E`).
-  - `eeeeee`: Displays a two-letter weekday form (e.g., "Tu").
-- `c`: Standalone weekday; supports the same widths as `e`.
-- `F`: Represents the week of the month that the first week starts on the first day of the month (e.g., "3").
+  - `eeeeee`: Displays the short two-letter weekday name (e.g., "Tu").
+- `c`: Standalone weekday.
+  - `c`: Displays the numeric weekday using the same Monday-to-Sunday numbering as `e`.
+  - `ccc`, `cccc`, `ccccc`: Display standalone text (same values as `e` in the current English data).
+  - `cccccc`: Displays the short two-letter weekday name (e.g., "Tu").
+- `F`: Represents the occurrence of the weekday within the month (e.g., the 2nd Sunday formats as `2`).
 - `a`: Represents the AM or PM designation of the day.
-  - `a`, `aa`, `aaa`, `aaaa`: Displays AM/PM (e.g., "PM").
-  - `aaaaa`: Displays a narrow form (e.g., "p").
+  - `a`, `aa`, `aaa`: Displays AM/PM (e.g., "PM").
+  - `aaaa`: Displays the full form (e.g., "ante meridiem", "post meridiem").
+  - `aaaaa`: Displays the narrow form (e.g., "a", "p").
+- `b`: Represents the day period, extending AM/PM with noon and midnight (TR35 §4, supported in Java 16+). The `B` symbol (flexible day periods) is not supported.
+  - `b`, `bb`, `bbb`: Displays a short form (e.g., "AM", "PM", "noon", "midnight").
+  - `bbbb`: Displays a full form (e.g., "ante meridiem", "post meridiem", "noon", "midnight"); unlike `a`, the AM/PM spellings are lowercase here.
+  - `bbbbb`: Displays a narrow form (e.g., "a", "p", "n", "mi").
 - `h`: Represents the hour of the AM/PM clock (1-12) (e.g., "12").
-  - One or more repetitions of the character indicates the truncation of the value to the specified number of characters.
+  - `h`, `hh` are supported, matching Java.
 - `K`: Represents the hour of the AM/PM clock (0-11) (e.g., "0").
-  - One or more repetitions of the character indicates the truncation of the value to the specified number of characters.
+  - `K`, `KK` are supported, matching Java.
 - `k`: Represents the hour of the day in a 1-24 format (e.g., "24").
-  - One or more repetitions of the character indicates the truncation of the value to the specified number of characters.
+  - `k`, `kk` are supported, matching Java.
 - `H`: Represents the hour of the day in a 0-23 format (e.g., "0").
-  - One or more repetitions of the character indicates the truncation of the value to the specified number of characters.
+  - `H`, `HH` are supported, matching Java.
 - `m`: Represents the minute of the hour (e.g., "30").
-  - One or more repetitions of the character indicates the truncation of the value to the specified number of characters.
+  - `m`, `mm` are supported, matching Java.
 - `s`: Represents the second of the minute (e.g., "55").
-  - One or more repetitions of the character indicates the truncation of the value to the specified number of characters.
+  - `s`, `ss` are supported, matching Java.
 - `S`: Represents a fraction of a second, typically displayed as a decimal number (e.g., "978" for milliseconds).
-  - One or more repetitions of the character indicates the truncation of the value to the specified number of characters.
+  - One or more repetitions of the character truncates to the specified number of most-significant digits; it does not round.
 - `A`: Represents the millisecond of the day (e.g., "1234").
   - One or more repetitions of the character indicates zero-padding to the specified number of characters (no truncation is applied).
-- `n`: Represents the nanosecond of the second (e.g., "987654321").
-  - One or more repetitions of the character indicates the truncation of the value to the specified number of characters.
-- `N`: Represents the nanosecond of the day (e.g., "1234000000").
-  - One or more repetitions of the character indicates the truncation of the value to the specified number of characters.
-- `V`: Time zone ID variants.
-  - `V`: Unsupported.
-  - `VV`, `VVV`, `VVVV`: Displays the zone identifier/name (UTC-normalized where applicable).
+- `n`: Represents the nanosecond of the second (e.g., "987654321"). This is a Lean/Java extension, not a TR35 field.
+  - One or more repetitions of the character sets a minimum width via zero-padding; the value is not truncated.
+- `N`: Represents the nanosecond of the day (e.g., "1234000000"). This is a Lean/Java extension, not a TR35 field.
+  - One or more repetitions of the character sets a minimum width via zero-padding; the value is not truncated.
+- `V`: Time zone ID.
+  - `VV`: Displays the zone identifier/name.
+  - Other counts are unsupported, matching Java.
 - `z`: Represents the time zone name.
   - `z`, `zz`, `zzz`: Shows a short zone name; for offset-only zones this is the numeric offset (e.g., "+09:00"), for UTC this is "UTC", otherwise the abbreviation (e.g., "PST").
   - `zzzz`: Displays the full zone name; for offset-only zones this is the numeric offset (e.g., "+09:00"), for UTC this is "Coordinated Universal Time", otherwise the full zone name (e.g., "Pacific Standard Time").
 - `v`: Generic time zone name.
-  - `v`: Displays a short generic name; for offset-only zones this is the numeric offset (e.g., "+09:00"), for UTC this is "UTC", otherwise the abbreviation.
-  - `vvvv`: Displays a full generic name; for offset-only zones this is the numeric offset (e.g., "+09:00"), for UTC this is "Coordinated Universal Time", otherwise the full zone name.
+  - `v`: In the current Lean timezone data this displays the stored abbreviation; for offset-only zones this is the numeric offset (e.g., "+09:00"), and for UTC it is normalized to "UTC".
+  - `vvvv`: In the current Lean timezone data this displays the stored zone name/ID; for offset-only zones this is the numeric offset (e.g., "+09:00"), and for UTC it is normalized to "Coordinated Universal Time".
 - `O`: Represents the localized zone offset in the format "GMT" followed by the time difference from UTC.
   - `O`: Displays the GMT offset in a short format (e.g., "GMT+8"), or "GMT" for UTC.
   - `OOOO`: Displays the full GMT offset with padded hour and minutes (e.g., "GMT+08:00"), or "GMT" for UTC.

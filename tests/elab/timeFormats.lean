@@ -5,9 +5,9 @@ def RFC1123 : Format Awareness.any := datespec("eee, dd MMM uuuu HH:mm:ss ZZZ")
 def ShortDate : Format Awareness.any := datespec("MM/dd/uuuu")
 def LongDate : Format Awareness.any := datespec("MMMM D, uuuu")
 def ShortDateTime : Format Awareness.any := datespec("MM/dd/uuuu HH:mm:ss")
-def LongDateTime : Format Awareness.any := datespec("MMMM D, uuuu h:mm aa")
+def LongDateTime : Format Awareness.any := datespec("MMMM D, uuuu h:mm a")
 def Time24Hour : Format Awareness.any := datespec("HH:mm:ss")
-def Time12Hour : Format Awareness.any := datespec("hh:mm:ss aa")
+def Time12Hour : Format Awareness.any := datespec("hh:mm:ss a")
 def FullDayTimeZone : Format Awareness.any := datespec("EEEE, MMMM dd, uuuu HH:mm:ss ZZZ")
 def CustomDayTime : Format Awareness.any := datespec("EEE dd MMM uuuu HH:mm")
 def EraDate : Format Awareness.any := datespec("MM D, uuuu G")
@@ -297,7 +297,7 @@ def tz : TimeZone := { offset := { second := -3600 }, name := "America/Sao_Paulo
 def zoned₆ := ZonedDateTime.ofPlainDateTime (zoned₄.toPlainDateTime) (TimeZone.ZoneRules.ofTimeZone tz)
 
 /--
-info: "CE CE CE Common Era C"
+info: "AD AD AD Anno Domini A"
 -/
 #guard_msgs in
 #eval zoned₄.format "G GG GGG GGGG GGGGG"
@@ -321,10 +321,10 @@ info: "195 195 195"
 #eval zoned₄.format "D DD DDD"
 
 /--
-info: "14 14 014 0014 00014"
+info: "14 14"
 -/
 #guard_msgs in
-#eval zoned₄.format "d dd ddd dddd ddddd"
+#eval zoned₄.format "d dd"
 
 /--
 info: "7 07 Jul July J"
@@ -339,16 +339,16 @@ info: "3 03 3rd quarter 3"
 #eval zoned₄.format "Q QQ QQQQ QQQQQ"
 
 /--
-info: "28 28 028 0028"
+info: "28 28"
 -/
 #guard_msgs in
-#eval zoned₄.format "w ww www wwww"
+#eval zoned₄.format "w ww"
 
 /--
-info: "2 02 002 0002"
+info: "2"
 -/
 #guard_msgs in
-#eval zoned₄.format "W WW WWW WWWW"
+#eval zoned₄.format "W"
 
 /--
 info: "Sun Sun Sun Sunday S"
@@ -363,46 +363,46 @@ info: "7 07 Sun Sunday S"
 #eval zoned₄.format "e ee eee eeee eeeee"
 
 /--
-info: "2 02 002 0002"
+info: "2"
 -/
 #guard_msgs in
-#eval zoned₄.format "F FF FFF FFFF"
+#eval zoned₄.format "F"
 
 /--
-info: "11 11 011 0011 0011"
+info: "11 11"
 -/
 #guard_msgs in
-#eval zoned₄.format "h hh hhh hhhh hhhh"
+#eval zoned₄.format "h hh"
 
 /--
-info: "11 11 011 0011 000011"
+info: "11 11"
 -/
 #guard_msgs in
-#eval zoned₄.format "K KK KKK KKKK KKKKKK"
+#eval zoned₄.format "K KK"
 
 /--
-info: "23 23 023 0023 000023"
+info: "23 23"
 -/
 #guard_msgs in
-#eval zoned₄.format "k kk kkk kkkk kkkkkk"
+#eval zoned₄.format "k kk"
 
 /--
-info: "23 23 023 0023 00023"
+info: "23 23"
 -/
 #guard_msgs in
-#eval zoned₄.format "H HH HHH HHHH HHHHH"
+#eval zoned₄.format "H HH"
 
 /--
-info: "13 13 013 0013 00013"
+info: "13 13"
 -/
 #guard_msgs in
-#eval zoned₄.format "m mm mmm mmmm mmmmm"
+#eval zoned₄.format "m mm"
 
 /--
-info: "12 12 012 0012 00012"
+info: "12 12"
 -/
 #guard_msgs in
-#eval zoned₄.format "s ss sss ssss sssss"
+#eval zoned₄.format "s ss"
 
 
 /--
@@ -483,7 +483,7 @@ info: "+0900 +0900 +0900 GMT+09:00 +09:00"
 #eval zoned₄.format "Z ZZ ZZZ ZZZZ ZZZZZ"
 
 /--
-info: "CE CE CE Common Era C"
+info: "AD AD AD Anno Domini A"
 -/
 #guard_msgs in
 #eval datetime₄.format "G GG GGG GGGG GGGGG"
@@ -513,10 +513,10 @@ info: "7 07 Jul J"
 #eval datetime₄.format "M MM MMM MMMMM"
 
 /--
-info: "14 14 014 0014 00014"
+info: "14 14"
 -/
 #guard_msgs in
-#eval datetime₄.format "d dd ddd dddd ddddd"
+#eval datetime₄.format "d dd"
 
 /--
 info: "7 07 Jul July J"
@@ -525,9 +525,9 @@ info: "7 07 Jul July J"
 #eval datetime₄.format "M MM MMM MMMM MMMMM"
 
 /--
-info: "14 14 0014 0014"
+info: "14 14"
 -/#guard_msgs in
-#eval datetime₄.format "d dd dddd dddd"
+#eval datetime₄.format "d dd"
 
 /--
 info: "3 03 3rd quarter 3"
@@ -536,16 +536,16 @@ info: "3 03 3rd quarter 3"
 #eval datetime₄.format "Q QQ QQQQ QQQQQ"
 
 /--
-info: "28 28 028 0028"
+info: "28 28"
 -/
 #guard_msgs in
-#eval datetime₄.format "w ww www wwww"
+#eval datetime₄.format "w ww"
 
 /--
-info: "2 02 002 0002"
+info: "2"
 -/
 #guard_msgs in
-#eval datetime₄.format "W WW WWW WWWW"
+#eval datetime₄.format "W"
 
 /--
 info: "Sun Sun Sun Sunday S"
@@ -560,46 +560,46 @@ info: "7 07 Sun Sunday S"
 #eval datetime₄.format "e ee eee eeee eeeee"
 
 /--
-info: "2 02 002 0002"
+info: "2"
 -/
 #guard_msgs in
-#eval datetime₄.format "F FF FFF FFFF"
+#eval datetime₄.format "F"
 
 /--
-info: "11 11 011 0011 0011"
+info: "11 11"
 -/
 #guard_msgs in
-#eval datetime₄.format "h hh hhh hhhh hhhh"
+#eval datetime₄.format "h hh"
 
 /--
-info: "11 11 011 0011 000011"
+info: "11 11"
 -/
 #guard_msgs in
-#eval datetime₄.format "K KK KKK KKKK KKKKKK"
+#eval datetime₄.format "K KK"
 
 /--
-info: "23 23 023 0023 000023"
+info: "23 23"
 -/
 #guard_msgs in
-#eval datetime₄.format "k kk kkk kkkk kkkkkk"
+#eval datetime₄.format "k kk"
 
 /--
-info: "23 23 023 0023 00023"
+info: "23 23"
 -/
 #guard_msgs in
-#eval datetime₄.format "H HH HHH HHHH HHHHH"
+#eval datetime₄.format "H HH"
 
 /--
-info: "13 13 013 0013 00013"
+info: "13 13"
 -/
 #guard_msgs in
-#eval datetime₄.format "m mm mmm mmmm mmmmm"
+#eval datetime₄.format "m mm"
 
 /--
-info: "12 12 012 0012 00012"
+info: "12 12"
 -/
 #guard_msgs in
-#eval datetime₄.format "s ss sss ssss sssss"
+#eval datetime₄.format "s ss"
 
 
 /--
@@ -632,41 +632,40 @@ info: "83592324354679 83592324354679 83592324354679 83592324354679 8359232435467
 #eval datetime₄.format "N NN NNN NNNN NNNNNNNNN"
 
 /--
-info: "11 11 011 0011 0011"
+info: "11 11"
 -/
 #guard_msgs in
-#eval time₄.format "h hh hhh hhhh hhhh"
+#eval time₄.format "h hh"
 
 /--
-info: "11 11 011 0011 000011"
+info: "11 11"
 -/
 #guard_msgs in
-#eval time₄.format "K KK KKK KKKK KKKKKK"
+#eval time₄.format "K KK"
 
 /--
-info: "23 23 023 0023 000023"
-
+info: "23 23"
 -/
 #guard_msgs in
-#eval time₄.format "k kk kkk kkkk kkkkkk"
-
-/--
-info: "23 23 023 0023 00023"
--/
-#guard_msgs in
-#eval time₄.format "H HH HHH HHHH HHHHH"
+#eval time₄.format "k kk"
 
 /--
-info: "13 13 013 0013 00013"
+info: "23 23"
 -/
 #guard_msgs in
-#eval time₄.format "m mm mmm mmmm mmmmm"
+#eval time₄.format "H HH"
 
 /--
-info: "12 12 012 0012 00012"
+info: "13 13"
 -/
 #guard_msgs in
-#eval time₄.format "s ss sss ssss sssss"
+#eval time₄.format "m mm"
+
+/--
+info: "12 12"
+-/
+#guard_msgs in
+#eval time₄.format "s ss"
 
 
 /--
@@ -699,7 +698,7 @@ info: "83592324354679 83592324354679 83592324354679 83592324354679 8359232435467
 #eval time₄.format "N NN NNN NNNN NNNNNNNNN"
 
 /--
-info: "CE CE CE Common Era C"
+info: "AD AD AD Anno Domini A"
 -/
 #guard_msgs in
 #eval date₄.format "G GG GGG GGGG GGGGG"
@@ -729,10 +728,10 @@ info: "7 07 Jul J"
 #eval date₄.format "M MM MMM MMMMM"
 
 /--
-info: "14 14 014 0014 00014"
+info: "14 14"
 -/
 #guard_msgs in
-#eval date₄.format "d dd ddd dddd ddddd"
+#eval date₄.format "d dd"
 
 /--
 info: "7 07 Jul July J"
@@ -741,9 +740,9 @@ info: "7 07 Jul July J"
 #eval date₄.format "M MM MMM MMMM MMMMM"
 
 /--
-info: "14 14 0014 0014"
+info: "14 14"
 -/#guard_msgs in
-#eval date₄.format "d dd dddd dddd"
+#eval date₄.format "d dd"
 
 /--
 info: "3 03 3rd quarter 3"
@@ -752,16 +751,16 @@ info: "3 03 3rd quarter 3"
 #eval date₄.format "Q QQ QQQQ QQQQQ"
 
 /--
-info: "28 28 028 0028"
+info: "28 28"
 -/
 #guard_msgs in
-#eval date₄.format "w ww www wwww"
+#eval date₄.format "w ww"
 
 /--
-info: "2 02 002 0002"
+info: "2"
 -/
 #guard_msgs in
-#eval date₄.format "W WW WWW WWWW"
+#eval date₄.format "W"
 
 /--
 info: "Sun Sun Sun Sunday S"
@@ -776,19 +775,19 @@ info: "7 07 Sun Sunday S"
 #eval date₄.format "e ee eee eeee eeeee"
 
 /--
-info: "2 02 002 0002"
+info: "2"
 -/
 #guard_msgs in
-#eval date₄.format "F FF FFF FFFF"
+#eval date₄.format "F"
 
 /--
-info: "-2000 2001 BCE"
+info: "-2000 2001 BC"
 -/
 #guard_msgs in
 #eval datetime₅.format "uuuu yyyy G"
 
 /--
-info: "2002 2002 CE"
+info: "2002 2002 AD"
 -/
 #guard_msgs in
 #eval datetime₄.format "uuuu yyyy G"
@@ -879,21 +878,21 @@ def dFormat : Format Awareness.any := datespec("D DD DDD")
 #eval do assert! (not <| dFormat.parseBuilder tuple3Mk "1 123 123" |>.isOk)
 #eval do assert! (not <| dFormat.parseBuilder tuple3Mk "367 12 123" |>.isOk)
 
-def dddFormat : Format Awareness.any := datespec("d dd ddd dddd ddddd")
+def dayOfMonthFormat : Format Awareness.any := datespec("d dd")
 
-#eval do assert! (dddFormat.parseBuilder tuple5Mk "1 12 031 0031 00031" |>.isOk)
-#eval do assert! (dddFormat.parseBuilder tuple5Mk "000031 12 031 0031 00031" |>.isOk)
+#eval do assert! (dayOfMonthFormat.parseBuilder tuple2Mk "1 12" |>.isOk)
+#eval do assert! (dayOfMonthFormat.parseBuilder tuple2Mk "31 31" |>.isOk)
 
-#eval do assert! (not <| dddFormat.parseBuilder tuple5Mk "1 12 0031 00031" |>.isOk)
-#eval do assert! (not <| dddFormat.parseBuilder tuple5Mk "1 031 0031 000031" |>.isOk)
+#eval do assert! (not <| dayOfMonthFormat.parseBuilder tuple2Mk "1 123" |>.isOk)
+#eval do assert! (not <| dayOfMonthFormat.parseBuilder tuple2Mk "32 31" |>.isOk)
 
-def wFormat : Format Awareness.any := datespec("w ww www wwww")
+def wFormat : Format Awareness.any := datespec("w ww")
 
-#eval do assert! (wFormat.parseBuilder tuple4Mk "1 01 031 0031" |>.isOk)
-#eval do assert! (wFormat.parseBuilder tuple4Mk "2 01 031 0031" |>.isOk)
+#eval do assert! (wFormat.parseBuilder tuple2Mk "1 01" |>.isOk)
+#eval do assert! (wFormat.parseBuilder tuple2Mk "2 01" |>.isOk)
 
-#eval do assert! (not <| wFormat.parseBuilder tuple4Mk "2 01 031 00310" |>.isOk)
-#eval do assert! (not <| wFormat.parseBuilder tuple4Mk "2 01 031 031" |>.isOk)
+#eval do assert! (not <| wFormat.parseBuilder tuple2Mk "2 031" |>.isOk)
+#eval do assert! (not <| wFormat.parseBuilder tuple2Mk "54 01" |>.isOk)
 
 def qFormat : Format Awareness.any := datespec("q qq")
 
@@ -903,13 +902,12 @@ def qFormat : Format Awareness.any := datespec("q qq")
 #eval do assert! (not <| qFormat.parseBuilder tuple2Mk "12 32" |>.isOk)
 #eval do assert! (not <| qFormat.parseBuilder tuple2Mk "000001 003" |>.isOk)
 
-def WFormat : Format Awareness.any := datespec("W WW")
+def WFormat : Format Awareness.any := datespec("W")
 
-#eval do assert! (WFormat.parseBuilder tuple2Mk "1 06" |>.isOk)
-#eval do assert! (WFormat.parseBuilder tuple2Mk "3 03" |>.isOk)
+#eval do assert! (WFormat.parseBuilder some "1" |>.isOk)
+#eval do assert! (WFormat.parseBuilder some "3" |>.isOk)
 
-#eval do assert! (not <| WFormat.parseBuilder tuple2Mk "12 32" |>.isOk)
-#eval do assert! (not <| WFormat.parseBuilder tuple2Mk "000001 003" |>.isOk)
+#eval do assert! (not <| WFormat.parseBuilder some "12" |>.isOk)
 
 def eFormat : Format Awareness.any := datespec("e ee")
 
@@ -919,13 +917,13 @@ def eFormat : Format Awareness.any := datespec("e ee")
 #eval do assert! (not <| eFormat.parseBuilder tuple2Mk "12 32" |>.isOk)
 #eval do assert! (not <| eFormat.parseBuilder tuple2Mk "000001 003" |>.isOk)
 
-def FFormat : Format Awareness.any := datespec("F FF")
+def FFormat : Format Awareness.any := datespec("F")
 
-#eval do assert! (FFormat.parseBuilder tuple2Mk "1 04" |>.isOk)
-#eval do assert! (FFormat.parseBuilder tuple2Mk "3 03" |>.isOk)
+#eval do assert! (FFormat.parseBuilder some "1" |>.isOk)
+#eval do assert! (FFormat.parseBuilder some "3" |>.isOk)
 
-#eval do assert! (not <| FFormat.parseBuilder tuple2Mk "12 32" |>.isOk)
-#eval do assert! (not <| FFormat.parseBuilder tuple2Mk "000001 003" |>.isOk)
+#eval do assert! (not <| FFormat.parseBuilder some "12" |>.isOk)
+#eval do assert! (not <| FFormat.parseBuilder some "6" |>.isOk)
 
 def hFormat : Format Awareness.any := datespec("h hh")
 

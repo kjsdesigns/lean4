@@ -36,10 +36,10 @@ The europeanDate format, which follows the pattern `dd-MM-uuuu`.
 def europeanDate : Format Awareness.any := datespec("dd-MM-uuuu")
 
 /--
-The time12Hour format, which follows the pattern `hh:mm:ss aa` for representing time
+The time12Hour format, which follows the pattern `hh:mm:ss a` for representing time
 in a 12-hour clock format with an upper case AM/PM marker.
 -/
-def time12Hour : Format Awareness.any := datespec("hh:mm:ss aa")
+def time12Hour : Format Awareness.any := datespec("hh:mm:ss a")
 
 /--
 The Time24Hour format, which follows the pattern `HH:mm:ss` for representing time
@@ -117,7 +117,7 @@ def leanDateTimeWithIdentifierAndNanos : Format Awareness.any := datespec("uuuu-
 
 /--
 The leanDateTimeWithZoneAndName format, which follows the pattern
-`uuuu-MM-dd'T'HH:mm:ss.SSSSSSSSSZZZZZ'['zzzz']'` for representing date, time, timezone offset,
+`uuuu-MM-dd'T'HH:mm:ss.SSSSSSSSSZZZZZ'['VV']'` for representing date, time, timezone offset,
 and timezone identifier. This is the canonical Lean format used in `repr` for named timezones.
 -/
 def leanDateTimeWithZoneAndName : Format Awareness.any := datespec("uuuu-MM-dd'T'HH:mm:ss.SSSSSSSSSZZZZZ'['VV']'")
@@ -160,10 +160,10 @@ This format is used in email headers and HTTP headers.
 def rfc822 : Format Awareness.any := datespec("eee, dd MMM uuuu HH:mm:ss ZZZ")
 
 /--
-The RFC850 format, which follows the pattern `eee, dd-MMM-YY HH:mm:ss ZZZ`.
+The RFC850 format, which follows the pattern `eee, dd-MMM-yy HH:mm:ss ZZZ`.
 This format is an older standard for representing date and time in headers.
 -/
-def rfc850 : Format Awareness.any := datespec("eee, dd-MM-uuuu HH:mm:ss ZZZ")
+def rfc850 : Format Awareness.any := datespec("eee, dd-MMM-yy HH:mm:ss ZZZ")
 
 /--
 A `MultiFormat` that parses `leanDateTimeWithZone` with or without nanoseconds.
@@ -254,13 +254,13 @@ def format (date : PlainDate) (format : String) : String :=
       | .Y _ => some date.weekBasedYear
       | .u _ => some date.year
       | .D _ => some (Sigma.mk date.year.isLeap date.dayOfYear)
-      | .Qorq _ => some date.quarter
+      | .Q _ | .q _ => some date.quarter
       | .w _ => some date.weekOfYear
-      | .W _ => some (date.weekOfMonth.expandTop (by decide))
-      | .MorL _ => some date.month
+      | .W _ => some date.alignedWeekOfMonth
+      | .M _ | .L _ => some date.month
       | .d _ => some date.day
       | .E _ => some date.weekday
-      | .eorc _ => some date.weekday
+      | .e _ | .c _ => some date.weekday
       | .F _ => some date.weekOfMonth
       | _ => none
     match res with
@@ -302,6 +302,16 @@ def format (time : PlainTime) (format : String) : String :=
       | .n _ => some time.nanosecond
       | .s _ => some time.second
       | .a _ => some (HourMarker.ofOrdinal time.hour)
+      | .b _ =>
+        let h := time.hour.val
+        let m := time.minute.val
+        let s := time.second.val
+        let n := time.nanosecond.val
+        some <|
+          if h = 12 ∧ m = 0 ∧ s = 0 ∧ n = 0 then .noon
+          else if h = 0 ∧ m = 0 ∧ s = 0 ∧ n = 0 then .midnight
+          else if h < 12 then .am
+          else .pm
       | .h _ => some time.hour.toRelative
       | .K _ => some (time.hour.emod 12 (by decide))
       | .S _ => some time.nanosecond
@@ -421,13 +431,13 @@ def format (date : PlainDateTime) (format : String) : String :=
             date.year
       | .u _ => some date.year
       | .D _ => some (Sigma.mk date.year.isLeap date.dayOfYear)
-      | .Qorq _ => some date.quarter
+      | .Q _ | .q _ => some date.quarter
       | .w _ => some date.weekOfYear
-      | .W _ => some (date.weekOfMonth.expandTop (by decide))
-      | .MorL _ => some date.month
+      | .W _ => some date.alignedWeekOfMonth
+      | .M _ | .L _ => some date.month
       | .d _ => some date.day
       | .E _ => some date.weekday
-      | .eorc _ => some date.weekday
+      | .e _ | .c _ => some date.weekday
       | .F _ => some date.weekOfMonth
       | .H _ => some date.hour
       | .k _ => some date.hour.shiftTo1BasedHour

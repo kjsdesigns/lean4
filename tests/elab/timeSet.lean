@@ -6,13 +6,13 @@ def RFC1123 : Format Awareness.any := datespec("eee, dd MMM uuuu HH:mm:ss ZZZ")
 def ShortDate : Format Awareness.any := datespec("MM/dd/uuuu")
 def LongDate : Format Awareness.any := datespec("MMMM D, uuuu")
 def ShortDateTime : Format Awareness.any := datespec("MM/dd/uuuu HH:mm:ss")
-def LongDateTime : Format Awareness.any := datespec("MMMM dd, uuuu hh:mm aa")
+def LongDateTime : Format Awareness.any := datespec("MMMM dd, uuuu hh:mm a")
 def Time24Hour : Format Awareness.any := datespec("HH:mm:ss")
-def Time12Hour : Format Awareness.any := datespec("hh:mm:ss aa")
+def Time12Hour : Format Awareness.any := datespec("hh:mm:ss a")
 def FullDayTimeZone : Format Awareness.any := datespec("EEEE, MMMM dd, uuuu HH:mm:ss ZZZ")
 def CustomDayTime : Format Awareness.any := datespec("EEE dd MMM uuuu HH:mm")
 
-def Full12HourWrong : Format Awareness.any := datespec("MM/dd/uuuu hh:mm:ss aa XXX")
+def Full12HourWrong : Format Awareness.any := datespec("MM/dd/uuuu hh:mm:ss a XXX")
 
 -- Dates
 

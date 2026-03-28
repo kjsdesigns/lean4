@@ -60,24 +60,37 @@ private meta def convertModifier : Modifier → MacroM (TSyntax `term)
   | .Y p => do `(Std.Time.Modifier.Y $(← convertYear p))
   | .u p => do `(Std.Time.Modifier.u $(← convertYear p))
   | .D p => do `(Std.Time.Modifier.D $(← convertNumber p))
-  | .MorL p =>
+  | .M p =>
     match p with
-    | .inl num => do `(Std.Time.Modifier.MorL (.inl $(← convertNumber num)))
-    | .inr txt => do `(Std.Time.Modifier.MorL (.inr $(← convertText txt)))
+    | .inl num => do `(Std.Time.Modifier.M (.inl $(← convertNumber num)))
+    | .inr txt => do `(Std.Time.Modifier.M (.inr $(← convertText txt)))
+  | .L p =>
+    match p with
+    | .inl num => do `(Std.Time.Modifier.L (.inl $(← convertNumber num)))
+    | .inr txt => do `(Std.Time.Modifier.L (.inr $(← convertText txt)))
   | .d p => do `(Std.Time.Modifier.d $(← convertNumber p))
-  | .Qorq p =>
+  | .Q p =>
     match p with
-    | .inl num => do `(Std.Time.Modifier.Qorq (.inl $(← convertNumber num)))
-    | .inr txt => do `(Std.Time.Modifier.Qorq (.inr $(← convertText txt)))
+    | .inl num => do `(Std.Time.Modifier.Q (.inl $(← convertNumber num)))
+    | .inr txt => do `(Std.Time.Modifier.Q (.inr $(← convertText txt)))
+  | .q p =>
+    match p with
+    | .inl num => do `(Std.Time.Modifier.q (.inl $(← convertNumber num)))
+    | .inr txt => do `(Std.Time.Modifier.q (.inr $(← convertText txt)))
   | .w p => do `(Std.Time.Modifier.w $(← convertNumber p))
   | .W p => do `(Std.Time.Modifier.W $(← convertNumber p))
   | .E p => do `(Std.Time.Modifier.E $(← convertText p))
-  | .eorc p =>
+  | .e p =>
     match p with
-    | .inl num => do `(Std.Time.Modifier.eorc (.inl $(← convertNumber num)))
-    | .inr txt => do `(Std.Time.Modifier.eorc (.inr $(← convertText txt)))
+    | .inl num => do `(Std.Time.Modifier.e (.inl $(← convertNumber num)))
+    | .inr txt => do `(Std.Time.Modifier.e (.inr $(← convertText txt)))
+  | .c p =>
+    match p with
+    | .inl num => do `(Std.Time.Modifier.c (.inl $(← convertNumber num)))
+    | .inr txt => do `(Std.Time.Modifier.c (.inr $(← convertText txt)))
   | .F p => do `(Std.Time.Modifier.F $(← convertNumber p))
   | .a p => do `(Std.Time.Modifier.a $(← convertText p))
+  | .b p => do `(Std.Time.Modifier.b $(← convertText p))
   | .h p => do `(Std.Time.Modifier.h $(← convertNumber p))
   | .K p => do `(Std.Time.Modifier.K $(← convertNumber p))
   | .k p => do `(Std.Time.Modifier.k $(← convertNumber p))

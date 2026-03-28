@@ -134,7 +134,7 @@ info: "Mon, 16 Jun 2014 03:03:03 -0300"
 #eval Formats.rfc822.format date₂
 
 /--
-info: "Mon, 16-06-2014 03:03:03 -0300"
+info: "Mon, 16-Jun-14 03:03:03 -0300"
 -/
 #guard_msgs in
 #eval Formats.rfc850.format date₂
