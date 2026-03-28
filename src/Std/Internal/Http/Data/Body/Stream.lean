@@ -570,16 +570,10 @@ def stream (gen : Stream → Async Unit) : Async Stream := do
 Creates a body from a fixed byte array.
 -/
 def fromBytes (content : ByteArray) : Async Stream := do
-  let s ← mkStream
-  s.setKnownSize (some (.fixed content.size))
-
-  try
+  stream fun s => do
+    s.setKnownSize (some (.fixed content.size))
     if content.size > 0 then
       s.send (Chunk.ofByteArray content)
-  finally
-    s.close
-
-  return s
 
 /--
 Creates an empty `Stream` body channel (already closed, no data).
