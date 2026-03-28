@@ -12,9 +12,11 @@ import all Std.Time.Date.Unit.Year
 
 public section
 
-namespace Std.Time
-
-open Std.Time Internal Lean
+namespace Std
+namespace Time
+open Std.Time
+open Internal
+open Lean
 
 set_option linter.all true
 
@@ -387,4 +389,6 @@ instance : HAdd PlainDate Week.Offset PlainDate where
 instance : HSub PlainDate Week.Offset PlainDate where
   hSub := subWeeks
 
-end Std.Time.PlainDate
+end PlainDate
+end Time
+end Std

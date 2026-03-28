@@ -11,7 +11,11 @@ public import Std.Time.Date.ValidDate
 
 public section
 
-namespace Std.Time.Nanosecond.Offset
+namespace Std
+namespace Time
+
+namespace Nanosecond
+namespace Offset
 
 /--
 Convert `Nanosecond.Offset` into `Day.Offset`.
@@ -41,7 +45,8 @@ Convert `Week.Offset` into `Nanosecond.Offset`.
 def ofWeeks (weeks : Week.Offset) : Nanosecond.Offset :=
   weeks.mul 604800000000000 |>.cast (by decide +kernel)
 
-end Nanosecond.Offset
+end Offset
+end Nanosecond
 
 namespace Millisecond
 namespace Offset
@@ -74,8 +79,11 @@ Convert `Week.Offset` into `Millisecond.Offset`.
 def ofWeeks (weeks : Week.Offset) : Millisecond.Offset :=
   weeks.mul 604800000 |>.cast (by decide +kernel)
 
-end Millisecond.Offset
-namespace Second.Offset
+end Offset
+end Millisecond
+
+namespace Second
+namespace Offset
 
 /--
 Convert `Second.Offset` into `Day.Offset`.
@@ -139,8 +147,11 @@ Convert `Week.Offset` into `Minute.Offset`.
 def ofWeeks (weeks : Week.Offset) : Minute.Offset :=
   weeks.mul 10080 |>.cast (by decide +kernel)
 
-end Minute.Offset
-namespace Hour.Offset
+end Offset
+end Minute
+
+namespace Hour
+namespace Offset
 
 /--
 Convert `Hour.Offset` into `Day.Offset`.
@@ -466,5 +477,3 @@ instance : HSub Week.Offset Day.Offset Day.Offset where
 
 instance : HSub Week.Offset Week.Offset Week.Offset where
   hSub x y := x.sub y
-
-end Std.Time
