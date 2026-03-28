@@ -18,65 +18,72 @@ def nag(reason: str, path: Path, fatal: bool = True) -> None:
         ERROR = True
 
 
-# Directories that should no longer be used but still work for now.
-
-for dir in (
-    "tests/compiler",
-    "tests/lean",
-    "tests/lean/run",
-):
-    for glob in (
-        f"{dir}/*.lean",
-        f"{dir}/*.expected.out",
-        f"{dir}/*.expected.ret",
-    ):
-        for file in Path().glob(glob):
-            nag("deprecated dir", file, fatal=False)
-
-
 # Files and directories that will no longer work.
 
-for file in Path().glob("tests/speedcenter.exec.velcom.yaml"):
-    nag("removed file", file)
-
-for file in Path().glob("tests/bench-radar/*"):
-    nag("removed dir", file)
+for pattern in (
+    "**/*.exit.expected",
+    "**/*.expected.out",
+    "**/*.expected.ret",
+    "**/*.no_interpreter",
+    "**/run_bench",
+    "**/run_test",
+    "tests/speedcenter.exec.velcom.yaml",
+):
+    for file in Path().glob(pattern):
+        nag("removed file", file)
 
 for dir in (
+    "tests/bench-radar",
     "tests/bench/cbv",
     "tests/bench/inundation",
+    "tests/compiler",
+    "tests/lean/docparse",
+    "tests/lean/interactive",
+    "tests/lean/run",
+    "tests/lean/server",
     "tests/lean/trust0",
+    "tests/plugin",
 ):
-    for glob in (
+    for file in Path().glob(f"{dir}/*"):
+        nag("removed dir", file)
+
+for dir in ("tests/lean",):
+    for pattern in (
         f"{dir}/*.lean",
         f"{dir}/*.expected.out",
         f"{dir}/*.expected.ret",
     ):
-        for file in Path().glob(glob):
+        for file in Path().glob(pattern):
             nag("removed dir", file)
 
 
 # Files that use the old naming convention in the new directories.
 
 for dir in (
+    "doc/examples",
     "tests/compile",
     "tests/compile_bench",
+    "tests/docparse",
     "tests/elab",
     "tests/elab_bench",
     "tests/elab_fail",
+    "tests/misc",
+    "tests/misc_bench",
+    "tests/server",
+    "tests/server_interactive",
 ):
-    for glob in (
+    for pattern in (
         f"{dir}/*.no_interpreter",
         f"{dir}/*.expected.out",
         f"{dir}/*.expected.ret",
     ):
-        for file in Path().glob(glob):
+        for file in Path().glob(pattern):
             nag("old suffix", file)
 
 
 # Files that expect a corresponding base file
 
-for glob, drop in (
+for pattern, drop in (
     ("**/*.no_test", 1),
     ("**/*.no_bench", 1),
     ("**/*.do_compile", 1),
@@ -98,13 +105,8 @@ for glob, drop in (
     ("**/*.after.sh", 2),
     ("**/*.out.expected", 2),
     ("**/*.out.ignored", 2),
-    ("**/*.exit.expected", 2),
-    # Old naming convention
-    ("**/*.no_interpreter", 1),
-    ("**/*.expected.out", 2),
-    ("**/*.expected.ret", 2),
 ):
-    for file in Path().glob(glob):
+    for file in Path().glob(pattern):
         basefile = file
         for _ in range(drop):
             basefile = basefile.with_suffix("")
@@ -119,13 +121,12 @@ for glob, drop in (
 
 # Files that shouldn't be empty
 
-for glob in (
+for pattern in (
     "**/*.init.sh",
     "**/*.before.sh",
     "**/*.after.sh",
-    "**/*.exit.expected",
 ):
-    for file in Path().glob(glob):
+    for file in Path().glob(pattern):
         if file.read_text().strip():
             continue
         nag("empty", file)
@@ -155,39 +156,13 @@ for file in Path().glob("**/*.no_test"):
 
 # Special rules for certain directories
 
-for glob in (
+for pattern in (
     "tests/compile_bench/*.no_bench",
-    "tests/elab/*.exit.expected",
     "tests/elab_bench/*.no_bench",
     "tests/misc_bench/*.no_bench",
 ):
-    for file in Path().glob(glob):
+    for file in Path().glob(pattern):
         nag("forbidden", file)
-
-for file in Path().glob("tests/elab_fail/*.exit.expected"):
-    if file.read_text().strip() == "0":
-        nag("must be != 0", file)
-
-
-# Run scripts sourcing incorrectly
-
-for file in Path().glob("**/run_test"):
-    if file.is_symlink():
-        continue
-    text = file.read_text()
-    if "env_test.sh" not in text:
-        nag("no env_test.sh", file)
-    if "env_bench.sh" in text:
-        nag("has env_bench.sh", file)
-
-for file in Path().glob("**/run_bench"):
-    if file.is_symlink():
-        continue
-    text = file.read_text()
-    if "env_bench.sh" not in text:
-        nag("no env_bench.sh", file)
-    if "env_test.sh" in text:
-        nag("has env_test.sh", file)
 
 
 # File confusion by case insensitive filesystems

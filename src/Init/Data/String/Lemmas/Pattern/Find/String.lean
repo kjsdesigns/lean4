@@ -8,6 +8,7 @@ module
 prelude
 public import Init.Data.String.Search
 import all Init.Data.String.Slice
+import all Init.Data.String.Pattern.String
 import Init.ByCases
 import Init.Data.String.Lemmas.Pattern.Find.Basic
 import Init.Data.String.Lemmas.Pattern.String.ForwardSearcher
@@ -55,11 +56,7 @@ theorem contains_slice_iff {t s : Slice} :
 @[simp]
 theorem contains_string_iff {t : String} {s : Slice} :
     s.contains t ↔ t.toList <:+: s.copy.toList := by
-  by_cases ht : t = ""
-  · simp [contains_string_eq_true_of_empty ht s, ht]
-  · have := Pattern.Model.ForwardStringSearcher.lawfulToForwardSearcherModel (pat := t) ht
-    simp only [Pattern.Model.contains_eq_true_iff,
-      Pattern.Model.ForwardStringSearcher.exists_matchesAt_iff_eq_append ht, isInfix_toList_iff]
+  simp [contains_string_eq_contains_toSlice, contains_slice_iff, copy_toSlice]
 
 @[simp]
 theorem contains_slice_eq_false_iff {t s : Slice} :
@@ -92,5 +89,13 @@ theorem contains_slice_eq_false_iff {t : Slice} {s : String} :
 theorem contains_string_eq_false_iff {t s : String} :
     s.contains t = false ↔ ¬(t.toList <:+: s.toList) :=
   Bool.eq_false_iff.trans (not_congr contains_string_iff)
+
+/-
+  Used internally by the `cbv` tactic.
+-/
+@[cbv_eval]
+theorem contains_string_eq_internal {t s : String} :
+    s.contains t = t.toList.isInfixOf_internal s.toList := by
+  rw [Bool.eq_iff_iff, contains_string_iff, List.isInfixOf_internal_iff_isInfix]
 
 end String

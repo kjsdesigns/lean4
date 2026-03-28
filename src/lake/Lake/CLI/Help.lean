@@ -361,6 +361,11 @@ COMMANDS:
   clean                 removes ALL froms the local Lake cache
   services              print configured remote cache services
 
+STAGING COMMANDS:
+  stage <map> <dir>     copy build outputs from the cache to a directory
+  unstage <dir>         cache build outputs from a staging directory
+  put-staged <dir>      upload build outputs from a staging directory
+
 See `lake cache help <command>` for more information on a specific command."
 
 def helpCacheGet :=
@@ -377,7 +382,7 @@ OPTIONS:
   --platform=<target-triple>      with Reservoir or --repo, sets the platform
   --toolchain=<name>              with Reservoir or --repo, sets the toolchain
   --scope=<remote-scope>          scope for a custom endpoint
-  --download-arts                 download artifacts now, not on demand
+  --mappings-only                 only download mappings, delay artifacts
   --force-download                redownload existing files
 
 Downloads build outputs for packages in the workspace from a remote cache
@@ -408,10 +413,9 @@ artifacts. If no mappings are found, Lake will backtrack the Git history up to
 `--max-revs`, looking for a revision with mappings. If `--max-revs` is 0, Lake
 will search the repository's entire history (or as far as Git will allow).
 
-With a named service and without a mappings file, Lake will only download
-the input-to-output mappings for packages. It will delay downloading of the
-corresponding artifacts to the next `lake build` that requires them. Using
-`--download-arts` will force Lake to download all artifacts eagerly.
+By default, Lake will download both the input-to-output mappings and the
+output artifacts for a package. By using `--mappings-onlys`, Lake will only
+download the mappings abd delay downloading artifacts until they are needed.
 
 If a download for an artifact fails or the download process for a whole
 package fails, Lake will report this and continue on to the next. Once done,
@@ -455,7 +459,7 @@ full scope). As such, the command will warn if the work tree currently
 has changes."
 
 def helpCacheAdd :=
-"Addd input-to-output mappings to the Lake cache
+"Add input-to-output mappings to the Lake cache
 
 USAGE:
   lake cache add <mappings>
@@ -476,6 +480,48 @@ artifacts and outputs, artifacts in a cache service are prefixed with a scope
 to avoid clashes. For Reservoir, this scope can either be a package (set via
 `--scope`) or a repository (set via `--repo`). For S3 services, both options
 are synonymous."
+
+def helpCacheStage :=
+"Copy build outputs from the cache to a staging directory
+
+USAGE:
+  lake cache stage <mappings> <staging-directory>
+
+Creates the staging directory and copies the mappings file to it. Then, it
+copies all artifacts described within the mappings file from the cache to the
+staging directory. Errors if any of the artifacts described cannot be found in
+the cache."
+
+def helpCacheUnstage :=
+"Cache build outputs from a staging directory
+
+USAGE:
+  lake cache unstage <staging-directory>
+
+Copies the mappings and artifacts stored in staging directory (e.g., via
+`lake cache stage`) back into the cache.
+
+Reads the mappings file located at `outputs.jsonl` within the staging
+directory and writes the mappings to the Lake cache. Then, it copies the
+described artifacts from the staging directory into the cache."
+
+def helpCachePutStaged :=
+"Upload build outputs from a staging directory to a remote service
+
+USAGE:
+  lake cache put-staged <staging-directory>
+
+OPTIONS:
+  --scope=<remote-scope>          verbatim scope
+  --repo=<github-repo>            scope with repository + toolchain & platform
+  --toolchain=<name>              with --repo, sets the toolchain
+  --platform=<target-triple>      with --repo, sets the platform
+
+Works like `lake cache put` but uploads outputs from the staging directory
+instead of the Lake cache. Does not configure the workspace and thus does not
+execute arbitrary user code. However, because of this, the package's platform
+and toolchain settings will not be automatically detected and must be
+specified manually via `--platform` and `--toolchain` (if desired)."
 
 def helpCacheClean :=
 "Removes ALL files from the local Lake cache
@@ -642,6 +688,9 @@ public def helpCache : (cmd : String) → String
 | "get"                 => helpCacheGet
 | "put"                 => helpCachePut
 | "add"                 => helpCacheAdd
+| "stage"               => helpCacheStage
+| "unstage"             => helpCacheUnstage
+| "put-staged"          => helpCachePutStaged
 | "clean"               => helpCacheClean
 | "services"            => helpCacheServices
 | _                     => helpCacheCli

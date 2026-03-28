@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 
+from dataclasses import dataclass
+from argparse import Namespace
 import argparse
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -9,11 +12,37 @@ from pathlib import Path
 os.chdir(Path(__file__).parent.parent)
 
 
+@dataclass
+class Args(Namespace):
+    force: bool
+    nomeld: bool
+
+
 parser = argparse.ArgumentParser(
     description="Interactively create, fix, and remove *.out.expected files "
     "based on their corresponding *.out.produced files."
 )
-args = parser.parse_args()
+parser.add_argument(
+    "--force",
+    "-f",
+    action="store_true",
+    help="automatically accept all suggested changes without user interaction",
+)
+parser.add_argument(
+    "--nomeld",
+    "-M",
+    action="store_true",
+    help="diff files instead of using meld to merge them",
+)
+args = parser.parse_args(namespace=Args)
+
+
+use_meld = not args.nomeld
+try:
+    subprocess.run(["meld", "--version"], check=True, stdout=subprocess.DEVNULL)
+except (subprocess.CalledProcessError, FileNotFoundError):
+    print("meld not found, falling back to --nomeld behavior")
+    use_meld = False
 
 
 def prompt(message: str, options: str = "Yn") -> str:
@@ -26,6 +55,10 @@ def prompt(message: str, options: str = "Yn") -> str:
     options = options.lower()
     options_display = "/".join(c.upper() if c == default else c for c in options)
 
+    if args.force and default:
+        print(f"{message} [{options_display}]: selected {default} due to --force")
+        return default
+
     while True:
         response = input(f"{message} [{options_display}]: ").strip().lower()
         if not response and default:
@@ -37,6 +70,8 @@ def prompt(message: str, options: str = "Yn") -> str:
 
 
 def remove_file(file: Path, reason: str) -> None:
+    print()
+    print()
     print(f"{reason} but {file} exists.")
     if prompt(f"Remove {file}?") == "y":
         file.unlink()
@@ -52,7 +87,29 @@ def compare_and_merge(
     if produced == expected:
         return
 
+    print()
+    print()
     print(f"{produced_file} differs from {expected_file}")
+
+    if args.force:
+        print(f"Automatically updating {expected_file} due to --force")
+        shutil.copy(produced_file, expected_file)
+        return
+
+    if not use_meld:
+        subprocess.run(
+            [
+                "diff",
+                "-au",
+                "--strip-trailing-cr",
+                "--color=always",
+                expected_file,
+                produced_file,
+            ]
+        )
+        if prompt(f"Apply diff to {expected_file}?") == "y":
+            shutil.copy(produced_file, expected_file)
+        return
 
     # This is the opposite direction of the tests' diff output, but meld puts
     # the cursor into the right file by default, and only saves the file with
@@ -66,10 +123,12 @@ def create_or_ignore(
     expected_file: Path,
     ignored_file: Path,
 ) -> None:
+    print()
+    print()
     print(f"{produced_file} is not empty.")
     answer = prompt("Create expected file, ignore, or do nothing?", "Ein")
     if answer == "e":
-        produced_file.copy(expected_file)
+        shutil.copy(produced_file, expected_file)
     elif answer == "i":
         ignored_file.touch()
 

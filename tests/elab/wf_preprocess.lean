@@ -1,3 +1,4 @@
+set_option backward.do.legacy false
 set_option Elab.async false -- for stable output order in #guard_msgs
 
 universe u
@@ -147,6 +148,8 @@ structure MTree (α : Type u) where
 /--
 warning: declaration uses `sorry`
 ---
+warning: declaration uses `sorry`
+---
 trace: α : Type u_1
 t : MTree α
 x✝¹ : List (MTree α)
@@ -173,6 +176,8 @@ theorem MTree.map.eq_1.{u_1, u_2} : ∀ {α : Type u_1} {β : Type u_2} (f : α 
 info: MTree.map.induct.{u_1} {α : Type u_1} (motive : MTree α → Prop)
   (case1 : ∀ (x : MTree α), (∀ (x_1 : List (MTree α)), x_1 ∈ x.cs → ∀ (x : MTree α), x ∈ x_1 → motive x) → motive x)
   (t : MTree α) : motive t
+---
+warning: declaration uses `sorry`
 -/
 #guard_msgs in
 #check MTree.map.induct
@@ -209,21 +214,18 @@ theorem MTree.size.eq_1.{u_1} : ∀ {α : Type u_1} (t : MTree α),
   t.size =
     (have s := 1;
       do
-      let r ←
-        forIn t.cs s fun css r =>
-            have s := r;
+      let __s ←
+        forIn t.cs s fun css __s =>
+            have s := __s;
             do
-            let r ←
-              forIn css s fun c r =>
-                  have s := r;
+            let __s ←
+              forIn css s fun c __s =>
+                  have s := __s;
                   have s := s + c.size;
-                  do
-                  pure PUnit.unit
                   pure (ForInStep.yield s)
-            have s : Nat := r
-            pure PUnit.unit
+            have s : Nat := __s
             pure (ForInStep.yield s)
-      have s : Nat := r
+      have s : Nat := __s
       pure s).run
 -/
 #guard_msgs in
@@ -243,6 +245,8 @@ inductive Expression where
 | object: List (String × Expression) → Expression
 
 /--
+warning: declaration uses `sorry`
+---
 warning: declaration uses `sorry`
 ---
 trace: L : List (String × Expression)
@@ -272,6 +276,8 @@ info: Ex1.t.induct (motive : Expression → Prop) (case1 : ∀ (s : String), mot
   (case2 :
     ∀ (L : List (String × Expression)), (∀ (x : String × Expression), motive x.snd) → motive (Expression.object L))
   (exp : Expression) : motive exp
+---
+warning: declaration uses `sorry`
 -/
 #guard_msgs in
 #check t.induct
@@ -284,6 +290,8 @@ inductive Expression where
 | object: List (String × Expression) → Expression
 
 /--
+warning: declaration uses `sorry`
+---
 warning: declaration uses `sorry`
 ---
 trace: L : List (String × Expression)

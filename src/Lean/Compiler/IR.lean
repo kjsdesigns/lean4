@@ -6,14 +6,12 @@ Authors: Leonardo de Moura
 module
 
 prelude
-public import Lean.Compiler.IR.AddExtern
 public import Lean.Compiler.IR.Basic
 public import Lean.Compiler.IR.Format
 public import Lean.Compiler.IR.CompilerM
 public import Lean.Compiler.IR.NormIds
 public import Lean.Compiler.IR.Checker
 public import Lean.Compiler.IR.UnboxResult
-public import Lean.Compiler.IR.EmitC
 public import Lean.Compiler.IR.Sorry
 public import Lean.Compiler.IR.ToIR
 public import Lean.Compiler.IR.ToIRType
@@ -34,7 +32,6 @@ def compile (decls : Array Decl) : CompilerM (Array Decl) := do
   let mut decls := decls
   decls ← updateSorryDep decls
   logDecls `result decls
-  checkDecls decls
   addDecls decls
   inferMeta decls
   return decls

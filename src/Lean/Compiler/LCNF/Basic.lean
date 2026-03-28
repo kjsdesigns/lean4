@@ -342,6 +342,11 @@ def LetValue.toExpr (e : LetValue pu) : Expr :=
   | .unbox var _ => mkApp (.const `unbox []) (.fvar var)
   | .isShared fvarId _ => mkApp (.const `isShared []) (.fvar fvarId)
 
+def LetValue.isPersistent (val : LetValue .impure) : Bool :=
+  match val with
+  | .fap _ xs => xs.isEmpty -- all global constants are persistent
+  | _ => false
+
 structure LetDecl (pu : Purity) where
   fvarId : FVarId
   binderName : Name
@@ -850,9 +855,11 @@ where
     | .jmp .. => inc
     | .return .. | unreach .. => return ()
 
+@[inline]
 partial def Code.forM [Monad m] (c : Code pu) (f : Code pu → m Unit) : m Unit :=
   go c
 where
+  @[specialize]
   go (c : Code pu) : m Unit := do
     f c
     match c with
@@ -1222,5 +1229,17 @@ def instantiateRevRangeArgs (e : Expr) (beginIdx endIdx : Nat) (args : Array (Ar
     e
   else
     e.instantiateRevRange beginIdx endIdx (args.map (·.toExpr))
+
+/-- Lookup function for compiler extensions with sorted persisted state that works in both `lean` and `leanir`. -/
+@[inline] def findExtEntry? [Inhabited σ] (env : Environment) (ext : PersistentEnvExtension α β σ) (declName : Name)
+    (findAtSorted? : Array α → Name → Option α')
+    (findInState? : σ → Name → Option α') : Option α' :=
+  (env.getModuleIdxFor? declName).bind (fun modIdx =>
+    -- non-meta defs with leanir
+    findAtSorted? (ext.getModuleIREntries env modIdx) declName <|>
+    -- meta defs with leanir and all defs without leanir
+    findAtSorted? (ext.getModuleEntries env modIdx) declName) <|>
+  -- In `leanir`, the current module has a module index, so we need to check the local state always
+  findInState? (ext.getState env) declName
 
 end Lean.Compiler.LCNF

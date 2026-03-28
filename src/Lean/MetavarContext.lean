@@ -400,6 +400,12 @@ def MetavarContext.getDelayedMVarAssignmentCore? (mctx : MetavarContext) (mvarId
 def MetavarContext.getDelayedMVarAssignmentExp (mctx : MetavarContext) (mvarId : MVarId) : Option DelayedMetavarAssignment :=
   mctx.dAssignment.find? mvarId
 
+@[export lean_delayed_mvar_assignment_fvars]
+def DelayedMetavarAssignment.fvarsExp (d : DelayedMetavarAssignment) : Array Expr := d.fvars
+
+@[export lean_delayed_mvar_assignment_mvar_id_pending]
+def DelayedMetavarAssignment.mvarIdPendingExp (d : DelayedMetavarAssignment) : MVarId := d.mvarIdPending
+
 def getDelayedMVarAssignment? [Monad m] [MonadMCtx m] (mvarId : MVarId) : m (Option DelayedMetavarAssignment) :=
   return (← getMCtx).getDelayedMVarAssignmentCore? mvarId
 
@@ -504,7 +510,7 @@ def hasAssignableMVar [Monad m] [MonadMCtx m] : Expr → m Bool
 
 /--
   Add `mvarId := u` to the universe metavariable assignment.
-  This method does not check whether `mvarId` is already assigned, nor it checks whether
+  This method does not check whether `mvarId` is already assigned, nor does it check whether
   a cycle is being introduced.
   This is a low-level API, and it is safer to use `isLevelDefEq (mkLevelMVar mvarId) u`.
 -/
@@ -517,7 +523,7 @@ def assignLevelMVarExp (m : MetavarContext) (mvarId : LMVarId) (val : Level) : M
 
 /--
 Add `mvarId := x` to the metavariable assignment.
-This method does not check whether `mvarId` is already assigned, nor it checks whether
+This method does not check whether `mvarId` is already assigned, nor does it check whether
 a cycle is being introduced, or whether the expression has the right type.
 This is a low-level API, and it is safer to use `isDefEq (mkMVar mvarId) x`.
 -/

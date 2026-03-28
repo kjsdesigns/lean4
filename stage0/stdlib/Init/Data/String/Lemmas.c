@@ -1,6 +1,6 @@
 // Lean compiler output
 // Module: Init.Data.String.Lemmas
-// Imports: public import Init.Data.String.Lemmas.Splits public import Init.Data.String.Lemmas.Modify public import Init.Data.String.Lemmas.Search public import Init.Data.String.Lemmas.FindPos public import Init.Data.String.Lemmas.Basic public import Init.Data.String.Lemmas.Order public import Init.Data.String.Lemmas.IsEmpty public import Init.Data.String.Lemmas.Pattern public import Init.Data.String.Lemmas.Slice public import Init.Data.String.Lemmas.Iterate public import Init.Data.String.Lemmas.Intercalate import Init.Data.Order.Lemmas public import Init.Data.String.Basic import Init.Data.Char.Lemmas import Init.Data.Char.Order import Init.Data.List.Lex
+// Imports: public import Init.Data.String.Lemmas.Splits public import Init.Data.String.Lemmas.Modify public import Init.Data.String.Lemmas.Search public import Init.Data.String.Lemmas.FindPos public import Init.Data.String.Lemmas.Basic public import Init.Data.String.Lemmas.Order public import Init.Data.String.Lemmas.IsEmpty public import Init.Data.String.Lemmas.Pattern public import Init.Data.String.Lemmas.Slice public import Init.Data.String.Lemmas.Iterate public import Init.Data.String.Lemmas.Intercalate public import Init.Data.String.Lemmas.Iter public import Init.Data.String.Lemmas.Hashable public import Init.Data.String.Lemmas.TakeDrop import Init.Data.Order.Lemmas public import Init.Data.String.Basic import Init.Data.Char.Lemmas import Init.Data.Char.Order import Init.Data.List.Lex
 #include <lean/lean.h>
 #if defined(__clang__)
 #pragma clang diagnostic ignored "-Wunused-parameter"
@@ -24,6 +24,9 @@ lean_object* runtime_initialize_Init_Data_String_Lemmas_Pattern(uint8_t builtin)
 lean_object* runtime_initialize_Init_Data_String_Lemmas_Slice(uint8_t builtin);
 lean_object* runtime_initialize_Init_Data_String_Lemmas_Iterate(uint8_t builtin);
 lean_object* runtime_initialize_Init_Data_String_Lemmas_Intercalate(uint8_t builtin);
+lean_object* runtime_initialize_Init_Data_String_Lemmas_Iter(uint8_t builtin);
+lean_object* runtime_initialize_Init_Data_String_Lemmas_Hashable(uint8_t builtin);
+lean_object* runtime_initialize_Init_Data_String_Lemmas_TakeDrop(uint8_t builtin);
 lean_object* runtime_initialize_Init_Data_Order_Lemmas(uint8_t builtin);
 lean_object* runtime_initialize_Init_Data_String_Basic(uint8_t builtin);
 lean_object* runtime_initialize_Init_Data_Char_Lemmas(uint8_t builtin);
@@ -34,68 +37,61 @@ LEAN_EXPORT lean_object* runtime_initialize_Init_Data_String_Lemmas(uint8_t buil
 lean_object * res;
 if (_G_runtime_initialized) return lean_io_result_mk_ok(lean_box(0));
 _G_runtime_initialized = true;
-res = runtime_initialize_Init_Data_String_Lemmas_Splits(builtin)
-;
+res = runtime_initialize_Init_Data_String_Lemmas_Splits(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = runtime_initialize_Init_Data_String_Lemmas_Modify(builtin)
-;
+res = runtime_initialize_Init_Data_String_Lemmas_Modify(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = runtime_initialize_Init_Data_String_Lemmas_Search(builtin)
-;
+res = runtime_initialize_Init_Data_String_Lemmas_Search(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = runtime_initialize_Init_Data_String_Lemmas_FindPos(builtin)
-;
+res = runtime_initialize_Init_Data_String_Lemmas_FindPos(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = runtime_initialize_Init_Data_String_Lemmas_Basic(builtin)
-;
+res = runtime_initialize_Init_Data_String_Lemmas_Basic(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = runtime_initialize_Init_Data_String_Lemmas_Order(builtin)
-;
+res = runtime_initialize_Init_Data_String_Lemmas_Order(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = runtime_initialize_Init_Data_String_Lemmas_IsEmpty(builtin)
-;
+res = runtime_initialize_Init_Data_String_Lemmas_IsEmpty(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = runtime_initialize_Init_Data_String_Lemmas_Pattern(builtin)
-;
+res = runtime_initialize_Init_Data_String_Lemmas_Pattern(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = runtime_initialize_Init_Data_String_Lemmas_Slice(builtin)
-;
+res = runtime_initialize_Init_Data_String_Lemmas_Slice(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = runtime_initialize_Init_Data_String_Lemmas_Iterate(builtin)
-;
+res = runtime_initialize_Init_Data_String_Lemmas_Iterate(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = runtime_initialize_Init_Data_String_Lemmas_Intercalate(builtin)
-;
+res = runtime_initialize_Init_Data_String_Lemmas_Intercalate(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = runtime_initialize_Init_Data_Order_Lemmas(builtin)
-;
+res = runtime_initialize_Init_Data_String_Lemmas_Iter(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = runtime_initialize_Init_Data_String_Basic(builtin)
-;
+res = runtime_initialize_Init_Data_String_Lemmas_Hashable(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = runtime_initialize_Init_Data_Char_Lemmas(builtin)
-;
+res = runtime_initialize_Init_Data_String_Lemmas_TakeDrop(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = runtime_initialize_Init_Data_Char_Order(builtin)
-;
+res = runtime_initialize_Init_Data_Order_Lemmas(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = runtime_initialize_Init_Data_List_Lex(builtin)
-;
+res = runtime_initialize_Init_Data_String_Basic(builtin);
+if (lean_io_result_is_error(res)) return res;
+lean_dec_ref(res);
+res = runtime_initialize_Init_Data_Char_Lemmas(builtin);
+if (lean_io_result_is_error(res)) return res;
+lean_dec_ref(res);
+res = runtime_initialize_Init_Data_Char_Order(builtin);
+if (lean_io_result_is_error(res)) return res;
+lean_dec_ref(res);
+res = runtime_initialize_Init_Data_List_Lex(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
 return lean_io_result_mk_ok(lean_box(0));
@@ -118,6 +114,9 @@ lean_object* initialize_Init_Data_String_Lemmas_Pattern(uint8_t builtin);
 lean_object* initialize_Init_Data_String_Lemmas_Slice(uint8_t builtin);
 lean_object* initialize_Init_Data_String_Lemmas_Iterate(uint8_t builtin);
 lean_object* initialize_Init_Data_String_Lemmas_Intercalate(uint8_t builtin);
+lean_object* initialize_Init_Data_String_Lemmas_Iter(uint8_t builtin);
+lean_object* initialize_Init_Data_String_Lemmas_Hashable(uint8_t builtin);
+lean_object* initialize_Init_Data_String_Lemmas_TakeDrop(uint8_t builtin);
 lean_object* initialize_Init_Data_Order_Lemmas(uint8_t builtin);
 lean_object* initialize_Init_Data_String_Basic(uint8_t builtin);
 lean_object* initialize_Init_Data_Char_Lemmas(uint8_t builtin);
@@ -128,76 +127,67 @@ LEAN_EXPORT lean_object* initialize_Init_Data_String_Lemmas(uint8_t builtin) {
 lean_object * res;
 if (_G_initialized) return lean_io_result_mk_ok(lean_box(0));
 _G_initialized = true;
-res = initialize_Init_Data_String_Lemmas_Splits(builtin)
-;
+res = initialize_Init_Data_String_Lemmas_Splits(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = initialize_Init_Data_String_Lemmas_Modify(builtin)
-;
+res = initialize_Init_Data_String_Lemmas_Modify(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = initialize_Init_Data_String_Lemmas_Search(builtin)
-;
+res = initialize_Init_Data_String_Lemmas_Search(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = initialize_Init_Data_String_Lemmas_FindPos(builtin)
-;
+res = initialize_Init_Data_String_Lemmas_FindPos(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = initialize_Init_Data_String_Lemmas_Basic(builtin)
-;
+res = initialize_Init_Data_String_Lemmas_Basic(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = initialize_Init_Data_String_Lemmas_Order(builtin)
-;
+res = initialize_Init_Data_String_Lemmas_Order(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = initialize_Init_Data_String_Lemmas_IsEmpty(builtin)
-;
+res = initialize_Init_Data_String_Lemmas_IsEmpty(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = initialize_Init_Data_String_Lemmas_Pattern(builtin)
-;
+res = initialize_Init_Data_String_Lemmas_Pattern(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = initialize_Init_Data_String_Lemmas_Slice(builtin)
-;
+res = initialize_Init_Data_String_Lemmas_Slice(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = initialize_Init_Data_String_Lemmas_Iterate(builtin)
-;
+res = initialize_Init_Data_String_Lemmas_Iterate(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = initialize_Init_Data_String_Lemmas_Intercalate(builtin)
-;
+res = initialize_Init_Data_String_Lemmas_Intercalate(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = initialize_Init_Data_Order_Lemmas(builtin)
-;
+res = initialize_Init_Data_String_Lemmas_Iter(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = initialize_Init_Data_String_Basic(builtin)
-;
+res = initialize_Init_Data_String_Lemmas_Hashable(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = initialize_Init_Data_Char_Lemmas(builtin)
-;
+res = initialize_Init_Data_String_Lemmas_TakeDrop(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = initialize_Init_Data_Char_Order(builtin)
-;
+res = initialize_Init_Data_Order_Lemmas(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = initialize_Init_Data_List_Lex(builtin)
-;
+res = initialize_Init_Data_String_Basic(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = runtime_initialize_Init_Data_String_Lemmas(builtin)
-;
+res = initialize_Init_Data_Char_Lemmas(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = meta_initialize_Init_Data_String_Lemmas(builtin)
-;
+res = initialize_Init_Data_Char_Order(builtin);
+if (lean_io_result_is_error(res)) return res;
+lean_dec_ref(res);
+res = initialize_Init_Data_List_Lex(builtin);
+if (lean_io_result_is_error(res)) return res;
+lean_dec_ref(res);
+res = runtime_initialize_Init_Data_String_Lemmas(builtin);
+if (lean_io_result_is_error(res)) return res;
+lean_dec_ref(res);
+res = meta_initialize_Init_Data_String_Lemmas(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
 return initialize_Init_Data_String_Lemmas(builtin);

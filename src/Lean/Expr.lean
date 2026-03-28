@@ -73,7 +73,7 @@ inductive BinderInfo where
   | default
   /-- Implicit binder annotation, e.g., `{x : α}` -/
   | implicit
-  /-- Strict implicit binder annotation, e.g., `{{ x : α }}` -/
+  /-- Strict implicit binder annotation, e.g., `⦃x : α⦄` -/
   | strictImplicit
   /-- Local instance binder annotation, e.g., `[Decidable α]` -/
   | instImplicit
@@ -107,7 +107,7 @@ def BinderInfo.isImplicit : BinderInfo → Bool
   | BinderInfo.implicit => true
   | _                   => false
 
-/-- Return `true` if the given `BinderInfo` is a strict implicit annotation (e.g., `{{α : Type u}}`) -/
+/-- Return `true` if the given `BinderInfo` is a strict implicit annotation (e.g., `⦃α : Type u⦄`) -/
 def BinderInfo.isStrictImplicit : BinderInfo → Bool
   | BinderInfo.strictImplicit => true
   | _                         => false
@@ -253,7 +253,7 @@ instance : EmptyCollection (FVarIdMap α) := inferInstanceAs (EmptyCollection (S
 instance : Inhabited (FVarIdMap α) where
   default := {}
 
-/-- Universe metavariable Id   -/
+/-- Expression metavariable Id   -/
 structure MVarId where
   name : Name
   deriving Inhabited, BEq, Hashable
@@ -301,8 +301,8 @@ inductive Expr where
   of a variable in the expression where there is a variable binder
   above it (i.e. introduced by a `lam`, `forallE`, or `letE`).
 
-  The `deBruijnIndex` parameter is the *de-Bruijn* index for the bound
-  variable. See [the Wikipedia page on de-Bruijn indices](https://en.wikipedia.org/wiki/De_Bruijn_index)
+  The `deBruijnIndex` parameter is the *de Bruijn* index for the bound
+  variable. See [the Wikipedia page on de Bruijn indices](https://en.wikipedia.org/wiki/De_Bruijn_index)
   for additional information.
 
   For example, consider the expression `fun x : Nat => forall y : Nat, x = y`.
@@ -321,16 +321,16 @@ inductive Expr where
   | bvar (deBruijnIndex : Nat)
 
   /--
-  The `fvar` constructor represent free variables. These *free* variable
-  occurrences are not bound by an earlier `lam`, `forallE`, or `letE`
+  The `fvar` constructor represents free variables. Such a *free* variable
+  occurrence is not bound by an earlier `lam`, `forallE`, or `letE`
   constructor and its binder exists in a local context only.
 
-  Note that Lean uses the *locally nameless approach*. See [McBride and McKinna](https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.365.2479&rep=rep1&type=pdf)
+  Note that Lean uses the *locally nameless approach*. See [McBride and McKinna](https://doi.org/10.1145/1017472.1017477)
   for additional details.
 
   When "visiting" the body of a binding expression (i.e. `lam`, `forallE`, or `letE`),
   bound variables are converted into free variables using a unique identifier,
-  and their user-facing name, type, value (for `LetE`), and binder annotation
+  and their user-facing name, type, value (for `letE`), and binder annotation
   are stored in the `LocalContext`.
   -/
   | fvar (fvarId : FVarId)
@@ -363,7 +363,7 @@ inductive Expr where
   A function application.
 
   For example, the natural number one, i.e. `Nat.succ Nat.zero` is represented as
-  ``Expr.app (.const `Nat.succ []) (.const .zero [])``.
+  ``Expr.app (.const `Nat.succ []) (.const `Nat.zero [])``.
   Note that multiple arguments are represented using partial application.
 
   For example, the two argument application `f x y` is represented as
@@ -383,7 +383,7 @@ inductive Expr where
   | lam (binderName : Name) (binderType : Expr) (body : Expr) (binderInfo : BinderInfo)
 
   /--
-  A dependent arrow `(a : α) → β)` (aka forall-expression) where `β` may dependent
+  A dependent arrow `(a : α) → β)` (aka forall-expression) where `β` may depend
   on `a`. Note that this constructor is also used to represent non-dependent arrows
   where `β` does not depend on `a`.
 
@@ -447,18 +447,24 @@ inductive Expr where
 
   /--
   Projection-expressions. They are redundant, but are used to create more compact
-  terms, speedup reduction, and implement eta for structures.
-  The type of `struct` must be an structure-like inductive type. That is, it has only one
-  constructor, is not recursive, and it is not an inductive predicate. The kernel and elaborators
-  check whether the `typeName` matches the type of `struct`, and whether the (zero-based) index
-  is valid (i.e., it is smaller than the number of constructor fields).
-  When exporting Lean developments to other systems, `proj` can be replaced with `typeName`.`rec`
+  terms, speed up reduction, and implement eta for structures.
+  The type of `struct` must be a one-constructor inductive type.
+  If `I.mk` is the constructor of an `m`-parameter inductive type `I`,
+  then ``.proj `I k (@I.mk p1 ... pm f0 f1 ...)`` is definitionally equal to `fk`.
+
+  The kernel and elaborator check whether the `typeName` matches the type of `struct`,
+  whether the zero-based index is valid (it must be smaller than the number of constructor fields),
+  and whether the projection itself is valid (for inductive predicates, the fields must be propositions).
+  When exporting Lean developments to other systems, `proj` can be replaced with `typeName.rec`
   applications.
+  Non-recursive structures (one-constructor inductive types with no indices) have an eta rule:
+  if `e : I p1 ... pm`, then `e` and `@I.mk p1 ... pm e.1 e.2 ... e.n` are definitionally equal.
 
   Example, given `a : Nat × Bool`, `a.1` is represented as
   ```
   .proj `Prod 0 a
   ```
+  and `a` is definitionally equal to `@Prod.mk Nat Bool a.1 a.2` by the structure eta rule.
   -/
   | proj (typeName : Name) (idx : Nat) (struct : Expr)
 with
@@ -1744,6 +1750,12 @@ def isFalse (e : Expr) : Bool :=
 
 def isTrue (e : Expr) : Bool :=
   e.cleanupAnnotations.isConstOf ``True
+
+def isBoolFalse (e : Expr) : Bool :=
+  e.cleanupAnnotations.isConstOf ``false
+
+def isBoolTrue (e : Expr) : Bool :=
+  e.cleanupAnnotations.isConstOf ``true
 
 /--
 `getForallArity type` returns the arity of a `forall`-type. This function consumes nested annotations,

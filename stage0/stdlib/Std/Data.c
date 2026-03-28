@@ -1,6 +1,6 @@
 // Lean compiler output
 // Module: Std.Data
-// Imports: public import Std.Data.DHashMap public import Std.Data.HashMap public import Std.Data.HashSet public import Std.Data.DTreeMap public import Std.Data.TreeMap public import Std.Data.TreeSet public import Std.Data.ExtDHashMap public import Std.Data.ExtHashMap public import Std.Data.ExtHashSet public import Std.Data.ExtDTreeMap public import Std.Data.ExtTreeMap public import Std.Data.ExtTreeSet public import Std.Data.DHashMap.RawLemmas public import Std.Data.DHashMap.RawDecidableEquiv public import Std.Data.HashMap.RawLemmas public import Std.Data.HashMap.RawDecidableEquiv public import Std.Data.HashSet.RawLemmas public import Std.Data.HashSet.RawDecidableEquiv public import Std.Data.DTreeMap.Raw public import Std.Data.TreeMap.Raw public import Std.Data.TreeSet.Raw public import Std.Data.Iterators public import Std.Data.ByteSlice
+// Imports: public import Std.Data.DHashMap public import Std.Data.HashMap public import Std.Data.HashSet public import Std.Data.DTreeMap public import Std.Data.TreeMap public import Std.Data.TreeSet public import Std.Data.ExtDHashMap public import Std.Data.ExtHashMap public import Std.Data.ExtHashSet public import Std.Data.ExtDTreeMap public import Std.Data.ExtTreeMap public import Std.Data.ExtTreeSet public import Std.Data.DHashMap.RawLemmas public import Std.Data.DHashMap.RawDecidableEquiv public import Std.Data.HashMap.RawLemmas public import Std.Data.HashMap.RawDecidableEquiv public import Std.Data.HashSet.RawLemmas public import Std.Data.HashSet.RawDecidableEquiv public import Std.Data.DTreeMap.Raw public import Std.Data.TreeMap.Raw public import Std.Data.TreeSet.Raw public import Std.Data.Iterators public import Std.Data.ByteSlice public import Std.Data.String
 #include <lean/lean.h>
 #if defined(__clang__)
 #pragma clang diagnostic ignored "-Wunused-parameter"
@@ -36,101 +36,82 @@ lean_object* runtime_initialize_Std_Data_TreeMap_Raw(uint8_t builtin);
 lean_object* runtime_initialize_Std_Data_TreeSet_Raw(uint8_t builtin);
 lean_object* runtime_initialize_Std_Data_Iterators(uint8_t builtin);
 lean_object* runtime_initialize_Std_Data_ByteSlice(uint8_t builtin);
+lean_object* runtime_initialize_Std_Data_String(uint8_t builtin);
 static bool _G_runtime_initialized = false;
 LEAN_EXPORT lean_object* runtime_initialize_Std_Data(uint8_t builtin) {
 lean_object * res;
 if (_G_runtime_initialized) return lean_io_result_mk_ok(lean_box(0));
 _G_runtime_initialized = true;
-res = runtime_initialize_Std_Data_DHashMap(builtin)
-;
+res = runtime_initialize_Std_Data_DHashMap(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = runtime_initialize_Std_Data_HashMap(builtin)
-;
+res = runtime_initialize_Std_Data_HashMap(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = runtime_initialize_Std_Data_HashSet(builtin)
-;
+res = runtime_initialize_Std_Data_HashSet(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = runtime_initialize_Std_Data_DTreeMap(builtin)
-;
+res = runtime_initialize_Std_Data_DTreeMap(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = runtime_initialize_Std_Data_TreeMap(builtin)
-;
+res = runtime_initialize_Std_Data_TreeMap(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = runtime_initialize_Std_Data_TreeSet(builtin)
-;
+res = runtime_initialize_Std_Data_TreeSet(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = runtime_initialize_Std_Data_ExtDHashMap(builtin)
-;
+res = runtime_initialize_Std_Data_ExtDHashMap(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = runtime_initialize_Std_Data_ExtHashMap(builtin)
-;
+res = runtime_initialize_Std_Data_ExtHashMap(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = runtime_initialize_Std_Data_ExtHashSet(builtin)
-;
+res = runtime_initialize_Std_Data_ExtHashSet(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = runtime_initialize_Std_Data_ExtDTreeMap(builtin)
-;
+res = runtime_initialize_Std_Data_ExtDTreeMap(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = runtime_initialize_Std_Data_ExtTreeMap(builtin)
-;
+res = runtime_initialize_Std_Data_ExtTreeMap(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = runtime_initialize_Std_Data_ExtTreeSet(builtin)
-;
+res = runtime_initialize_Std_Data_ExtTreeSet(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = runtime_initialize_Std_Data_DHashMap_RawLemmas(builtin)
-;
+res = runtime_initialize_Std_Data_DHashMap_RawLemmas(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = runtime_initialize_Std_Data_DHashMap_RawDecidableEquiv(builtin)
-;
+res = runtime_initialize_Std_Data_DHashMap_RawDecidableEquiv(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = runtime_initialize_Std_Data_HashMap_RawLemmas(builtin)
-;
+res = runtime_initialize_Std_Data_HashMap_RawLemmas(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = runtime_initialize_Std_Data_HashMap_RawDecidableEquiv(builtin)
-;
+res = runtime_initialize_Std_Data_HashMap_RawDecidableEquiv(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = runtime_initialize_Std_Data_HashSet_RawLemmas(builtin)
-;
+res = runtime_initialize_Std_Data_HashSet_RawLemmas(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = runtime_initialize_Std_Data_HashSet_RawDecidableEquiv(builtin)
-;
+res = runtime_initialize_Std_Data_HashSet_RawDecidableEquiv(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = runtime_initialize_Std_Data_DTreeMap_Raw(builtin)
-;
+res = runtime_initialize_Std_Data_DTreeMap_Raw(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = runtime_initialize_Std_Data_TreeMap_Raw(builtin)
-;
+res = runtime_initialize_Std_Data_TreeMap_Raw(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = runtime_initialize_Std_Data_TreeSet_Raw(builtin)
-;
+res = runtime_initialize_Std_Data_TreeSet_Raw(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = runtime_initialize_Std_Data_Iterators(builtin)
-;
+res = runtime_initialize_Std_Data_Iterators(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = runtime_initialize_Std_Data_ByteSlice(builtin)
-;
+res = runtime_initialize_Std_Data_ByteSlice(builtin);
+if (lean_io_result_is_error(res)) return res;
+lean_dec_ref(res);
+res = runtime_initialize_Std_Data_String(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
 return lean_io_result_mk_ok(lean_box(0));
@@ -165,109 +146,88 @@ lean_object* initialize_Std_Data_TreeMap_Raw(uint8_t builtin);
 lean_object* initialize_Std_Data_TreeSet_Raw(uint8_t builtin);
 lean_object* initialize_Std_Data_Iterators(uint8_t builtin);
 lean_object* initialize_Std_Data_ByteSlice(uint8_t builtin);
+lean_object* initialize_Std_Data_String(uint8_t builtin);
 static bool _G_initialized = false;
 LEAN_EXPORT lean_object* initialize_Std_Data(uint8_t builtin) {
 lean_object * res;
 if (_G_initialized) return lean_io_result_mk_ok(lean_box(0));
 _G_initialized = true;
-res = initialize_Std_Data_DHashMap(builtin)
-;
+res = initialize_Std_Data_DHashMap(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = initialize_Std_Data_HashMap(builtin)
-;
+res = initialize_Std_Data_HashMap(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = initialize_Std_Data_HashSet(builtin)
-;
+res = initialize_Std_Data_HashSet(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = initialize_Std_Data_DTreeMap(builtin)
-;
+res = initialize_Std_Data_DTreeMap(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = initialize_Std_Data_TreeMap(builtin)
-;
+res = initialize_Std_Data_TreeMap(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = initialize_Std_Data_TreeSet(builtin)
-;
+res = initialize_Std_Data_TreeSet(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = initialize_Std_Data_ExtDHashMap(builtin)
-;
+res = initialize_Std_Data_ExtDHashMap(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = initialize_Std_Data_ExtHashMap(builtin)
-;
+res = initialize_Std_Data_ExtHashMap(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = initialize_Std_Data_ExtHashSet(builtin)
-;
+res = initialize_Std_Data_ExtHashSet(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = initialize_Std_Data_ExtDTreeMap(builtin)
-;
+res = initialize_Std_Data_ExtDTreeMap(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = initialize_Std_Data_ExtTreeMap(builtin)
-;
+res = initialize_Std_Data_ExtTreeMap(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = initialize_Std_Data_ExtTreeSet(builtin)
-;
+res = initialize_Std_Data_ExtTreeSet(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = initialize_Std_Data_DHashMap_RawLemmas(builtin)
-;
+res = initialize_Std_Data_DHashMap_RawLemmas(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = initialize_Std_Data_DHashMap_RawDecidableEquiv(builtin)
-;
+res = initialize_Std_Data_DHashMap_RawDecidableEquiv(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = initialize_Std_Data_HashMap_RawLemmas(builtin)
-;
+res = initialize_Std_Data_HashMap_RawLemmas(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = initialize_Std_Data_HashMap_RawDecidableEquiv(builtin)
-;
+res = initialize_Std_Data_HashMap_RawDecidableEquiv(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = initialize_Std_Data_HashSet_RawLemmas(builtin)
-;
+res = initialize_Std_Data_HashSet_RawLemmas(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = initialize_Std_Data_HashSet_RawDecidableEquiv(builtin)
-;
+res = initialize_Std_Data_HashSet_RawDecidableEquiv(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = initialize_Std_Data_DTreeMap_Raw(builtin)
-;
+res = initialize_Std_Data_DTreeMap_Raw(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = initialize_Std_Data_TreeMap_Raw(builtin)
-;
+res = initialize_Std_Data_TreeMap_Raw(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = initialize_Std_Data_TreeSet_Raw(builtin)
-;
+res = initialize_Std_Data_TreeSet_Raw(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = initialize_Std_Data_Iterators(builtin)
-;
+res = initialize_Std_Data_Iterators(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = initialize_Std_Data_ByteSlice(builtin)
-;
+res = initialize_Std_Data_ByteSlice(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = runtime_initialize_Std_Data(builtin)
-;
+res = initialize_Std_Data_String(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
-res = meta_initialize_Std_Data(builtin)
-;
+res = runtime_initialize_Std_Data(builtin);
+if (lean_io_result_is_error(res)) return res;
+lean_dec_ref(res);
+res = meta_initialize_Std_Data(builtin);
 if (lean_io_result_is_error(res)) return res;
 lean_dec_ref(res);
 return initialize_Std_Data(builtin);

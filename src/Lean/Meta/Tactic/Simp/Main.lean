@@ -434,7 +434,7 @@ but if `Config.letToHave` is enabled then we attempt to transform it into a `hav
 If that does not change it, then it is only `dsimp`ed.
 -/
 def simpLet (e : Expr) : SimpM Result := do
-  withTraceNode `Debug.Meta.Tactic.simp (return m!"{exceptEmoji ·} let{indentExpr e}") do
+  withTraceNode `Debug.Meta.Tactic.simp (fun _ => return m!"let{indentExpr e}") do
     assert! e.isLet
     /-
     Recall: `simpLet` is called after `reduceStep` is applied, so `simpLet` is not responsible for zeta reduction.
@@ -512,6 +512,7 @@ Auxiliary `dsimproc` for not visiting `Char` literal subterms.
 -/
 private def doNotVisitCharLit : DSimproc := doNotVisit isCharLit ``Char.ofNat
 
+set_option compiler.ignoreBorrowAnnotation true in
 @[export lean_dsimp]
 private partial def dsimpImpl (e : Expr) : SimpM Expr := do
   let cfg ← getConfig
@@ -710,6 +711,7 @@ where
       r ← r.mkEqTrans (← simpLoop r.expr)
     cacheResult e cfg r
 
+set_option compiler.ignoreBorrowAnnotation true in
 @[export lean_simp]
 def simpImpl (e : Expr) : SimpM Result := withIncRecDepth do
   checkSystem "simp"

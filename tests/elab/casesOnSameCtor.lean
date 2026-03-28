@@ -131,8 +131,33 @@ end Vec
 
 namespace List
 -- set_option debug.skipKernelTC true
--- set_option trace.compiler.ir.result true
 
+
+-- No code is generated for the match_on_same_ctor or match_on_same_ctor.het
+/--
+trace: [Compiler.saveMono] size: 5
+    def _private.elab.casesOnSameCtor.0._eval._lam_0 _x.1 _x.2 _x.3 _y.4 @&_y.5 @&_y.6 @&_y.7 @&_y.8 @&_y.9 _y.10 : EST.Out
+      Exception lcAny PUnit :=
+      let _x.11 := mkCasesOnSameCtor _x.1 _x.2 _y.6 _y.7 _y.8 _y.9 _y.10;
+      cases _x.11 : EST.Out Exception lcAny PUnit
+      | EST.Out.ok a.12 a.13 =>
+        let _x.14 := @EST.Out.ok ◾ ◾ ◾ _x.3 a.13;
+        return _x.14
+      | EST.Out.error a.15 a.16 =>
+        return _x.11
+[Compiler.saveMono] size: 7
+    def _private.elab.casesOnSameCtor.0._eval @&a @&a a.1 : EST.Out Exception lcAny PUnit :=
+      let _x.2 := "List";
+      let _x.3 := "match_on_same_ctor";
+      let _x.4 := Name.mkStr2 _x.2 _x.3;
+      let _x.5 := Name.mkStr1 _x.2;
+      let _x.6 := PUnit.unit;
+      let _f.7 := _eval._lam_0 _x.4 _x.5 _x.6;
+      let _x.8 := Lean.Elab.Command.liftTermElabM._redArg _f.7 a a a.1;
+      return _x.8
+-/
+#guard_msgs in
+set_option trace.Compiler.saveMono true in
 run_meta mkCasesOnSameCtor `List.match_on_same_ctor ``List
 
 /--

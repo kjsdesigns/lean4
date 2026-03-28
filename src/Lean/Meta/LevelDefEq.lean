@@ -85,6 +85,7 @@ private def isMVarWithGreaterDepth (v : Level) (mvarId : LMVarId) : MetaM Bool :
   | Level.mvar mvarId' => return (← mvarId'.getLevel) > (← mvarId.getLevel)
   | _ => return false
 
+set_option compiler.ignoreBorrowAnnotation true in
 mutual
 
   private partial def solve (u v : Level) : MetaM LBool := do
@@ -132,7 +133,7 @@ mutual
   partial def isLevelDefEqAuxImpl : Level → Level → MetaM Bool
     | Level.succ lhs, Level.succ rhs => isLevelDefEqAux lhs rhs
     | lhs, rhs =>
-      withTraceNode `Meta.isLevelDefEq (return m!"{exceptBoolEmoji ·} {lhs} =?= {rhs}") do
+      withTraceNode `Meta.isLevelDefEq (fun _ => return m!"{lhs} =?= {rhs}") do
       if lhs.getLevelOffset == rhs.getLevelOffset then
         return lhs.getOffset == rhs.getOffset
       else

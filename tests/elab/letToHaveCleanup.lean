@@ -1,4 +1,5 @@
 import Lean
+set_option backward.do.legacy false
 /-!
 ## Checking that let-to-have is applied to definitions and equation lemmas
 -/
@@ -70,22 +71,29 @@ def fnStructRec (n : Nat) : let α := Nat; α :=
 info: def fnStructRec : Nat →
   have α : Type := Nat;
   α :=
-fun n =>
-  Nat.brecOn n fun n f =>
-    (match (motive :=
-        (n : Nat) →
-          Nat.below n →
-            let α : Type := Nat;
-            α)
-        n with
-      | 0 => fun x => 0
-      | n.succ => fun x =>
-        id
-          (let m : Nat := n + 1;
-          m * x.1))
-      f
+fun n => Nat.brecOn n fnStructRec._f
 -/
 #guard_msgs in #print fnStructRec
+/--
+info: @[reducible] def fnStructRec._f : (n : Nat) →
+  Nat.below n →
+    have α : Type := Nat;
+    α :=
+fun n f =>
+  (match (motive :=
+      (n : Nat) →
+        Nat.below n →
+          let α : Type := Nat;
+          α)
+      n with
+    | 0 => fun x => 0
+    | n.succ => fun x =>
+      id
+        (let m : Nat := n + 1;
+        m * x.1))
+    f
+-/
+#guard_msgs in #print fnStructRec._f
 /--
 info: fnStructRec.eq_def (n : Nat) :
   fnStructRec n =
@@ -139,19 +147,7 @@ info: id
 -/
 #guard_msgs in #unfold1 fnStructRec 1
 /--
-info: Nat.brecOn 1 fun n f =>
-  (match (motive :=
-      (n : Nat) →
-        Nat.below n →
-          let α : Type := Nat;
-          α)
-      n with
-    | 0 => fun x => 0
-    | n.succ => fun x =>
-      id
-        (let m : Nat := n + 1;
-        m * x.1))
-    f
+info: Nat.brecOn 1 fnStructRec._f
 -/
 #guard_msgs in
 set_option smartUnfolding false in
@@ -274,16 +270,15 @@ fun {α} x y => do
   if a = true then
       have arr : Array α := #[];
       do
-      let r ←
-        forIn (*...10) arr fun i r =>
-            have arr : Array α := r;
+      let __s ←
+        forIn (*...10) arr fun i __s =>
+            have arr : Array α := __s;
             do
             let __do_lift ← y i
             have b : α := __do_lift
             have arr : Array α := arr.push b
-            pure PUnit.unit
             pure (ForInStep.yield arr)
-      have arr : Array α := r
+      have arr : Array α := __s
       pure arr
     else pure #[]
 -/
