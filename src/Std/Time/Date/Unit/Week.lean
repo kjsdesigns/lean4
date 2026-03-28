@@ -10,7 +10,9 @@ public import Std.Time.Date.Unit.Day
 
 public section
 
-namespace Std.Time.Week
+namespace Std
+namespace Time
+namespace Week
 open Internal
 
 set_option linter.all true
@@ -208,4 +210,7 @@ Convert `Day.Offset` into `Week.Offset`.
 def ofDays (days : Day.Offset) : Week.Offset :=
   days.ediv 7
 
-end Std.Time.Week.Offset
+end Offset
+end Week
+end Time
+end Std

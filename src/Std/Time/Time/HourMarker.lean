@@ -10,7 +10,8 @@ public import Std.Time.Time.Basic
 
 public section
 
-namespace Std.Time
+namespace Std
+namespace Time
 open Internal
 
 set_option linter.all true
@@ -85,4 +86,6 @@ def toRelative (hour : Hour.Ordinal) : Bounded.LE 1 12 × HourMarker :=
     let t := hour |>.truncateBottom h |>.sub 12
     (t.expandTop (by decide), .pm)
 
-end Std.Time.HourMarker
+end HourMarker
+end Time
+end Std

@@ -10,7 +10,8 @@ public import Std.Time.Zoned.Offset
 
 public section
 
-namespace Std.Time
+namespace Std
+namespace Time
 
 set_option linter.all true
 
@@ -72,5 +73,3 @@ Gets the number of seconds in a timezone offset.
 -/
 def toSeconds (tz : TimeZone) : Second.Offset :=
   tz.offset.second
-
-end Std.Time.TimeZone

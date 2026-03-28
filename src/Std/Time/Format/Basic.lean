@@ -16,7 +16,8 @@ public section
 This module defines the `Formatter` types. It is based on the Java's `DateTimeFormatter` format.
 -/
 
-namespace Std.Time
+namespace Std
+namespace Time
 open Internal
 open Std.Internal.Parsec.String
 open Std.Internal.Parsec Lean PlainTime PlainDate TimeZone DateTime
@@ -1831,4 +1832,5 @@ def format (mf : MultiFormat aw) (date : DateTime tz) : String :=
   let fmt := mf.formats.val[0]'(mf.formats.property)
   fmt.format date
 
-end Std.Time.MultiFormat
+end MultiFormat
+end Time

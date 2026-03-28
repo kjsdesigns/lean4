@@ -11,7 +11,9 @@ import Init.Data.Fin.Lemmas
 
 public section
 
-namespace Std.Time.Month
+namespace Std
+namespace Time
+namespace Month
 open Internal
 
 set_option linter.all true
@@ -330,4 +332,7 @@ theorem valid_clipDay : Valid leap month (clipDay leap month day) := by
   exact Int.le_refl (days leap month).val
   next h => exact Int.not_lt.mp h
 
-end Std.Time.Month.Ordinal
+end Ordinal
+end Month
+end Time
+end Std

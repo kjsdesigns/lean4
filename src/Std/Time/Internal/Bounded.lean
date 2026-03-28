@@ -14,7 +14,9 @@ import Init.Ext
 
 @[expose] public section
 
-namespace Std.Time.Internal
+namespace Std
+namespace Time
+namespace Internal
 
 set_option linter.all true in
 
@@ -487,4 +489,8 @@ def max (bounded : Bounded.LE n m) (val : Int) : Bounded.LE (Max.max n val) (Max
     contradiction
   next h h₁ => exact right
 
-end Std.Time.Internal.Bounded.LE
+end LE
+end Bounded
+end Internal
+end Time
+end Std

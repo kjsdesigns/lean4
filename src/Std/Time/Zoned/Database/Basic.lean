@@ -11,7 +11,8 @@ public import Std.Time.Zoned.Database.TzIf
 
 public section
 
-namespace Std.Time
+namespace Std
+namespace Time
 
 set_option linter.all true
 
@@ -115,5 +116,3 @@ def convertTZif (tz : TZif.TZif) (id : String) : Except String ZoneRules := do
   if let some v2 := tz.v2
     then convertTZifV2 v2 id
     else convertTZifV1 tz.v1 id
-
-end Std.Time.TimeZone

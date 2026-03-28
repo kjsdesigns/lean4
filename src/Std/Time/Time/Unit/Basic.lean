@@ -19,7 +19,8 @@ The units are organized into types representing these time-related concepts, wit
 to facilitate conversions and manipulations between them.
 -/
 
-namespace Std.Time
+namespace Std
+namespace Time
 open Internal
 
 set_option linter.all true
@@ -322,4 +323,7 @@ Converts a `Minute.Offset` to an `Hour.Offset`.
 def ofMinutes (offset : Minute.Offset) : Hour.Offset :=
   offset.toHours
 
-end Std.Time.Hour.Offset
+end Hour.Offset
+
+end Time
+end Std

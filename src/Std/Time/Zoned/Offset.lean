@@ -10,7 +10,9 @@ public import Std.Time.Time
 
 public section
 
-namespace Std.Time.TimeZone
+namespace Std
+namespace Time
+namespace TimeZone
 open Internal
 
 set_option linter.all true
@@ -82,4 +84,7 @@ Creates an `Offset` from a given number of hours and minutes.
 def ofHoursAndMinutes (n : Hour.Offset) (m : Minute.Offset) : Offset :=
   ofSeconds (n.toSeconds + m.toSeconds)
 
-end Std.Time.TimeZone.Offset
+end Offset
+end TimeZone
+end Time
+end Std

@@ -10,7 +10,9 @@ public import Std.Time.Internal
 
 public section
 
-namespace Std.Time.Nanosecond
+namespace Std
+namespace Time
+namespace Nanosecond
 open Internal
 
 set_option linter.all true
@@ -159,4 +161,7 @@ Converts an `Ordinal` to an `Offset`.
 def toOffset (ordinal : Ordinal) : Offset :=
   UnitVal.ofInt ordinal.val
 
-end Std.Time.Nanosecond.Ordinal
+end Ordinal
+end Nanosecond
+end Time
+end Std

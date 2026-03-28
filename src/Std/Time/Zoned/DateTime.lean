@@ -14,7 +14,8 @@ import all Std.Time.DateTime.PlainDateTime
 
 public section
 
-namespace Std.Time
+namespace Std
+namespace Time
 open Internal
 
 set_option linter.all true
@@ -532,4 +533,6 @@ instance : HAdd (DateTime tz) Duration (DateTime tz) where
 instance : HSub (DateTime tz) Duration (DateTime tz) where
   hSub x y := x.subNanoseconds y.toNanoseconds
 
-end Std.Time.DateTime
+end DateTime
+end Time
+end Std

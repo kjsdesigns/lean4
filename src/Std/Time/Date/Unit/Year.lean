@@ -10,7 +10,9 @@ public import Std.Time.Date.Unit.Month
 
 public section
 
-namespace Std.Time.Year
+namespace Std
+namespace Time
+namespace Year
 open Internal
 
 set_option linter.all true
@@ -128,4 +130,7 @@ Checks if the given date is valid for the specified year, month, and day.
 abbrev Valid (year : Year.Offset) (month : Month.Ordinal) (day : Day.Ordinal) : Prop :=
   day ≤ month.days year.isLeap
 
-end Std.Time.Year.Offset
+end Offset
+end Year
+end Time
+end Std

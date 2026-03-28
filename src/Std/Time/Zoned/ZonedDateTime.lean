@@ -12,7 +12,8 @@ import all Std.Time.DateTime.PlainDateTime
 
 public section
 
-namespace Std.Time
+namespace Std
+namespace Time
 
 set_option linter.all true
 
@@ -593,4 +594,6 @@ instance : HAdd ZonedDateTime Duration ZonedDateTime where
 instance : HSub ZonedDateTime Duration ZonedDateTime where
   hSub x y := x.subNanoseconds y.toNanoseconds
 
-end Std.Time.ZonedDateTime
+end ZonedDateTime
+end Time
+end Std

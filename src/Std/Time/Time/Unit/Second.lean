@@ -10,7 +10,9 @@ public import Std.Time.Time.Unit.Nanosecond
 
 @[expose] public section
 
-namespace Std.Time.Second
+namespace Std
+namespace Time
+namespace Second
 open Internal
 
 set_option linter.all true
@@ -124,4 +126,7 @@ Converts an `Ordinal` to an `Second.Offset`.
 def toOffset (ordinal : Ordinal leap) : Second.Offset :=
   UnitVal.ofInt ordinal.val
 
-end Std.Time.Second.Ordinal
+end Ordinal
+end Second
+end Time
+end Std

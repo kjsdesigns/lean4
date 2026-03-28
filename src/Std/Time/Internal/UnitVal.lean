@@ -11,7 +11,9 @@ public import Init.Data.Rat.Basic
 
 @[expose] public section
 
-namespace Std.Time.Internal
+namespace Std
+namespace Time
+namespace Internal
 open Lean
 
 set_option linter.all true
@@ -148,4 +150,7 @@ instance : ToString (UnitVal n) where toString n := toString n.val
 def cast (_ : a = b) (x : UnitVal a) : UnitVal b :=
   .ofInt (x.val)
 
-end Std.Time.Internal.UnitVal
+end UnitVal
+end Internal
+end Time
+end Std

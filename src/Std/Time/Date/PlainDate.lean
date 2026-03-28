@@ -13,6 +13,7 @@ import all Std.Time.Date.Unit.Year
 public section
 
 namespace Std.Time
+
 open Std.Time Internal Lean
 
 set_option linter.all true
