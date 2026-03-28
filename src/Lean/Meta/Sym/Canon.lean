@@ -435,7 +435,7 @@ Types receive targeted reductions (eta, projection, match/ite, Nat arithmetic).
 Instances are re-synthesized. Values are traversed but not reduced.
 Runs at reducible transparency.
 -/
-public def canon (e : Expr) : SymM Expr :=
+public def canon (e : Expr) : SymM Expr := do profileitM Exception "sym canon" (← getOptions) do
   withReducible do Canon.canon e {} |>.run' {}
 
 end Lean.Meta.Sym
