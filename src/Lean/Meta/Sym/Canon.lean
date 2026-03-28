@@ -15,6 +15,9 @@ import Lean.Meta.WHNF
 import Init.Grind.Util
 namespace Lean.Meta.Sym
 namespace Canon
+
+builtin_initialize registerTraceClass `sym.debug.canon
+
 /-!
 # Type-directed canonicalizer
 
@@ -322,8 +325,7 @@ where
       let mut args := args.toVector
       for h : i in *...args.size do
         let arg := args[i]
-        -- TODO: should rename to `sym.debug.canon`
-        trace[grind.debug.canon] "[{repr (← shouldCanon pinfos i arg)}]: {arg} : {← inferType arg}"
+        trace[sym.debug.canon] "[{repr (← shouldCanon pinfos i arg)}]: {arg} : {← inferType arg}"
         let arg' ← match (← shouldCanon pinfos i arg) with
           | .canonType =>
             /-

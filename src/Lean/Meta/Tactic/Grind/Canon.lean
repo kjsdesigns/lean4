@@ -6,6 +6,7 @@ Authors: Leonardo de Moura
 module
 prelude
 public import Lean.Meta.Tactic.Grind.Types
+import Lean.Meta.Sym.Canon
 import Init.Grind.Util
 import Lean.Meta.IntInstTesters
 import Lean.Meta.NatInstTesters
@@ -205,7 +206,8 @@ set_option compiler.ignoreBorrowAnnotation true in
 @[export lean_grind_canon]
 partial def canonImpl (e : Expr) : GoalM Expr := do profileitM Exception "grind canon" (← getOptions) do
   trace_goal[grind.debug.canon] "{e}"
-  visit e |>.run' {}
+  Sym.canon e
+  -- visit e |>.run' {}
 where
   visit (e : Expr) : StateRefT (Std.HashMap ExprPtr Expr) GoalM Expr := do
     unless e.isApp || e.isForall do return e
