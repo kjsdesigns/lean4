@@ -49,6 +49,10 @@ type position (where reductions are applied) or a value position (where it is on
 Caches are keyed by `Expr` (structural equality), not pointer equality, because
 the canonicalizer runs before `shareCommon` and enters binders using locally nameless
 representation.
+
+## Future work
+
+If needed we should add support for user-defined extensions.
 -/
 
 structure State where
