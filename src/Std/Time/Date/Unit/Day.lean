@@ -10,8 +10,9 @@ public import Std.Time.Time
 
 public section
 
-namespace Std.Time.Day
-
+namespace Std
+namespace Time
+namespace Day
 open Lean Internal
 
 set_option linter.all true

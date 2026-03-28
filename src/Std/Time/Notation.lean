@@ -11,7 +11,8 @@ public meta import Std.Time.Format
 
 public section
 
-namespace Std.Time
+namespace Std
+namespace Time
 open Lean Parser Command Std
 
 set_option linter.all true
@@ -255,5 +256,3 @@ macro_rules
       match TimeZone.fromTimeZone tz.getString with
       | .ok res => return ← convertTimezone res
       | .error res => Macro.throwErrorAt tz s!"error: {res}"
-
-end Std.Time

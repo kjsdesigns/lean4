@@ -12,9 +12,10 @@ import Init.Data.Bool
 
 public section
 
-namespace Std.Time
-
-open Internal Month.Ordinal
+namespace Std
+namespace Time
+open Internal
+open Month.Ordinal
 
 set_option linter.all true
 
@@ -57,7 +58,6 @@ def dayOfYear (ordinal : ValidDate leap) : Day.Ordinal.OfYear leap :=
   | false, bounded => bounded
 
 set_option backward.isDefEq.respectTransparency false in
-
 /--
 Transforms a `Day.Ordinal.OfYear` into a tuple of a `Month` and a `Day`.
 -/
@@ -103,4 +103,6 @@ def ofOrdinal (ordinal : Day.Ordinal.OfYear leap) : ValidDate leap :=
 
     go 1 0 (Int.le_trans (by decide) ordinal.property.left) (by cases leap <;> decide)
 
-end Std.Time.ValidDate
+end ValidDate
+end Time
+end Std

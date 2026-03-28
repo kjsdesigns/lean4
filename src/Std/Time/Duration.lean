@@ -11,7 +11,8 @@ public import Init.Data.String.Basic
 
 public section
 
-namespace Std.Time
+namespace Std
+namespace Time
 open Internal
 
 set_option linter.all true
@@ -385,4 +386,6 @@ instance : HAdd PlainTime Duration PlainTime where
 instance : HSub PlainTime Duration PlainTime where
    hSub pt d := PlainTime.ofNanoseconds (pt.toNanoseconds - d.toNanoseconds)
 
-end Std.Time.Duration
+end Duration
+end Time
+end Std

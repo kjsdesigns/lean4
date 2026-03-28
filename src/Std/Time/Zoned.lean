@@ -13,9 +13,12 @@ public import Std.Time.Zoned.Database
 
 public section
 
-namespace Std.Time.PlainDateTime
+namespace Std
+namespace Time
 
 set_option linter.all true
+
+namespace PlainDateTime
 
 /--
 Get the current time, in the local timezone.
@@ -41,7 +44,6 @@ def now : IO PlainDate :=
   PlainDateTime.date <$> PlainDateTime.now
 
 end PlainDate
-
 namespace PlainTime
 
 /--
@@ -85,7 +87,6 @@ def now : IO (DateTime tz) := do
   return DateTime.ofTimestamp tm tz
 
 end DateTime
-
 namespace ZonedDateTime
 
 /--
@@ -178,4 +179,4 @@ Converts a `PlainDate` to a `Timestamp` using the `TimeZone`.
 def toTimestampWithZone (dt : PlainDate) (tz : TimeZone) : Timestamp :=
   ZonedDateTime.ofPlainDateWithZone dt tz |>.toTimestamp
 
-end Std.Time.PlainDate
+end PlainDate

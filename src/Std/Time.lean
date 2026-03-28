@@ -1,4 +1,4 @@
-/-
+q/-
 Copyright (c) 2024 Lean FRO, LLC. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Sofia Rodrigues
@@ -17,7 +17,8 @@ public import Std.Time.Zoned.Database
 
 public section
 
-namespace Std.Time
+namespace Std
+namespace Time
 
 /-!
 # Time
@@ -257,5 +258,3 @@ The `.sssssssss` can be omitted in most cases.
 - **`zoned("uuuu-MM-ddTHH:mm:ss.sssssssss, timezone")`**: Represents an `IO ZonedDateTime`, using a specified `timezone` term and allowing optional nanoseconds.
 
 -/
-
-end Std.Time
