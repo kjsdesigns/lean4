@@ -15,24 +15,20 @@ Author: Sofia Rodrigues
 #include <openssl/bio.h>
 #endif
 
+#include <vector>
+
 namespace lean {
 
 static lean_external_class * g_ssl_session_external_class = nullptr;
 void initialize_openssl_session();
 
 #ifndef LEAN_EMSCRIPTEN
-typedef struct {
-    char * data;
-    size_t size;
-} lean_ssl_pending_write;
-
-typedef struct {
+struct lean_ssl_session_object {
     SSL * ssl;
     BIO * read_bio;
     BIO * write_bio;
-    size_t pending_writes_count;
-    lean_ssl_pending_write * pending_writes;
-} lean_ssl_session_object;
+    std::vector<std::vector<char>> pending_writes;
+};
 
 static inline lean_object * lean_ssl_session_object_new(lean_ssl_session_object * s) { return lean_alloc_external(g_ssl_session_external_class, s); }
 static inline lean_ssl_session_object * lean_to_ssl_session_object(lean_object * o) { return (lean_ssl_session_object*)(lean_get_external_data(o)); }

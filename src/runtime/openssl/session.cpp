@@ -7,8 +7,7 @@ Author: Sofia Rodrigues
 #include "runtime/openssl/session.h"
 
 #include <climits>
-#include <cstdlib>
-#include <cstring>
+#include <new>
 #include <string>
 
 #ifndef LEAN_EMSCRIPTEN
@@ -104,40 +103,6 @@ static inline lean_object * mk_empty_byte_array() {
     return arr;
 }
 
-static void free_pending_writes(lean_ssl_session_object * obj) {
-    if (obj->pending_writes != nullptr) {
-        for (size_t i = 0; i < obj->pending_writes_count; i++) {
-            free(obj->pending_writes[i].data);
-        }
-        free(obj->pending_writes);
-        obj->pending_writes = nullptr;
-    }
-    obj->pending_writes_count = 0;
-}
-
-static bool append_pending_write(lean_ssl_session_object * obj, char const * data, size_t size) {
-    char * copy = (char*)malloc(size);
-    if (copy == nullptr) return false;
-
-    std::memcpy(copy, data, size);
-
-    size_t new_count = obj->pending_writes_count + 1;
-    lean_ssl_pending_write * new_arr = (lean_ssl_pending_write*)realloc(
-        obj->pending_writes, sizeof(lean_ssl_pending_write) * new_count
-    );
-
-    if (new_arr == nullptr) {
-        free(copy);
-        return false;
-    }
-
-    obj->pending_writes = new_arr;
-    obj->pending_writes[obj->pending_writes_count].data = copy;
-    obj->pending_writes[obj->pending_writes_count].size = size;
-    obj->pending_writes_count = new_count;
-    return true;
-}
-
 /*
 Return values:
   1 -> write completed
@@ -166,75 +131,24 @@ static int ssl_write_step(lean_ssl_session_object * obj, char const * data, size
 /*
 Return values:
   1 -> all pending writes flushed
-  0 -> still blocked by renegotiation
+  0 -> still blocked, *out_err filled with SSL_ERROR_WANT_READ or SSL_ERROR_WANT_WRITE
  -1 -> fatal error, *out_err filled
 */
 static int try_flush_pending_writes(lean_ssl_session_object * obj, int * out_err) {
-    if (obj->pending_writes_count == 0) return 1;
-
-    size_t completed = 0;
-
-    for (size_t i = 0; i < obj->pending_writes_count; i++) {
-        lean_ssl_pending_write * pw = &obj->pending_writes[i];
-
-        while (pw->size > 0) {
-            int err = 0;
-            int step = ssl_write_step(obj, pw->data, pw->size, &err);
-
-            if (step == 1) {
-                // We do not enable partial writes, so a successful SSL_write consumes the full buffer.
-                pw->size = 0;
-                continue;
-            }
-
-            if (step == 0) {
-                goto done;
-            }
-
-            *out_err = err;
-            return -1;
-        }
-
-        free(pw->data);
-        pw->data = nullptr;
-        completed++;
+    while (!obj->pending_writes.empty()) {
+        auto & pw = obj->pending_writes.front();
+        int step = ssl_write_step(obj, pw.data(), pw.size(), out_err);
+        if (step < 0) return -1;
+        if (step == 0) return 0;
+        obj->pending_writes.erase(obj->pending_writes.begin());
     }
-
-done:
-    if (completed > 0) {
-        obj->pending_writes_count -= completed;
-        if (obj->pending_writes_count == 0) {
-            free(obj->pending_writes);
-            obj->pending_writes = nullptr;
-        } else {
-            std::memmove(
-                obj->pending_writes,
-                obj->pending_writes + completed,
-                sizeof(lean_ssl_pending_write) * obj->pending_writes_count
-            );
-            // Keep memory usage proportional to currently queued writes.
-            lean_ssl_pending_write * shrunk = (lean_ssl_pending_write*)realloc(
-                obj->pending_writes,
-                sizeof(lean_ssl_pending_write) * obj->pending_writes_count
-            );
-            if (shrunk != nullptr) {
-                obj->pending_writes = shrunk;
-            }
-        }
-    }
-
-    return obj->pending_writes_count == 0 ? 1 : 0;
+    return 1;
 }
 
 void lean_ssl_session_finalizer(void * ptr) {
     lean_ssl_session_object * obj = (lean_ssl_session_object*)ptr;
-
-    if (obj->ssl != nullptr) {
-        SSL_free(obj->ssl);
-    }
-
-    free_pending_writes(obj);
-    free(obj);
+    if (obj->ssl != nullptr) SSL_free(obj->ssl);
+    delete obj;
 }
 
 void initialize_openssl_session() {
@@ -271,7 +185,7 @@ static lean_obj_res mk_ssl_session(SSL_CTX * ctx, uint8_t is_server) {
         SSL_set_connect_state(ssl);
     }
 
-    lean_ssl_session_object * ssl_obj = (lean_ssl_session_object*)malloc(sizeof(lean_ssl_session_object));
+    lean_ssl_session_object * ssl_obj = new (std::nothrow) lean_ssl_session_object();
     if (ssl_obj == nullptr) {
         SSL_free(ssl);
         return mk_ssl_io_error("failed to allocate SSL session object");
@@ -280,8 +194,6 @@ static lean_obj_res mk_ssl_session(SSL_CTX * ctx, uint8_t is_server) {
     ssl_obj->ssl = ssl;
     ssl_obj->read_bio = read_bio;
     ssl_obj->write_bio = write_bio;
-    ssl_obj->pending_writes_count = 0;
-    ssl_obj->pending_writes = nullptr;
 
     lean_object * obj = lean_ssl_session_object_new(ssl_obj);
     lean_mark_mt(obj);
@@ -347,6 +259,26 @@ extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_write(b_obj_arg _role, b_obj_arg
         return mk_option_io_want_none();
     }
 
+    // If there are pending writes, try to flush them first to preserve write order.
+    // Only attempt the new write directly if the queue fully drains.
+    if (!ssl_obj->pending_writes.empty()) {
+        int flush_err = 0;
+        int flushed = try_flush_pending_writes(ssl_obj, &flush_err);
+
+        if (flushed < 0) {
+            return mk_ssl_io_error("pending SSL write flush failed", flush_err);
+        }
+
+        if (flushed == 0) {
+            ssl_obj->pending_writes.emplace_back(payload, payload + data_len);
+            if (flush_err == SSL_ERROR_WANT_READ) {
+                return mk_option_io_want_read();
+            }
+            return mk_option_io_want_write();
+        }
+        // flushed == 1: queue is clear, fall through to attempt the new write
+    }
+
     int err = 0;
     int step = ssl_write_step(ssl_obj, payload, data_len, &err);
 
@@ -360,9 +292,7 @@ extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_write(b_obj_arg _role, b_obj_arg
 
     // Queue plaintext so it is retried after the required socket I/O completes.
     if (step == 0) {
-        if (!append_pending_write(ssl_obj, payload, data_len)) {
-            return mk_ssl_io_error("failed to append pending SSL write");
-        }
+        ssl_obj->pending_writes.emplace_back(payload, payload + data_len);
         if (err == SSL_ERROR_WANT_READ) {
             return mk_option_io_want_read();
         }
@@ -411,16 +341,24 @@ extern "C" LEAN_EXPORT lean_obj_res lean_uv_ssl_read(b_obj_arg _role, b_obj_arg 
 
     if (err == SSL_ERROR_WANT_READ) {
         int flush_err = 0;
-        if (try_flush_pending_writes(ssl_obj, &flush_err) < 0) {
+        int flushed = try_flush_pending_writes(ssl_obj, &flush_err);
+        if (flushed < 0) {
             return mk_ssl_io_error("pending SSL write flush failed", flush_err);
+        }
+        if (flushed == 0 && flush_err == SSL_ERROR_WANT_WRITE) {
+            return mk_read_result_want_write();
         }
         return mk_read_result_want_read();
     }
 
     if (err == SSL_ERROR_WANT_WRITE) {
         int flush_err = 0;
-        if (try_flush_pending_writes(ssl_obj, &flush_err) < 0) {
+        int flushed = try_flush_pending_writes(ssl_obj, &flush_err);
+        if (flushed < 0) {
             return mk_ssl_io_error("pending SSL write flush failed", flush_err);
+        }
+        if (flushed == 0 && flush_err == SSL_ERROR_WANT_READ) {
+            return mk_read_result_want_read();
         }
         return mk_read_result_want_write();
     }
