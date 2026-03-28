@@ -147,6 +147,10 @@ structure Context where
   sharedExprs : SharedExprs
   config      : Config := {}
 
+structure Canon.Instances where
+  /-- Cache mapping instances to their canonical synthesized instances. -/
+  exprToInst : Std.HashMap Expr Expr := {}
+
 /-- Mutable state for the symbolic computation framework. -/
 structure State where
   /-- `ShareCommon` (aka `Hash-consing`) state. -/
@@ -191,6 +195,7 @@ structure State where
   within a `sym =>` block and reported when a tactic fails.
   -/
   issues : List MessageData := []
+  canonInstances : Canon.Instances := {}
   debug : Bool := false
 
 abbrev SymM := ReaderT Context <| StateRefT State MetaM

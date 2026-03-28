@@ -60,8 +60,6 @@ structure State where
   cache       : Std.HashMap Expr Expr := {}
   /-- Cache for type-level canonicalization (reductions applied). -/
   cacheInType : Std.HashMap Expr Expr := {}
-  /-- Cache mapping instance types to their canonical synthesized instances. -/
-  cacheInst   : Std.HashMap Expr Expr := {}
 
 structure Context where
   /-- `true` if we are visiting a type. -/
@@ -255,22 +253,22 @@ where
       withReader (fun ctx => { ctx with insideType := true }) <| canon e
 
   canonInst (e : Expr) : CanonM Expr := do
-    let type ← inferType e
-    if let some inst := (← get).cacheInst.get? type then
+    if let some inst := (← getThe Sym.State).canonInstances.exprToInst.get? e then
       checkDefEqInst e inst
     else
       /-
       We normalize the type to make sure `OfNat (Fin (2+1)) 1` and `OfNat (Fin 3) 1` will produce
       the same instances.
       -/
+      let type ← inferType e
       let type' ← canonInsideType' type
       let some inst ← Sym.synthInstance? type' |
         reportIssue! "failed to canonicalize instance{indentExpr e}\nfailed to synthesize{indentExpr type'}"
         return e
-      let e ← checkDefEqInst e inst
+      let inst ← checkDefEqInst e inst
       -- Remark: we cache result using the type **before** canonicalization.
-      modify fun s => { s with cacheInst := s.cacheInst.insert type e }
-      return e
+      modifyThe Sym.State fun s => { s with canonInstances.exprToInst := s.canonInstances.exprToInst.insert e inst }
+      return inst
 
   canonLambda (e : Expr) : CanonM Expr := do
     if (← read).insideType then
