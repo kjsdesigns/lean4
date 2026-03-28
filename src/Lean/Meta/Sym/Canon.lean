@@ -7,7 +7,8 @@ module
 prelude
 public import Lean.Meta.Sym.SymM
 import Lean.Meta.Sym.ExprPtr
-import Lean.Meta.Tactic.Grind.SynthInstance -- TODO: we need to move to Sym
+import Lean.Meta.SynthInstance
+import Lean.Meta.Sym.SynthInstance
 import Lean.Meta.IntInstTesters
 import Lean.Meta.NatInstTesters
 import Lean.Meta.Sym.Eta
@@ -259,7 +260,7 @@ where
       the same instances.
       -/
       let type' ← canonInsideType' type
-      let some inst ← Grind.synthInstanceMeta? type' |
+      let some inst ← Sym.synthInstance? type' |
         reportIssue! "failed to canonicalize instance{indentExpr e}\nfailed to synthesize{indentExpr type'}"
         return e
       let e ← checkDefEqInst e inst
@@ -413,6 +414,14 @@ where
       return (← reduceProj? e).getD e
     else
       return e
+
+/--
+Returns `true` if `shouldCannon pinfos i arg` is not `.visit`.
+This is a helper function used to implement mbtc.
+-/
+public def isSupport (pinfos : Array ParamInfo) (i : Nat) (arg : Expr) : MetaM Bool := do
+  let r ← Canon.shouldCanon pinfos i arg
+  return !r matches .visit
 
 end Canon
 

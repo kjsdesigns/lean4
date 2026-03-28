@@ -26,6 +26,7 @@ public import Lean.Meta.Sym.Util
 public import Lean.Meta.Sym.Eta
 public import Lean.Meta.Sym.Canon
 public import Lean.Meta.Sym.Grind
+public import Lean.Meta.Sym.SynthInstance
 
 /-!
 # Symbolic computation support.
