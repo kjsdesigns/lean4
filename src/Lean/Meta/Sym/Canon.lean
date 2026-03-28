@@ -55,17 +55,11 @@ representation.
 If needed we should add support for user-defined extensions.
 -/
 
-structure State where
-  /-- Cache for value-level canonicalization (no type reductions applied). -/
-  cache       : Std.HashMap Expr Expr := {}
-  /-- Cache for type-level canonicalization (reductions applied). -/
-  cacheInType : Std.HashMap Expr Expr := {}
-
 structure Context where
   /-- `true` if we are visiting a type. -/
   insideType : Bool := false
 
-abbrev CanonM := ReaderT Context $ StateRefT State SymM
+abbrev CanonM := ReaderT Context SymM
 
 /--
 Auxiliary function for normalizing the arguments of `OfNat.ofNat` during canonicalization.
@@ -112,18 +106,18 @@ private def normOfNatArgs? (args : Array Expr) : MetaM (Option (Array Expr)) := 
 
 abbrev withCaching (e : Expr) (k : CanonM Expr) : CanonM Expr := do
   if (← read).insideType then
-    if let some r := (← get).cacheInType.get? e then
+    if let some r := (← get).canon.cacheInType.get? e then
       return r
     else
       let r ← k
-      modify fun s => { s with cacheInType := s.cacheInType.insert e r }
+      modify fun s => { s with canon.cacheInType := s.canon.cacheInType.insert e r }
       return r
   else
-    if let some r := (← get).cache.get? e then
+    if let some r := (← get).canon.cache.get? e then
       return r
     else
       let r ← k
-      modify fun s => { s with cache := s.cache.insert e r }
+      modify fun s => { s with canon.cache := s.canon.cache.insert e r }
       return r
 
 def isTrueCond (e : Expr) : Bool :=
@@ -253,7 +247,7 @@ where
       withReader (fun ctx => { ctx with insideType := true }) <| canon e
 
   canonInst (e : Expr) : CanonM Expr := do
-    if let some inst := (← getThe Sym.State).canonInstances.exprToInst.get? e then
+    if let some inst := (← get).canon.cacheInsts.get? e then
       checkDefEqInst e inst
     else
       /-
@@ -267,7 +261,7 @@ where
         return e
       let inst ← checkDefEqInst e inst
       -- Remark: we cache result using the type **before** canonicalization.
-      modifyThe Sym.State fun s => { s with canonInstances.exprToInst := s.canonInstances.exprToInst.insert e inst }
+      modify fun s => { s with canon.cacheInsts := s.canon.cacheInsts.insert e inst }
       return inst
 
   canonLambda (e : Expr) : CanonM Expr := do
@@ -434,6 +428,6 @@ Instances are re-synthesized. Values are traversed but not reduced.
 Runs at reducible transparency.
 -/
 public def canon (e : Expr) : SymM Expr := do profileitM Exception "sym canon" (← getOptions) do
-  withReducible do Canon.canon e {} |>.run' {}
+  withReducible do Canon.canon e {}
 
 end Lean.Meta.Sym
