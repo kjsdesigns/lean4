@@ -998,7 +998,7 @@ def TypeFormat : Modifier → Type
   | .Q _ => Month.Quarter
   | .q _ => Month.Quarter
   | .w _ => Week.Ordinal
-  | .W _ => Week.Ordinal.OfMonth
+  | .W _ => Bounded.LE 1 5
   | .E _ => Weekday
   | .e _ => Weekday
   | .c _ => Weekday
@@ -1193,7 +1193,7 @@ private def dateFromModifier (date : DateTime tz) : TypeFormat modifier :=
   | .Q _ => date.quarter
   | .q _ => date.quarter
   | .w _ => date.weekOfYear
-  | .W _ => date.alignedWeekOfMonth
+  | .W _ => date.weekOfMonth
   | .E _ =>  date.weekday
   | .e _ => date.weekday
   | .c _ => date.weekday
@@ -1644,7 +1644,7 @@ private structure DateBuilder where
   d : Option Day.Ordinal := none
   quarter : Option Month.Quarter := none
   w : Option Week.Ordinal := none
-  W : Option Week.Ordinal.OfMonth := none
+  W : Option (Bounded.LE 1 5) := none
   E : Option Weekday := none
   weekday : Option Weekday := none
   F : Option (Bounded.LE 1 5) := none

@@ -193,7 +193,7 @@ info: "2"
 #eval td.format "F"
 
 /--
-info: "2 1"
+info: "1 1"
 -/
 #guard_msgs in
 #eval tdWeekMonth.format "W F"
@@ -685,33 +685,33 @@ info: "1 01 001"
 #eval tdJan1.format "D DD DDD"
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- W  Aligned week-of-month edge cases (Monday-first blocks)
+-- W  Aligned week-of-month: Java ALIGNED_WEEK_OF_MONTH = (dayOfMonth-1)/7+1
 -- ─────────────────────────────────────────────────────────────────────────────
 
--- Aug 1 (Thu): first of month is Thu → W=1
+-- Aug 1 (Thu): (1-1)/7+1 = 1 → W=1
 /--
 info: "1"
 -/
 #guard_msgs in
 #eval tdAug1.format "W"
 
--- Aug 4 (Sun): still in the first Mon-Sun block → W=1
+-- Aug 4 (Sun): (4-1)/7+1 = 1 → W=1
 /--
 info: "1"
 -/
 #guard_msgs in
 #eval tdAug4.format "W"
 
--- Aug 5 (Mon): starts a new Mon-Sun block → W=2
+-- Aug 5 (Mon): (5-1)/7+1 = 1 → W=1
 /--
-info: "2"
+info: "1"
 -/
 #guard_msgs in
 #eval tdWeekMonth.format "W"
 
--- Aug 12 (Mon): starts the third Mon-Sun block → W=3
+-- Aug 12 (Mon): (12-1)/7+1 = 2 → W=2
 /--
-info: "3"
+info: "2"
 -/
 #guard_msgs in
 #eval tdAug12.format "W"
