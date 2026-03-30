@@ -92,7 +92,7 @@ private def hasSpace (s : String) : Bool :=
   s.toList.any (· == ' ')
 
 private def strStartsWith (s prefix_ : String) : Bool :=
-  s.toList.take prefix_.data.length == prefix_.data
+  s.toList.take prefix_.toList.length == prefix_.toList
 
 private def wrapParens (s : String) : String :=
   if hasSpace s && !strStartsWith s "(" && !strStartsWith s "(memo " then
@@ -197,6 +197,16 @@ private structure PPCtx where
   emitted : IO.Ref (Std.HashSet Expr)
   nextId : IO.Ref Nat
   binderNames : Std.HashSet Name
+  outer? : Option PPCtx := none  -- outer scope for closed sharing
+
+/-- Check if `e` is shared in this context or any outer context. -/
+private partial def PPCtx.isShared (ctx : PPCtx) (e : Expr) : Bool :=
+  ctx.sharedSet.contains e || (match ctx.outer? with | some o => o.isShared e | none => false)
+
+/-- Get the context that owns a shared expression (innermost first). -/
+private partial def PPCtx.ownerOf? (ctx : PPCtx) (e : Expr) : Option PPCtx :=
+  if ctx.sharedSet.contains e then some ctx
+  else match ctx.outer? with | some o => o.ownerOf? e | none => none
 
 private def PPCtx.nameFor (ctx : PPCtx) (e : Expr) : IO Name := do
   let names ← ctx.names.get
@@ -218,20 +228,39 @@ private def PPCtx.markFirstEmit (ctx : PPCtx) (e : Expr) : IO Bool := do
   ctx.emitted.modify (·.insert e)
   return true
 
+/-- Count open (has loose bvars) subexpr occurrences within a binder body. -/
+private partial def countBodySubexprs (e : Expr)
+    (counts : IO.Ref (Std.HashMap Expr Nat)) : IO Unit := do
+  if isTrivial e then return
+  if !e.hasLooseBVars then return
+  let c ← counts.get
+  let prev := c.getD e 0
+  counts.set (c.insert e (prev + 1))
+  if prev == 0 then
+    match e with
+    | .app f a => countBodySubexprs f counts; countBodySubexprs a counts
+    | .lam _ t b _ => countBodySubexprs t counts; countBodySubexprs b counts
+    | .forallE _ t b _ => countBodySubexprs t counts; countBodySubexprs b counts
+    | .letE _ t v b _ =>
+      countBodySubexprs t counts; countBodySubexprs v counts; countBodySubexprs b counts
+    | .mdata _ e => countBodySubexprs e counts
+    | .proj _ _ e => countBodySubexprs e counts
+    | _ => pure ()
+
 mutual
 
 private partial def ppExpr (ctx : PPCtx) (e : Expr) (bvars : Array Name)
     (allowMemo : Bool := true) : IO String := do
   if isTrivial e then return ppAtom e bvars
-  if allowMemo && ctx.sharedSet.contains e then
-    let name ← ctx.nameFor e
-    if ← ctx.markFirstEmit e then
-      let val ← ppExprInner ctx e bvars
-      return "(memo " ++ toString name ++ " := " ++ val ++ ")"
-    else
-      return toString name
-  else
-    ppExprInner ctx e bvars
+  if allowMemo then
+    if let some owner := ctx.ownerOf? e then
+      let name ← owner.nameFor e
+      if ← owner.markFirstEmit e then
+        let val ← ppExprInner ctx e bvars
+        return "(memo " ++ toString name ++ " := " ++ val ++ ")"
+      else
+        return toString name
+  ppExprInner ctx e bvars
 
 private partial def ppExprInner (ctx : PPCtx) (e : Expr) (bvars : Array Name) : IO String := do
   match e with
@@ -249,7 +278,7 @@ private partial def ppExprInner (ctx : PPCtx) (e : Expr) (bvars : Array Name) : 
   | .lam n t b bi =>
     let tStr ← ppExpr ctx t bvars (allowMemo := false)
     let name := freshBinderName n bvars
-    let bStr ← ppExpr ctx b (bvars.push name)
+    let bStr ← ppBinderBody ctx b (bvars.push name)
     return "fun " ++ binderOpen bi ++ quoteName name ++ " : " ++ tStr
       ++ binderClose bi ++ " => " ++ bStr
   | .forallE n t b bi =>
@@ -259,19 +288,48 @@ private partial def ppExprInner (ctx : PPCtx) (e : Expr) (bvars : Array Name) : 
       return wrapParens tStr ++ " → " ++ bStr
     else
       let name := freshBinderName n bvars
-      let bStr ← ppExpr ctx b (bvars.push name)
+      let bStr ← ppBinderBody ctx b (bvars.push name)
       return "∀ " ++ binderOpen bi ++ quoteName name ++ " : " ++ tStr
         ++ binderClose bi ++ ", " ++ bStr
   | .letE n t v b _ =>
     let tStr ← ppExpr ctx t bvars (allowMemo := false)
     let vStr ← ppExpr ctx v bvars
-    let bStr ← ppExpr ctx b (bvars.push (freshBinderName n bvars))
-    return "let " ++ quoteName (freshBinderName n bvars) ++ " : " ++ tStr ++ " := " ++ vStr ++ "; " ++ bStr
+    let name := freshBinderName n bvars
+    let bStr ← ppBinderBody ctx b (bvars.push name)
+    return "let " ++ quoteName name ++ " : " ++ tStr ++ " := " ++ vStr ++ "; " ++ bStr
   | .mdata _ inner => ppExpr ctx inner bvars
   | .proj typeName idx struct =>
     let sStr ← ppExpr ctx struct bvars
     return "@" ++ toString typeName ++ "." ++ toString (idx + 1) ++ " " ++ wrapParens sStr
   | _ => return ppAtom e bvars
+
+/-- Print a binder body with scope-local open sharing detection.
+    If the body has repeated open subexprs, wraps output in `memoized%`. -/
+private partial def ppBinderBody (ctx : PPCtx) (body : Expr) (bvars : Array Name)
+    (minWeight : Nat := 3) : IO String := do
+  if !body.hasLooseBVars then
+    return ← ppExpr ctx body bvars
+  let countsRef ← IO.mkRef (∅ : Std.HashMap Expr Nat)
+  countBodySubexprs body countsRef
+  let counts ← countsRef.get
+  let bodyShared : Std.HashSet Expr := counts.fold (fun acc expr count =>
+    if count > 1 && exprWeight expr >= minWeight
+    then acc.insert expr else acc) ∅
+  if bodyShared.isEmpty then
+    return ← ppExpr ctx body bvars
+  -- Create a child context with open sharing, linked to outer for closed sharing
+  let childCtx : PPCtx := {
+    sharedSet := bodyShared
+    binderNames := ctx.binderNames
+    names := ← IO.mkRef ∅
+    emitted := ← IO.mkRef ∅
+    nextId := ← IO.mkRef 0
+    outer? := some ctx
+  }
+  let bodyStr ← ppExpr childCtx body bvars
+  let localNames ← childCtx.names.get
+  if localNames.isEmpty then return bodyStr
+  else return "memoized% " ++ bodyStr
 
 end
 

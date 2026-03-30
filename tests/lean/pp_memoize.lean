@@ -142,7 +142,7 @@ theorem rt_proof : 1 + 1 = 2 ∧ 1 + 1 = 2 := ⟨rfl, rfl⟩
 #guard_msgs in #roundtrip rt_shared
 /-- info: memoized% @Nat.add (memo s0 := @Nat.mul (memo s1 := @Nat.add (memo s2 := @Nat.succ @Nat.zero) (@Nat.succ s2)) s1) s0 -/
 #guard_msgs in #roundtrip rt_deep
-/-- info: fun (x : @Nat) => fun (y : @Nat) => @Nat.add (@Nat.mul x y) (@Nat.mul x y) -/
+/-- info: fun (x : @Nat) => fun (y : @Nat) => memoized% @Nat.add (memo s0 := @Nat.mul x y) s0 -/
 #guard_msgs in #roundtrip rt_lam2
 /-- info: @Function.comp.{1, 1, 1} @Nat @Nat @Nat (fun (x : @Nat) => @HAdd.hAdd.{0, 0, 0} @Nat @Nat @Nat (@instHAdd.{0} @Nat @instAddNat) x (@OfNat.ofNat.{0} @Nat 1 (@instOfNatNat 1))) (fun (x : @Nat) => @HMul.hMul.{0, 0, 0} @Nat @Nat @Nat (@instHMul.{0} @Nat @instMulNat) x (@OfNat.ofNat.{0} @Nat 2 (@instOfNatNat 2))) -/
 #guard_msgs in #roundtrip rt_ho
@@ -180,3 +180,14 @@ def rt_kw_match := fun («match» : Nat) => «match»
 #guard_msgs in #roundtrip rt_kw_let
 /-- info: fun («match» : @Nat) => «match» -/
 #guard_msgs in #roundtrip rt_kw_match
+
+-- Scoped sharing under binders (nested memoized%)
+
+noncomputable def rt_open_sharing := fun (x : Nat) => Nat.add (Nat.mul x x) (Nat.mul x x)
+noncomputable def rt_nested_open := fun (x : Nat) => fun (y : Nat) =>
+  Nat.add (Nat.mul x y) (Nat.mul x y)
+
+/-- info: fun (x : @Nat) => memoized% @Nat.add (memo s0 := @Nat.mul x x) s0 -/
+#guard_msgs in #roundtrip rt_open_sharing
+/-- info: fun (x : @Nat) => fun (y : @Nat) => memoized% @Nat.add (memo s0 := @Nat.mul x y) s0 -/
+#guard_msgs in #roundtrip rt_nested_open
