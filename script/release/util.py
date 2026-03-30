@@ -91,6 +91,10 @@ class Version:
         return Version(major=self.major, minor=self.minor + 1, patch=0, rc=None)
 
     @property
+    def stable(self) -> Self:
+        return Version(major=self.major, minor=self.minor, patch=self.patch, rc=None)
+
+    @property
     def is_stable(self) -> bool:
         return self.rc is None
 
@@ -146,6 +150,10 @@ def get_github_instance() -> Github:
         Checklist().fatal("Failed to get GitHub token from `gh auth token`")
 
 
+def get_release_branch_name(version: Version) -> str:
+    return f"releases/{version.base}"
+
+
 def get_bump_branch_name(version: Version) -> str:
     return f"bump_to_{version}"
 
@@ -158,50 +166,41 @@ def get_toolchain_for_version(version: Version) -> str:
     return f"leanprover/lean4:{version.tag}"
 
 
-def get_blocking_labels(version: Version) -> list[str]:
-    return [f"backport releases/{version.base}", f"blocks-release-{version.base}"]
+def get_blocking_label(version: Version) -> str:
+    return f"blocks-release-{version.base}"
 
 
-def get_file_contents(cl: Checklist, repo: Repository, ref: str, path: str) -> str:
+def get_backport_label(version: Version) -> str:
+    return f"backport {get_release_branch_name(version)}"
+
+
+def get_file_contents(repo: Repository, ref: str, path: str) -> str:
     try:
         file = repo.get_contents(path, ref=ref)
     except UnknownObjectException:
-        cl.fatal(
-            f"Failed to read [b]{e(path)}[/b] from [b]{e(ref)}[/b] in [b]{e(repo.full_name)}[/b]"
-        )
+        raise SystemExit(f"Failed to read {path!r} from {ref!r} in {repo.full_name!r}")
     if isinstance(file, list):
-        cl.fatal(
-            f"Failed to read [b]{e(path)}[/b] from [b]{e(ref)}[/b] in [b]{e(repo.full_name)}[/b]"
-        )
+        raise SystemExit(f"Failed to read {path!r} from {ref!r} in {repo.full_name!r}")
     return file.decoded_content.decode("utf-8")
 
 
-def get_toolchain(cl: Checklist, repo: Repository, ref: str) -> str:
-    return get_file_contents(cl, repo, ref, "lean-toolchain").strip()
+def get_toolchain(repo: Repository, ref: str) -> str:
+    return get_file_contents(repo, ref, "lean-toolchain").strip()
 
 
-# Returns (tag, next) where `tag` is the latest release tag with the expected
-# toolchain, and `next` is the next patch version after the latest release.
-def get_proofwidgets_release_for(
-    cl: Checklist,
-    repo: Repository,
-    version: Version,
-) -> tuple[Tag | None, str]:
+def get_proofwidgets_release_for(repo: Repository, version: Version) -> Tag | None:
     expected_toolchain = get_toolchain_for_version(version)
-    latest_patch: int | None = None
     for tag in repo.get_tags().get_page(0):
-        if not (match := re.fullmatch(r"v0\.0\.(\d+)", tag.name)):
+        if not re.fullmatch(r"v0\.0\.\d+", tag.name):
             continue
-
-        patch = int(match.group(1))
-        if latest_patch is None or patch > latest_patch:
-            latest_patch = patch
-
-        toolchain = get_file_contents(cl, repo, tag.commit.sha, "lean-toolchain")
+        toolchain = get_file_contents(repo, tag.commit.sha, "lean-toolchain")
         if toolchain.strip() == expected_toolchain:
-            return tag, f"v0.0.{latest_patch + 1}"
+            return tag
 
-    if latest_patch is None:
-        cl.fatal("No releases found in tags")
 
-    return None, f"v0.0.{latest_patch + 1}"
+def get_next_proofwidgets_release(repo: Repository) -> str:
+    for tag in repo.get_tags():
+        if match := re.fullmatch(r"v0\.0\.(\d+)", tag.name):
+            patch = int(match.group(1))
+            return f"v0.0.{patch + 1}"
+    raise SystemExit("No releases found in tags")

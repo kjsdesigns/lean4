@@ -1,9 +1,11 @@
+import datetime
 from argparse import ArgumentParser, Namespace
 
 import repos
 from github import Github, UnknownObjectException
 from github.Branch import Branch
 from github.GitRef import GitRef
+from github.GitRelease import GitRelease
 from github.PullRequest import PullRequest
 from github.Repository import Repository
 from repos import ReleaseRepo
@@ -13,11 +15,16 @@ from steps import Steps
 from util import (
     Checklist,
     Version,
-    get_blocking_labels,
+    get_backport_label,
+    get_blocking_label,
     get_bump_branch_name,
     get_file_contents,
     get_github_instance,
+    get_next_proofwidgets_release,
     get_proofwidgets_release_for,
+    get_release_branch_name,
+    get_toolchain,
+    get_toolchain_for_version,
     initialize_rich,
     prompt,
     run,
@@ -32,14 +39,14 @@ class RepoChecker:
         steps: Steps,
         completed: set[str],
         rrepo: ReleaseRepo,
-        repo: Repository,
+        grepo: Repository,
     ) -> None:
         self.interactive = interactive
         self.version = version
         self.steps = steps
         self.completed = completed
         self.rrepo = rrepo
-        self.repo = repo
+        self.grepo = grepo
 
         self.cl = Checklist()
 
@@ -56,12 +63,23 @@ class RepoChecker:
                 )
         self.cl.ensure_success()
 
-    def check_repo_has_pr(self) -> PullRequest:
-        base = self.repo.default_branch
+    def check_repo_has_correct_toolchain(self) -> bool:
+        expected = get_toolchain_for_version(self.version)
+        actual = get_toolchain(self.grepo, self.grepo.default_branch)
+
+        if actual == expected:
+            self.cl.success(f"Repo uses toolchain [b]{expected}[/b]")
+            return True
+        else:
+            self.cl.fail(f"Repo uses toolchain [b]{actual}[/b]")
+            return False
+
+    def check_repo_has_bump_pr(self, fatal: bool = True) -> PullRequest | None:
+        base = self.grepo.default_branch
         head = get_bump_branch_name(self.version)
         owner = self.rrepo.owner
 
-        for pr in self.repo.get_pulls(
+        for pr in self.grepo.get_pulls(
             state="all",
             head=f"{owner}:{head}",
             base=base,
@@ -73,17 +91,21 @@ class RepoChecker:
             )
             return pr
 
+        if not fatal:
+            self.cl.success(f"No PR found from [b]{e(head)}[/b] to [b]{e(base)}[/b]")
+            return
+
         if not self.prompt(f"No PR found from [b]{head}[/b] to [b]{base}[/b]. Create?"):
             self.cl.fatal(f"No PR found from [b]{e(head)}[/b] to [b]{e(base)}[/b]")
 
-        number = self.steps.create_release_pr(self.rrepo.full_name)
-        pr = self.repo.get_pull(number)
+        number = self.steps.create_release_pr(self.rrepo)
+        pr = self.grepo.get_pull(number)
         self.cl.success(
             f"Created PR #{pr.number} [b u link={pr.html_url}]{e(pr.title)}[/]"
         )
         return pr
 
-    def check_pr_is_merged(self, pr: PullRequest) -> None:
+    def check_bump_pr_is_merged(self, pr: PullRequest) -> None:
         if pr.merged:
             self.cl.success("PR is merged")
         elif pr.state == "closed":
@@ -104,7 +126,7 @@ class RepoChecker:
             return
 
         try:
-            tag = self.repo.get_git_ref(f"tags/{self.version}")
+            tag = self.grepo.get_git_ref(f"tags/{self.version}")
             self.cl.success(f"Toolchain tag [b]{self.version}[/b] exists")
             return tag
         except UnknownObjectException:
@@ -116,19 +138,17 @@ class RepoChecker:
             self.cl.fatal(f"Toolchain tag [b]{self.version}[/b] does not exist")
             return
 
-        self.steps.create_release_tag(self.rrepo.full_name)
+        self.steps.create_release_tag(self.rrepo)
         self.cl.success(f"Toolchain tag [b]{self.version}[/b] created")
-        return self.repo.get_git_ref(f"tags/{self.version}")
+        return self.grepo.get_git_ref(f"tags/{self.version}")
 
-    def check_stable_branch_points_to_toolchain_tag(self, tag: GitRef | None) -> None:
-        if not tag:
-            return
+    def check_stable_branch_points_to_toolchain_tag(self, tag: GitRef) -> None:
         if not self.rrepo.stable_branch:
             return
         if not self.version.is_stable:
             return
 
-        branch = self.repo.get_branch("stable")
+        branch = self.grepo.get_branch("stable")
         if branch.commit.sha == tag.object.sha:
             self.cl.success("Stable branch points to toolchain tag")
             return
@@ -137,14 +157,14 @@ class RepoChecker:
             self.cl.fatal("Stable branch does not point to toolchain tag")
             return
 
-        self.steps.bump_stable_to_release_tag(self.rrepo.full_name)
+        self.steps.bump_stable_to_release_tag(self.rrepo)
         self.cl.success("Stable branch updated to point to toolchain tag")
 
     def check_next_bump_branch(self) -> None:
         if not self.rrepo.bump_branch:
             return
 
-        repo = self.repo
+        repo = self.grepo
         if self.rrepo.nightly:
             repo = self.steps.github.get_repo(self.rrepo.nightly)
 
@@ -159,23 +179,21 @@ class RepoChecker:
         if self.rrepo.full_name != repos.PROOFWIDGETS4.full_name:
             return
 
-        tag, next_release_tag = get_proofwidgets_release_for(
-            self.cl, self.repo, self.version
-        )
-
+        tag = get_proofwidgets_release_for(self.grepo, self.version)
         if tag:
             self.cl.success(
                 f"Found tag [b]{e(tag.name)}[/b] with toolchain {self.version}"
             )
             return
 
+        next_release_tag = get_next_proofwidgets_release(self.grepo)
         if not self.prompt(
             f"No tag found with toolchain [b]{self.version}[/b]. Create [b]{next_release_tag}[/b]?"
         ):
             self.cl.fatal(f"No tag found with toolchain [b]{self.version}[/b]")
 
-        self.steps.create_release_tag(self.rrepo.full_name, next_release_tag)
-        self.repo.get_git_ref(f"tags/{next_release_tag}")
+        self.steps.create_release_tag(self.rrepo, next_release_tag)
+        self.grepo.get_git_ref(f"tags/{next_release_tag}")
         self.cl.success(
             f"Created tag [b]{e(next_release_tag)}[/b] with toolchain {self.version}"
         )
@@ -184,7 +202,10 @@ class RepoChecker:
         if self.rrepo.full_name != repos.MATHLIB4.full_name:
             return
 
-        path = self.steps.clone(self.rrepo.full_name)
+        path = self.steps.path(self.rrepo)
+        self.steps.ensure_repo(self.rrepo)
+        self.steps.ensure_branch(self.rrepo)  # At this point, the PR has been merged
+
         script = path / "scripts" / "verify_version_tags.py"
         script = script.resolve()
         try:
@@ -196,18 +217,26 @@ class RepoChecker:
     def check(self) -> None:
         self.check_dependencies_completed()
 
-        pr = self.check_repo_has_pr()
-        self.check_pr_is_merged(pr)
+        has_toolchain = self.check_repo_has_correct_toolchain()
+
+        # Special cases for repos outside the usual github organizations
+        if not has_toolchain:
+            if self.rrepo.full_name == repos.LEAN4_UNICODE_BASIC.full_name:
+                self.cl.fatal("Repo must be updated manually")
+
+        pr = self.check_repo_has_bump_pr(fatal=not has_toolchain)
+        if pr:
+            self.check_bump_pr_is_merged(pr)
 
         tag = self.check_toolchain_tag_exists()
-        self.check_stable_branch_points_to_toolchain_tag(tag)
+        if tag:
+            self.check_stable_branch_points_to_toolchain_tag(tag)
 
         # TODO Think about using bump branch for rc1 PRs
         self.check_next_bump_branch()
 
         self.check_proofwidgets_release()
         self.check_mathlib4_version_tags()
-        # TODO Check that reference manual has section for our release?
 
         self.cl.ensure_success()
 
@@ -230,65 +259,86 @@ class Checker:
     def github(self) -> Github:
         return self.steps.github
 
-    def check_release_branch_exists(self, version: Version) -> Branch:
-        branch_name = f"releases/{version.base}"
+    def check_release_branch_exists(self, version: Version) -> Branch | None:
+        branch_name = get_release_branch_name(version)
 
         try:
             branch = self.lean4.get_branch(branch_name)
             self.cl.success(f"Release branch [b]{e(branch_name)}[/] exists")
             return branch
         except UnknownObjectException:
-            self.cl.fatal(f"Release branch [b]{e(branch_name)}[/] does not exist")
-
-    def check_release_branch_exists_nonfatal(self, version: Version) -> None:
-        branch_name = f"releases/{version.base}"
-
-        try:
-            self.lean4.get_branch(branch_name)
-            self.cl.success(f"Release branch [b]{e(branch_name)}[/] exists")
-        except UnknownObjectException:
             self.cl.fail(f"Release branch [b]{e(branch_name)}[/] does not exist")
 
-    def check_blocking_labels_exist(self, version: Version) -> None:
-        success = True
-        for label in get_blocking_labels(version):
-            try:
-                self.lean4.get_label(label)
-            except UnknownObjectException:
-                self.cl.fail(f"Label [b]{e(label)}[/] does not exist")
-                success = False
-        if success:
-            self.cl.success("Blocking labels exist")
+    def check_label_exists(self, label: str) -> None:
+        try:
+            self.lean4.get_label(label)
+            self.cl.success(f"Label [b]{e(label)}[/b] exists")
+        except UnknownObjectException:
+            self.cl.fail(f"Label [b]{e(label)}[/] does not exist")
 
-    def check_cmake_version(self, branch: Branch) -> None:
+    def check_cmake_version(
+        self,
+        version: Version,
+        branch: str,
+        release: bool = True,
+    ) -> None:
         path = "src/CMakeLists.txt"
-        contents = get_file_contents(self.cl, self.lean4, branch.name, path)
+        contents = get_file_contents(self.lean4, branch, path)
         lines = {line.strip() for line in contents.splitlines()}
 
+        expected = {
+            "LEAN_VERSION_MAJOR": version.major,
+            "LEAN_VERSION_MINOR": version.minor,
+            "LEAN_VERSION_PATCH": version.patch,
+            "LEAN_VERSION_IS_RELEASE": int(release),
+        }
+
         success = True
-        for expected in [
-            f"set(LEAN_VERSION_MAJOR {self.version.major})",
-            f"set(LEAN_VERSION_MINOR {self.version.minor})",
-            f"set(LEAN_VERSION_PATCH {self.version.patch})",
-            "set(LEAN_VERSION_IS_RELEASE 1)",
-        ]:
-            if any(line.startswith(expected) for line in lines):
+        for name, value in expected.items():
+            prefixes = [f"set({name} {value})", f"set({name} {value} CACHE"]
+            if any(line.startswith(prefix) for line in lines for prefix in prefixes):
                 continue
-            self.cl.fatal(f"[b]{e(path)}[/b] must contain line [b]{e(expected)}[/b]")
+            self.cl.fail(
+                f"On [b]{e(branch)}[/b], [b]{e(name)}[/b] must be set to [b]{value}[/b]"
+            )
             success = False
 
         if success:
-            self.cl.success(
-                f"CMake version settings on [b]{e(branch.name)}[/b] are correct"
-            )
+            self.cl.success(f"CMake version settings on [b]{e(branch)}[/b] are correct")
 
-    def check_tag_exists(self) -> GitRef:
+    def check_no_open_issues_labeled(self, label: str) -> None:
+        success = True
+        for issue in self.lean4.get_issues(state="open", labels=[label]):
+            kind = "PR" if issue.pull_request else "issue"
+            self.cl.fail(
+                f"Found {kind} #{issue.number} [b u link={issue.html_url}]{e(issue.title)}[/] labeled [b]{e(label)}[/b]"
+            )
+            success = False
+
+        if success:
+            self.cl.success(f"No open issues labeled [b]{e(label)}[/b] found")
+
+    def check_no_open_backport_prs(self) -> None:
+        release_branch = get_release_branch_name(self.version)
+
+        success = True
+        for pr in self.lean4.get_pulls(state="open", base=release_branch):
+            if "backport" in pr.title.lower():
+                self.cl.fail(
+                    f"Found backport PR #{pr.number} [b u link={pr.html_url}]{e(pr.title)}[/]"
+                )
+                success = False
+
+        if success:
+            self.cl.success("No open backport PRs found")
+
+    def check_tag_exists(self) -> GitRef | None:
         try:
             ref = self.lean4.get_git_ref(f"tags/{self.version}")
             self.cl.success(f"Tag [b]{self.version}[/b] exists")
             return ref
         except UnknownObjectException:
-            self.cl.fatal(f"Tag [b]{self.version}[/b] does not exist")
+            self.cl.fail(f"Tag [b]{self.version}[/b] does not exist")
 
     def check_release_ci(self, release_tag: GitRef) -> None:
         runs = self.lean4.get_workflow_runs(
@@ -297,7 +347,7 @@ class Checker:
         )
         runs = list(runs)
         if len(runs) == 0:
-            self.cl.fatal("No release workflow runs found")
+            self.cl.fail("No release workflow runs found")
 
         run = runs[0]
 
@@ -307,7 +357,7 @@ class Checker:
             )
 
         if run.conclusion != "success":
-            self.cl.fatal(
+            self.cl.fail(
                 f"[b u link={run.html_url}]Release workflow run {run.id}[/] failed"
             )
 
@@ -315,32 +365,67 @@ class Checker:
             f"[b u link={run.html_url}]Release workflow run {run.id}[/] finished"
         )
 
-    def check_release_page(self) -> None:
+    def check_release_page(self) -> GitRelease | None:
         try:
-            self.lean4.get_release(self.version.tag)
+            release = self.lean4.get_release(self.version.tag)
             self.cl.success(f"Release page for [b]{self.version.tag}[/b] exists")
+            return release
         except UnknownObjectException:
             self.cl.blocked(
                 f"Release page for [b]{self.version.tag}[/b] does not exist"
             )
 
+    def check_reference_manual_title(self, release: GitRelease) -> None:
+        repo = self.github.get_repo(repos.REFERENCE_MANUAL.full_name)
+
+        stem = str(self.version.stable).replace(".", "_")
+        file = f"Manual/Releases/{stem}.lean"
+        try:
+            text = get_file_contents(repo, repo.default_branch, file)
+        except SystemExit:
+            self.cl.fail(f"Refman has no release log at [b]{e(file)}[/b]")
+            return
+
+        date = release.created_at.astimezone(datetime.timezone.utc).strftime("%Y-%m-%d")
+        title = f"Lean {self.version} ({date})"
+        title_line = f'#doc (Manual) "{title}" =>'
+
+        for line in text.splitlines():
+            if line.strip() == title_line:
+                self.cl.success(f"Release log has title title [b]{e(title)}[/b]")
+                return
+
+        self.cl.fail(f"Release log does not have title [b]{e(title)}[/b]")
+
     def check(self) -> None:
         self.cl.section("Prepare release cycle")
+        self.check_label_exists(get_backport_label(self.version))
+        self.check_label_exists(get_blocking_label(self.version))
+        self.check_label_exists(get_blocking_label(self.version.next))
         release_branch = self.check_release_branch_exists(self.version)
-        self.check_blocking_labels_exist(self.version)
-        self.cl.ensure_success()
+        if release_branch:
+            self.check_cmake_version(self.version, release_branch.name)
+        self.check_cmake_version(
+            self.version.next,
+            self.lean4.default_branch,
+            release=False,
+        )
 
         self.cl.section("Release")
-        self.check_cmake_version(release_branch)
+        self.check_no_open_issues_labeled(get_backport_label(self.version))
+        self.check_no_open_issues_labeled(get_blocking_label(self.version))
+        self.check_no_open_backport_prs()
         release_tag = self.check_tag_exists()
-        self.check_release_ci(release_tag)
-        self.check_release_page()
-        self.cl.ensure_success()
+        if release_tag:
+            self.check_release_ci(release_tag)
+        release = self.check_release_page()
+        if release:
+            self.check_reference_manual_title(release)
 
         completed: set[str] = set()
         for rrepo in repos.ALL:
             self.cl.section(f"[u link={rrepo.url}]{e(rrepo.full_name)}[/u link]")
-            repo = self.github.get_repo(rrepo.full_name)
+            grepo = self.github.get_repo(rrepo.full_name)
             try:
                 RepoChecker(
                     interactive=self.interactive,
@@ -348,19 +433,13 @@ class Checker:
                     steps=self.steps,
                     completed=completed,
                     rrepo=rrepo,
-                    repo=repo,
+                    grepo=grepo,
                 ).check()
                 completed.add(rrepo.full_name)
             except SystemExit:
                 self.cl.failed = True
-        self.cl.ensure_success()
 
-        # TODO master should have updated cmake versions - where to check? Here?
-        # TODO Move these checks to "Prepare release cycle" or something? These things should maybe be available while the current release is still ongoing.
-        # self.cl.section("Prepare next release cycle")
-        # self.check_release_branch_exists_nonfatal(self.version.next)
-        # self.check_blocking_labels_exist(self.version.next)
-        # self.cl.ensure_success()
+        self.cl.ensure_success()
 
 
 def main(version: Version, interactive: bool) -> None:

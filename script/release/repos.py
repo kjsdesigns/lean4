@@ -28,12 +28,16 @@ class ReleaseRepo:
         BY_FULL_NAME[self.full_name] = self
         return self
 
+    @classmethod
+    def by_full_name(cls, full_name: str) -> Self:
+        if full_name not in BY_FULL_NAME:
+            raise SystemExit(f"Unknown repo {full_name}")
+        return BY_FULL_NAME[full_name]
 
-LEAN4_CLI = ReleaseRepo(
-    owner="leanprover",
-    name="lean4-cli",
-    toolchain_tag=True,
-)._register()
+
+##################
+## Repositories ##
+##################
 
 BATTERIES = ReleaseRepo(
     owner="leanprover-community",
@@ -43,11 +47,29 @@ BATTERIES = ReleaseRepo(
     bump_branch=True,
 )._register()
 
-QUOTE4 = ReleaseRepo(
+AESOP = ReleaseRepo(
     owner="leanprover-community",
-    name="quote4",
+    name="aesop",
     toolchain_tag=True,
     stable_branch=True,
+    dependencies=[
+        BATTERIES,
+    ],
+)._register()
+
+LEAN4_CLI = ReleaseRepo(
+    owner="leanprover",
+    name="lean4-cli",
+    toolchain_tag=True,
+)._register()
+
+IMPORT_GRAPH = ReleaseRepo(
+    owner="leanprover-community",
+    name="import-graph",
+    toolchain_tag=True,
+    dependencies=[
+        LEAN4_CLI,
+    ],
 )._register()
 
 PLAUSIBLE = ReleaseRepo(
@@ -56,18 +78,83 @@ PLAUSIBLE = ReleaseRepo(
     toolchain_tag=True,
 )._register()
 
+PROOFWIDGETS4 = ReleaseRepo(
+    owner="leanprover-community",
+    name="ProofWidgets4",
+)._register()
+
+MATHLIB4 = ReleaseRepo(
+    owner="leanprover-community",
+    name="mathlib4",
+    nightly="leanprover-community/mathlib4-nightly-testing",
+    toolchain_tag=True,
+    stable_branch=True,
+    bump_branch=True,
+    dependencies=[
+        AESOP,
+        BATTERIES,
+        IMPORT_GRAPH,
+        LEAN4_CLI,
+        PLAUSIBLE,
+        PROOFWIDGETS4,
+    ],
+)._register()
+
+CSLIB = ReleaseRepo(
+    owner="leanprover",
+    name="cslib",
+    toolchain_tag=True,
+    stable_branch=True,
+    bump_branch=True,
+    dependencies=[
+        MATHLIB4,
+    ],
+)._register()
+
+REPL = ReleaseRepo(
+    owner="leanprover-community",
+    name="repl",
+    toolchain_tag=True,
+    stable_branch=True,
+    dependencies=[
+        MATHLIB4,
+    ],
+)._register()
+
 VERSO = ReleaseRepo(
     owner="leanprover",
     name="verso",
     toolchain_tag=True,
-    dependencies=[PLAUSIBLE],
+    dependencies=[
+        MATHLIB4,  # Benchmarks
+        PLAUSIBLE,
+    ],
 )._register()
 
-IMPORT_GRAPH = ReleaseRepo(
-    owner="leanprover-community",
-    name="import-graph",
+REFERENCE_MANUAL = ReleaseRepo(
+    owner="leanprover",
+    name="reference-manual",
     toolchain_tag=True,
-    dependencies=[LEAN4_CLI],
+    dependencies=[
+        VERSO,
+    ],
+)._register()
+
+VERSO_WEB_COMPONENTS = ReleaseRepo(
+    owner="leanprover",
+    name="verso-web-components",
+    toolchain_tag=True,
+    dependencies=[
+        VERSO,
+    ],
+)._register()
+
+LEAN_FRO_ORG = ReleaseRepo(
+    owner="leanprover",
+    name="lean-fro.org",
+    dependencies=[
+        VERSO_WEB_COMPONENTS,
+    ],
 )._register()
 
 LEAN4_UNICODE_BASIC = ReleaseRepo(
@@ -80,74 +167,20 @@ BIBTEX_QUERY = ReleaseRepo(
     owner="dupuisf",
     name="BibtexQuery",
     toolchain_tag=True,
-    dependencies=[LEAN4_UNICODE_BASIC],
-)._register()
-
-REFERENCE_MANUAL = ReleaseRepo(
-    owner="leanprover",
-    name="reference-manual",
-    toolchain_tag=True,
-    dependencies=[VERSO],
-)._register()
-
-PROOFWIDGETS4 = ReleaseRepo(
-    owner="leanprover-community",
-    name="ProofWidgets4",
-)._register()
-
-AESOP = ReleaseRepo(
-    owner="leanprover-community",
-    name="aesop",
-    toolchain_tag=True,
-    stable_branch=True,
-    dependencies=[BATTERIES],
-)._register()
-
-MATHLIB4 = ReleaseRepo(
-    owner="leanprover-community",
-    name="mathlib4",
-    nightly="leanprover-community/mathlib4-nightly-testing",
-    toolchain_tag=True,
-    stable_branch=True,
-    bump_branch=True,
-    dependencies=[PROOFWIDGETS4, AESOP, BATTERIES, IMPORT_GRAPH, PLAUSIBLE, LEAN4_CLI],
+    dependencies=[
+        LEAN4_UNICODE_BASIC,
+    ],
 )._register()
 
 DOC_GEN4 = ReleaseRepo(
     owner="leanprover",
     name="doc-gen4",
     toolchain_tag=True,
-    dependencies=[BIBTEX_QUERY, MATHLIB4, LEAN4_CLI],
-)._register()
-
-CSLIB = ReleaseRepo(
-    owner="leanprover",
-    name="cslib",
-    toolchain_tag=True,
-    stable_branch=True,
-    bump_branch=True,
-    dependencies=[MATHLIB4],
-)._register()
-
-REPL = ReleaseRepo(
-    owner="leanprover-community",
-    name="repl",
-    toolchain_tag=True,
-    stable_branch=True,
-    dependencies=[MATHLIB4],
-)._register()
-
-VERSO_WEB_COMPONENTS = ReleaseRepo(
-    owner="leanprover",
-    name="verso-web-components",
-    toolchain_tag=True,
-    dependencies=[VERSO],
-)._register()
-
-LEAN_FRO_ORG = ReleaseRepo(
-    owner="leanprover",
-    name="lean-fro.org",
-    dependencies=[VERSO_WEB_COMPONENTS],
+    dependencies=[
+        BIBTEX_QUERY,
+        LEAN4_CLI,
+        MATHLIB4,
+    ],
 )._register()
 
 COMPARATOR = ReleaseRepo(
@@ -161,3 +194,28 @@ LEAN4EXPORT = ReleaseRepo(
     name="lean4export",
     toolchain_tag=True,
 )._register()
+
+QUOTE4 = ReleaseRepo(
+    owner="leanprover-community",
+    name="quote4",
+    toolchain_tag=True,
+    stable_branch=True,
+)._register()
+
+
+###################
+## Visualization ##
+###################
+
+def print_graphviz_dot() -> None:
+    print("digraph G {")
+    print("  rankdir=LR;")
+    for repo in sorted(ALL, key=lambda r: r.full_name):
+        print(f'  "{repo.full_name}"')
+        for dep in repo.dependencies:
+            print(f'  "{dep.full_name}" -> "{repo.full_name}"')
+    print("}")
+
+
+if __name__ == "__main__":
+    print_graphviz_dot()
