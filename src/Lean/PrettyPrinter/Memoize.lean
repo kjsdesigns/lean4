@@ -323,7 +323,7 @@ private partial def ppBinderBody (ctx : PPCtx) (body : Expr) (bvars : Array Name
     binderNames := ctx.binderNames
     names := ← IO.mkRef ∅
     emitted := ← IO.mkRef ∅
-    nextId := ← IO.mkRef 0
+    nextId := ctx.nextId  -- share counter with outer to avoid name collisions
     outer? := some ctx
   }
   let bodyStr ← ppExpr childCtx body bvars

@@ -191,3 +191,38 @@ noncomputable def rt_nested_open := fun (x : Nat) => fun (y : Nat) =>
 #guard_msgs in #roundtrip rt_open_sharing
 /-- info: fun (x : @Nat) => fun (y : @Nat) => memoized% @Nat.add (memo s0 := @Nat.mul x y) s0 -/
 #guard_msgs in #roundtrip rt_nested_open
+
+-- Sibling lambdas: same raw Expr `g #0` under different binders gets independent sharing
+noncomputable def rt_sibling_lam :=
+  @Prod.mk (Nat → Nat) (Nat → Nat)
+    (fun x => Nat.add (Nat.mul x x) (Nat.mul x x))
+    (fun y => Nat.add (Nat.mul y y) (Nat.mul y y))
+
+/-- info: memoized% @Prod.mk.{0, 0} (memo s0 := @Nat → @Nat) s0 (memo s1 := fun (x : @Nat) => memoized% @Nat.add (memo s2 := @Nat.mul x x) s2) s1 -/
+#guard_msgs in #roundtrip rt_sibling_lam
+
+-- Sharing at nested depth with closed+open mix
+noncomputable def rt_depth2 := fun (x : Nat) => fun (y : Nat) =>
+  Nat.add (Nat.add (Nat.mul x y) (Nat.mul x y))
+          (Nat.add (Nat.mul x y) (Nat.mul x y))
+
+/-- info: fun (x : @Nat) => fun (y : @Nat) => memoized% @Nat.add (memo s0 := @Nat.add (memo s1 := @Nat.mul x y) s1) s0 -/
+#guard_msgs in #roundtrip rt_depth2
+
+-- Name collision avoidance: outer and inner scopes use distinct names
+noncomputable def rt_outer_sharing := fun (x : Nat) =>
+  @Prod.mk (Nat → Nat) (Nat → Nat)
+    (fun y => Nat.add x y)
+    (fun z => Nat.add x z)
+
+/-- info: memoized% fun (x : @Nat) => memoized% @Prod.mk.{0, 0} (memo s0 := @Nat → @Nat) s0 (memo s1 := fun (y : @Nat) => @Nat.add x y) s1 -/
+#guard_msgs in #roundtrip rt_outer_sharing
+
+-- Sharing across let value and body under binder (zeta-reduced)
+noncomputable def rt_let_cross := fun (x : Nat) =>
+  let a := Nat.mul x x
+  let b := Nat.mul x x
+  Nat.add a b
+
+/-- info: fun (x : @Nat) => memoized% @Nat.add (memo s0 := @Nat.mul x x) s0 -/
+#guard_msgs in #roundtrip rt_let_cross
