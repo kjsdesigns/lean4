@@ -1524,6 +1524,24 @@ This parser has arity 0 - it does not capture anything. -/
 @[builtin_doc] def checkColGt (errorMsg : String := "checkColGt") : Parser where
   fn := checkColGtFn errorMsg
 
+/-- Like `checkColGtFn` but defaults to checking against column 0 when no position is saved.
+This makes indentation checks apply even at the top level. -/
+def checkColPosGtFn (errorMsg : String) : ParserFn := fun c s =>
+  let savedCol := match c.savedPos? with
+    | some savedPos => (c.fileMap.toPosition savedPos).column
+    | none => 0
+  let pos := c.fileMap.toPosition s.pos
+  if pos.column > savedCol then s
+  else s.mkError errorMsg
+
+/-- Like `checkColGt` but defaults to checking against column 0 when no position is saved (see
+`withPosition`). This makes indentation checks apply even at the top level, where no position has
+been saved.
+
+This parser has arity 0 - it does not capture anything. -/
+@[builtin_doc] def checkColPosGt (errorMsg : String := "checkColPosGt") : Parser where
+  fn := checkColPosGtFn errorMsg
+
 def checkLineEqFn (errorMsg : String) : ParserFn := fun c s =>
   match c.savedPos? with
   | none => s
