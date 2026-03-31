@@ -222,15 +222,15 @@ end PrvTest
 The name `IO.CancelToken.ref✝` is a private imported name.
 -/
 /--
-info: def IO.CancelToken.isSet : IO.CancelToken → BaseIO Bool :=
-fun tk => ST.Ref.get (IO.CancelToken.ref✝ tk)
+info: def IO.CancelToken.set : IO.CancelToken → BaseIO Unit :=
+fun tk => ST.Ref.set (IO.CancelToken.ref✝ tk) true
 -/
-#guard_msgs in #print IO.CancelToken.isSet
+#guard_msgs in #print IO.CancelToken.set
 /-!
 Even if `IO` is opened, it won't print as `CancelToken.ref✝`, but the full name.
 -/
 /--
-info: def IO.CancelToken.isSet : CancelToken → BaseIO Bool :=
-fun tk => ST.Ref.get (IO.CancelToken.ref✝ tk)
+info: def IO.CancelToken.set : CancelToken → BaseIO Unit :=
+fun tk => ST.Ref.set (IO.CancelToken.ref✝ tk) true
 -/
-#guard_msgs in open IO in #print IO.CancelToken.isSet
+#guard_msgs in open IO in #print IO.CancelToken.set

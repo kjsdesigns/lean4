@@ -36,17 +36,20 @@ returning
 * a cancellation hook and
 * a monadic value with the cached result (and subsequent state as it was after running).
 
-The task is run with a fresh `CancelToken` in its context, so it can detect cancellation
-via `Core.checkInterrupted`. The cancellation hook sets this token.
+The task is run with a child `CancelToken` in its context, so it can detect cancellation
+via `Core.checkInterrupted`. The cancellation hook sets this token. If a parent cancel token
+exists in the current context, the child token is linked to it via `CancelToken.newWithParent`,
+so that server-level cancellation propagates to subtasks.
 
 Uses `Core.wrapAsync` internally to properly handle name generators and heartbeats.
-
-Note: We only set the cancel token and don't call `IO.cancel task`. We're uncertain whether
-`IO.cancel` is also necessary - it may be required for tasks that use `IO.checkCanceled`
-instead of `Core.checkInterrupted`.
 -/
 def asTask (t : CoreM α) : CoreM (BaseIO Unit × Task (CoreM α)) := do
-  let cancelToken ← IO.CancelToken.new
+  -- Create a child cancel token that also checks the parent's token.
+  -- This ensures that server-level cancellation propagates to subtasks.
+  let parentToken? := (← read).cancelTk?
+  let cancelToken ← match parentToken? with
+    | some parent => IO.CancelToken.newWithParent parent
+    | none => IO.CancelToken.new
   -- Use wrapAsync to properly handle name generators and heartbeats,
   -- but modify it to return both the result and state
   let wrappedAct ← Core.wrapAsync (fun () => do let a ← t; let s ← get; return (a, s)) (some cancelToken)

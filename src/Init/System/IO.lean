@@ -1681,21 +1681,32 @@ tasks.
 -/
 structure CancelToken where
   private ref : IO.Ref Bool
+  /-- Optional parent token. When set, `isSet` also checks the parent (recursively). -/
+  parent? : Option CancelToken := none
 deriving Nonempty
 
 namespace CancelToken
 
 /-- Creates a new cancellation token. -/
-def new : BaseIO CancelToken :=
-  CancelToken.mk <$> IO.mkRef false
+def new : BaseIO CancelToken := do
+  return { ref := (← IO.mkRef false) }
 
-/-- Activates a cancellation token. Idempotent. -/
+/-- Creates a new cancellation token with a parent. The child token is considered set
+    whenever the parent is set (in addition to being set directly). -/
+def newWithParent (parent : CancelToken) : BaseIO CancelToken := do
+  return { ref := (← IO.mkRef false), parent? := some parent }
+
+/-- Activates a cancellation token. Idempotent. Does not activate the parent. -/
 def set (tk : CancelToken) : BaseIO Unit :=
   tk.ref.set true
 
-/-- Checks whether the cancellation token has been activated. -/
-def isSet (tk : CancelToken) : BaseIO Bool :=
-  tk.ref.get
+/-- Checks whether the cancellation token has been activated, either directly or
+    via a parent token. -/
+partial def isSet (tk : CancelToken) : BaseIO Bool := do
+  if (← tk.ref.get) then return true
+  if let some parent := tk.parent? then
+    return (← parent.isSet)
+  return false
 
 -- separate definition as otherwise no unboxed version is generated
 @[export lean_io_cancel_token_is_set]
