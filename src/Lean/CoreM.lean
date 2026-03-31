@@ -449,12 +449,21 @@ protected def withIncRecDepth [Monad m] [MonadControlT CoreM m] (x : m α) : m �
   controlAt CoreM fun runInBase => withIncRecDepth (runInBase x)
 
 /--
+Record a check-in for the `LEAN_CHECK_SYSTEM_INTERVAL_MS` monitoring.
+When that env var is set, warns on stderr if too much CPU time has elapsed since
+the last check-in from either the C++ `check_system` or this function.
+-/
+@[extern "lean_check_system_interval"]
+opaque checkSystemInterval (componentName : @& String) : BaseIO Unit
+
+/--
 Throws an internal interrupt exception if cancellation has been requested. The exception is not
 caught by `try catch` but is intended to be caught by `Command.withLoggingExceptions` at the top
 level of elaboration. In particular, we want to skip producing further incremental snapshots after
 the exception has been thrown.
  -/
 @[inline] def checkInterrupted : CoreM Unit := do
+  checkSystemInterval "Lean elaborator"
   if let some tk := (← read).cancelTk? then
     if (← tk.isSet) then
       throwInterruptException

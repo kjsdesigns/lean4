@@ -48,6 +48,32 @@ static uint64_t thread_cpu_time_ns() {
 // Thread-local: last CPU time when check_system was called on this thread.
 LEAN_THREAD_VALUE(uint64_t, g_last_check_system_ns, 0);
 
+static void check_system_interval(char const * component_name) {
+    unsigned interval_ms = get_check_system_interval_ms();
+    if (interval_ms > 0) {
+        uint64_t now_ns = thread_cpu_time_ns();
+        uint64_t last_ns = g_last_check_system_ns;
+        g_last_check_system_ns = now_ns;
+        if (last_ns != 0) {
+            uint64_t elapsed_ms = (now_ns - last_ns) / 1000000;
+            if (elapsed_ms > interval_ms) {
+                fprintf(stderr,
+                    "[check_system] WARNING: %llu ms CPU time since last check_system call "
+                    "(component: %s)\n",
+                    (unsigned long long)elapsed_ms, component_name);
+                void * bt_buf[64];
+                int nptrs = backtrace(bt_buf, 64);
+                backtrace_symbols_fd(bt_buf, nptrs, 2); // fd 2 = stderr
+            }
+        }
+    }
+}
+
+extern "C" LEAN_EXPORT obj_res lean_check_system_interval(b_lean_obj_arg component_name) {
+    check_system_interval(lean_string_cstr(component_name));
+    return lean_io_result_mk_ok(lean_box(0));
+}
+
 extern "C" LEAN_EXPORT obj_res lean_internal_get_default_max_heartbeat() {
 #ifdef LEAN_DEFAULT_MAX_HEARTBEAT
     return lean_box(LEAN_DEFAULT_MAX_HEARTBEAT);
@@ -103,24 +129,7 @@ void check_interrupted() {
 }
 
 void check_system(char const * component_name, bool do_check_interrupted) {
-    unsigned interval_ms = get_check_system_interval_ms();
-    if (interval_ms > 0) {
-        uint64_t now_ns = thread_cpu_time_ns();
-        uint64_t last_ns = g_last_check_system_ns;
-        g_last_check_system_ns = now_ns;
-        if (last_ns != 0) {
-            uint64_t elapsed_ms = (now_ns - last_ns) / 1000000;
-            if (elapsed_ms > interval_ms) {
-                fprintf(stderr,
-                    "[check_system] WARNING: %llu ms CPU time since last check_system call "
-                    "(component: %s)\n",
-                    (unsigned long long)elapsed_ms, component_name);
-                void * bt_buf[64];
-                int nptrs = backtrace(bt_buf, 64);
-                backtrace_symbols_fd(bt_buf, nptrs, 2); // fd 2 = stderr
-            }
-        }
-    }
+    check_system_interval(component_name);
     check_stack(component_name);
     check_memory(component_name);
     if (do_check_interrupted) {
