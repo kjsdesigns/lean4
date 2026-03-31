@@ -52,6 +52,20 @@ namespace Lean.Parser.Tactic
 
 syntax (name := tryTrace) "try?" optConfig : tactic
 
+/--
+`try? => tac` runs `tac` through `try?`'s suggestion engine (`evalSuggest`) without the
+automatic tactic generation phase. This is useful for testing `evalSuggest` directly with
+explicit tactic scripts using `try?`'s internal combinators (`attempt_all`, `attempt_all_par`,
+`first_par`, etc.).
+
+Example:
+```
+example : 1 = 1 := by
+  try? => first | rfl | simp
+```
+-/
+syntax (name := tryTraceWith) "try?" optConfig " => " tacticSeq : tactic
+
 /-- Helper internal tactic for implementing the tactic `try?`. -/
 syntax (name := attemptAll) "attempt_all " withPosition((ppDedent(ppLine) colGe "| " tacticSeq)+) : tactic
 
