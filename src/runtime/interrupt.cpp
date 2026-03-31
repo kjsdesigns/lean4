@@ -7,6 +7,7 @@ Author: Leonardo de Moura
 #include <limits>
 #include <cstdlib>
 #include <ctime>
+#include <execinfo.h>
 #include "runtime/thread.h"
 #include "runtime/interrupt.h"
 #include "runtime/exception.h"
@@ -114,6 +115,9 @@ void check_system(char const * component_name, bool do_check_interrupted) {
                     "[check_system] WARNING: %llu ms CPU time since last check_system call "
                     "(component: %s)\n",
                     (unsigned long long)elapsed_ms, component_name);
+                void * bt_buf[64];
+                int nptrs = backtrace(bt_buf, 64);
+                backtrace_symbols_fd(bt_buf, nptrs, 2); // fd 2 = stderr
             }
         }
     }
