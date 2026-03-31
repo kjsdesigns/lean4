@@ -9,8 +9,10 @@ module
 prelude
 public import Lean.Elab.Command
 public import Lean.Elab.Tactic.Basic
+public import Lean.Elab.Task
 public meta import Lean.Elab.Command
 public meta import Lean.Elab.Tactic.Basic
+public meta import Lean.Elab.Task
 
 public section
 
@@ -183,6 +185,66 @@ elab_rules : tactic
 
   dbg_trace "blocked!"
   log "blocked"
+
+/-! ## Helpers for testing `asTask` subtask cancellation -/
+
+meta initialize parOnceRef : IO.Ref (Option (Task Unit)) ← IO.mkRef none
+
+/--
+Like `wait_for_cancel_once`, but spawns a parallel subtask via `TacticM.asTask'` that waits for
+cancellation. This tests whether subtasks spawned via `asTask'` (as used by `TacticM.par` in `try?`)
+inherit their parent's cancellation token.
+
+The subtask gets a fresh cancel token from `asTask'` (via `Core.wrapAsync`), so the parent's
+cancellation token is NOT propagated. The test expects to see "leaked!" if the bug exists,
+or "subtask-cancelled!" if the fix is in place.
+-/
+scoped syntax "wait_for_cancel_once_par_subtask" : tactic
+@[incremental]
+elab_rules : tactic
+| `(tactic| wait_for_cancel_once_par_subtask) => do
+  let prom ← IO.Promise.new
+  if let some t := (← parOnceRef.modifyGet (fun old => (old, old.getD prom.result!))) then
+    IO.wait t
+    return
+
+  -- Send "blocked" diagnostic (like wait_for_cancel_once)
+  dbg_trace "blocked!"
+  log "blocked"
+  let ctx ← readThe Elab.Term.Context
+  let some tacSnap := ctx.tacSnap? | unreachable!
+  tacSnap.new.resolve {
+    diagnostics := (← Language.Snapshot.Diagnostics.ofMessageLog (← Core.getMessageLog))
+    stx := default
+    finished := default
+  }
+
+  -- Now spawn a subtask via asTask' (same mechanism used by TacticM.par in try?)
+  -- This subtask gets a FRESH cancel token, disconnected from the server's token
+  let subtask ← Elab.Tactic.TacticM.asTask' do
+    -- Poll for cancellation (checks the FRESH token, not the server's)
+    let mut cancelled := false
+    for _ in List.range 100 do -- 100 * 50ms = 5s max
+      IO.sleep 50
+      let ctx ← readThe Core.Context
+      if let some cancelTk := ctx.cancelTk? then
+        if (← cancelTk.isSet) then
+          cancelled := true
+          break
+    if cancelled then
+      IO.eprintln "subtask-cancelled!"
+    else
+      IO.eprintln "leaked!"
+    prom.resolve ()
+
+  -- Block the main thread waiting for the subtask
+  -- The server's cancellation sets the PARENT token, but the main thread is blocked in IO.wait
+  -- and can only check checkInterrupted after the subtask completes
+  discard <| IO.wait subtask
+
+  -- If we reach here (subtask didn't throw), resolve and check interrupted
+  prom.resolve ()
+  Core.checkInterrupted
 
 meta initialize cmdOnceRef : IO.Ref (Option (Task Unit)) ← IO.mkRef none
 

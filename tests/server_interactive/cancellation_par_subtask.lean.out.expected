@@ -1,0 +1,25 @@
+blocked!
+subtask-cancelled!
+{"version": 2,
+ "uri": "file:///cancellation_par_subtask.lean",
+ "diagnostics":
+ [{"source": "Lean 4",
+   "severity": 3,
+   "range":
+   {"start": {"line": 18, "character": 0}, "end": {"line": 19, "character": 0}},
+   "message": "Goals accomplished!",
+   "leanTags": [2],
+   "isSilent": true,
+   "fullRange":
+   {"start": {"line": 18, "character": 0},
+    "end": {"line": 19, "character": 15}}},
+  {"source": "Lean 4",
+   "severity": 3,
+   "range":
+   {"start": {"line": 24, "character": 0}, "end": {"line": 25, "character": 0}},
+   "message": "Goals accomplished!",
+   "leanTags": [2],
+   "isSilent": true,
+   "fullRange":
+   {"start": {"line": 24, "character": 0},
+    "end": {"line": 26, "character": 9}}}]}
