@@ -240,6 +240,11 @@ structure Problem where
   vars          : List Expr
   alts          : List Alt
   examples      : List Example
+  /-- Variables worth expanding in counter-examples. Initialized to the match discriminants;
+      propagated through single-constructor case splits only. When generating counter-examples
+      for missing cases, only variables in this set are case-split, avoiding combinatorial
+      explosion for types with many constructors. -/
+  counterExVars : FVarIdSet := {}
   deriving Inhabited
 
 def withGoalOf {α} (p : Problem) (x : MetaM α) : MetaM α :=

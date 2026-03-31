@@ -564,11 +564,16 @@ private def processConstructor (p : Problem) : MetaM (Array Problem) := do
        let isRec ← withGoalOf p <| hasRecursiveType x
         /- If there are no alternatives and the type of the current variable is recursive, we do NOT consider
           a constructor-transition to avoid nontermination.
-          TODO: implement a more general approach if this is not sufficient in practice -/
+          We also skip splitting variables that are not "counter-example worthy" when the split
+          branches (>1 subgoals). Only original match discriminants and variables derived from
+          them through single-constructor splits are counter-example worthy. This avoids
+          combinatorial explosion (K^numFields per missing case) when generating counter-examples
+          for types with many constructors. -/
        if isRec then
          return none
-       else
-         return some subgoals
+       if !p.counterExVars.contains x.fvarId! && subgoals.size > 1 then
+         return none
+       return some subgoals
   let some subgoals := subgoals? | return #[{ p with vars := xs }]
   subgoals.mapM fun subgoal => subgoal.mvarId.withContext do
     -- withTraceNode `Meta.Match.match (msg := (return m!"{exceptEmoji ·} case {subgoal.ctorName}")) do
@@ -593,7 +598,22 @@ private def processConstructor (p : Problem) : MetaM (Array Problem) := do
         | .ctor _ _ _ fieldPats :: ps  => return { alt with patterns := fieldPats ++ ps }
         | .inaccessible _ :: ps        => return { alt with patterns := fields.map .inaccessible ++ ps }
         | _                            => unreachable!
-      return { p with mvarId := subgoal.mvarId, vars := newVars, alts := newAlts, examples := examples }
+      -- Propagate counterExVars: remove split var, map through subst, add fields for single-ctor splits
+      let mut newCounterExVars := p.counterExVars.erase x.fvarId!
+      -- Map remaining counterExVars through the substitution
+      let mut mappedCounterExVars : FVarIdSet := {}
+      for fvarId in newCounterExVars do
+        match subst.find? fvarId with
+        | some (.fvar newId) => mappedCounterExVars := mappedCounterExVars.insert newId
+        | some _             => pure () -- mapped to non-fvar, drop it
+        | none               => mappedCounterExVars := mappedCounterExVars.insert fvarId
+      newCounterExVars := mappedCounterExVars
+      -- For single-constructor types, propagate worthiness to fields
+      if subgoals.size == 1 && p.counterExVars.contains x.fvarId! then
+        for field in fields do
+          if let .fvar fvarId := field then
+            newCounterExVars := newCounterExVars.insert fvarId
+      return { p with mvarId := subgoal.mvarId, vars := newVars, alts := newAlts, examples := examples, counterExVars := newCounterExVars }
     else
       -- A catch-all case
       let subst := subgoal.subst
@@ -604,7 +624,14 @@ private def processConstructor (p : Problem) : MetaM (Array Problem) := do
         | .ctor .. :: _ => false
         | _             => true
       let newAlts := newAlts.map fun alt => alt.applyFVarSubst subst
-      return { p with mvarId := subgoal.mvarId, alts := newAlts, vars := newVars, examples := examples }
+      -- Map counterExVars through subst for catch-all case
+      let mut newCounterExVars : FVarIdSet := {}
+      for fvarId in p.counterExVars do
+        match subst.find? fvarId with
+        | some (.fvar newId) => newCounterExVars := newCounterExVars.insert newId
+        | some _             => pure ()
+        | none               => newCounterExVars := newCounterExVars.insert fvarId
+      return { p with mvarId := subgoal.mvarId, alts := newAlts, vars := newVars, examples := examples, counterExVars := newCounterExVars }
 
 private def processNonVariable (p : Problem) : MetaM Problem := withGoalOf p do
   let x :: xs := p.vars | unreachable!
@@ -1213,7 +1240,8 @@ def mkMatcher (input : MkMatcherInput) : MetaM MatcherResult := withCleanLCtxFor
       let mvar ← mkFreshExprMVar mvarType
       trace[Meta.Match.debug] "goal\n{mvar.mvarId!}"
       let examples := discrs'.toList.map fun discr => Example.var discr.fvarId!
-      let (_, s) ← (process { mvarId := mvar.mvarId!, vars := discrs'.toList, alts := alts, examples := examples }).run {}
+      let counterExVars := discrs'.foldl (init := (∅ : FVarIdSet)) fun s d => s.insert d.fvarId!
+      let (_, s) ← (process { mvarId := mvar.mvarId!, vars := discrs'.toList, alts := alts, examples := examples, counterExVars }).run {}
       let val ← mkLambdaFVars discrs' mvar
       trace[Meta.Match.debug] "matcher\nvalue: {val}\ntype: {← inferType val}"
       let mut rfls := #[]
@@ -1236,7 +1264,8 @@ def mkMatcher (input : MkMatcherInput) : MetaM MatcherResult := withCleanLCtxFor
     withAlts motive discrs discrInfos lhss isSplitter fun alts minors altInfos => do
       let mvar ← mkFreshExprMVar mvarType
       let examples := discrs.toList.map fun discr => Example.var discr.fvarId!
-      let (_, s) ← (process { mvarId := mvar.mvarId!, vars := discrs.toList, alts := alts, examples := examples }).run {}
+      let counterExVars := discrs.foldl (init := (∅ : FVarIdSet)) fun s d => s.insert d.fvarId!
+      let (_, s) ← (process { mvarId := mvar.mvarId!, vars := discrs.toList, alts := alts, examples := examples, counterExVars }).run {}
       let args := #[motive] ++ discrs ++ minors
       let type ← mkForallFVars args mvarType
       let val  ← mkLambdaFVars args mvar
