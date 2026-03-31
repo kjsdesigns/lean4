@@ -26,7 +26,7 @@
 {"textDocument": {"uri": "file:///plainTermGoal.lean"},
  "position": {"line": 11, "character": 10}}
 {"range":
- {"start": {"line": 11, "character": 2}, "end": {"line": 11, "character": 19}},
+ {"start": {"line": 11, "character": 2}, "end": {"line": 13, "character": 11}},
  "goal": "y : Int\n⊢ Option Unit"}
 {"textDocument": {"uri": "file:///plainTermGoal.lean"},
  "position": {"line": 16, "character": 17}}
