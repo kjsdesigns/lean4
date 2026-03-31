@@ -5,6 +5,8 @@ Released under Apache 2.0 license as described in the file LICENSE.
 Author: Leonardo de Moura
 */
 #include <limits>
+#include <cstdlib>
+#include <ctime>
 #include "runtime/thread.h"
 #include "runtime/interrupt.h"
 #include "runtime/exception.h"
@@ -15,6 +17,35 @@ Author: Leonardo de Moura
 namespace lean {
 LEAN_THREAD_VALUE(size_t, g_max_heartbeat, 0);
 LEAN_THREAD_VALUE(size_t, g_heartbeat, 0);
+
+// --- check_system interval monitoring ---
+// When LEAN_CHECK_SYSTEM_INTERVAL_MS is set, warn on stderr if check_system
+// is not called within the given interval (in milliseconds of CPU time) on the
+// current thread. Uses CLOCK_THREAD_CPUTIME_ID so that IO waits (sleep, network,
+// disk) do not count towards the interval.
+
+// 0 = disabled
+static unsigned g_check_system_interval_ms = 0;
+static bool g_check_system_interval_initialized = false;
+
+static unsigned get_check_system_interval_ms() {
+    if (!g_check_system_interval_initialized) {
+        g_check_system_interval_initialized = true;
+        if (const char * env = std::getenv("LEAN_CHECK_SYSTEM_INTERVAL_MS")) {
+            g_check_system_interval_ms = std::atoi(env);
+        }
+    }
+    return g_check_system_interval_ms;
+}
+
+static uint64_t thread_cpu_time_ns() {
+    struct timespec ts;
+    clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts);
+    return static_cast<uint64_t>(ts.tv_sec) * 1000000000ULL + static_cast<uint64_t>(ts.tv_nsec);
+}
+
+// Thread-local: last CPU time when check_system was called on this thread.
+LEAN_THREAD_VALUE(uint64_t, g_last_check_system_ns, 0);
 
 extern "C" LEAN_EXPORT obj_res lean_internal_get_default_max_heartbeat() {
 #ifdef LEAN_DEFAULT_MAX_HEARTBEAT
@@ -71,6 +102,21 @@ void check_interrupted() {
 }
 
 void check_system(char const * component_name, bool do_check_interrupted) {
+    unsigned interval_ms = get_check_system_interval_ms();
+    if (interval_ms > 0) {
+        uint64_t now_ns = thread_cpu_time_ns();
+        uint64_t last_ns = g_last_check_system_ns;
+        g_last_check_system_ns = now_ns;
+        if (last_ns != 0) {
+            uint64_t elapsed_ms = (now_ns - last_ns) / 1000000;
+            if (elapsed_ms > interval_ms) {
+                fprintf(stderr,
+                    "[check_system] WARNING: %llu ms CPU time since last check_system call "
+                    "(component: %s)\n",
+                    (unsigned long long)elapsed_ms, component_name);
+            }
+        }
+    }
     check_stack(component_name);
     check_memory(component_name);
     if (do_check_interrupted) {
