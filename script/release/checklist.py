@@ -1,4 +1,3 @@
-import datetime
 from argparse import ArgumentParser, Namespace
 
 import repos
