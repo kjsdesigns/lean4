@@ -1,3 +1,4 @@
+import datetime
 import re
 import shlex
 import subprocess
@@ -18,9 +19,9 @@ REPOS_FILE = Path(__file__).with_name("repos.yaml")
 type Arg = str | bytes | PathLike[str] | PathLike[bytes]
 
 
-def run(*args: Arg, cwd: Path | None = None) -> None:
+def run(*args: Arg, cwd: Path | None = None, silent: bool = False) -> None:
     print(f"[bright_black]$ {e(' '.join(shlex.quote(str(arg)) for arg in args))}[/]")
-    subprocess.run(args, check=True, cwd=cwd)
+    subprocess.run(args, check=True, cwd=cwd, capture_output=silent)
 
 
 def run_stdout(*args: Arg, cwd: Path | None = None) -> str:
@@ -77,10 +78,14 @@ class Version:
         )
 
     @property
-    def tag(self) -> str:
-        main = f"v{self.major}.{self.minor}.{self.patch}"
+    def raw(self) -> str:
+        main = f"{self.major}.{self.minor}.{self.patch}"
         rc = "" if self.rc is None else f"-rc{self.rc}"
         return main + rc
+
+    @property
+    def tag(self) -> str:
+        return f"v{self.raw}"
 
     @property
     def base(self) -> Self:
@@ -204,3 +209,16 @@ def get_next_proofwidgets_release(repo: Repository) -> str:
             patch = int(match.group(1))
             return f"v0.0.{patch + 1}"
     raise SystemExit("No releases found in tags")
+
+
+def get_refman_release_notes_path(version: Version) -> str:
+    stem = str(version.stable).replace(".", "_")
+    return f"Manual/Releases/{stem}.lean"
+
+
+def get_refman_release_notes_title(
+    version: Version,
+    released: datetime.datetime,
+) -> str:
+    date = released.astimezone(datetime.timezone.utc).strftime("%Y-%m-%d")
+    return f"Lean {version.raw} ({date})"

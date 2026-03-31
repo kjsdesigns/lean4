@@ -1,5 +1,8 @@
+import datetime
 import re
 from pathlib import Path
+from re import Match, Pattern
+from typing import Callable
 
 import click
 import repos
@@ -12,12 +15,24 @@ from util import (
     get_bump_toolchain_commit_message,
     get_github_instance,
     get_proofwidgets_release_for,
+    get_refman_release_notes_path,
+    get_refman_release_notes_title,
     get_toolchain_for_version,
     initialize_rich,
     prompt,
     run,
     run_stdout,
 )
+
+
+def edit(
+    path: Path,
+    pattern: Pattern[str] | str,
+    repl: Callable[[Match[str]], str] | str,
+) -> None:
+    text = path.read_text()
+    text = re.sub(pattern, repl, text)
+    path.write_text(text)
 
 
 class Steps:
@@ -64,11 +79,11 @@ class Steps:
         run("git", "diff", "--quiet", cwd=path)
 
         # There should be no stray files lying around
-        run("git", "clean", "-dfx", cwd=path)
+        run("git", "clean", "-dfx", cwd=path, silent=True)
 
         # The remote tracking branches should be up-to-date
-        run("git", "fetch", "--all", "--prune", "--prune-tags", cwd=path)
-        run("git", "fetch", "--all", "--prune", cwd=path)
+        run("git", "fetch", "--all", "--prune", "--prune-tags", cwd=path, silent=True)
+        run("git", "fetch", "--all", "--prune", cwd=path, silent=True)
 
     def ensure_repo(self, repo: ReleaseRepo) -> None:
         self._ensure_cloned(repo)
@@ -94,76 +109,98 @@ class Steps:
         run("git", "switch", "-C", branch, f"{remote}/{branch}", cwd=path)
         return branch
 
-    def _bump_toolchain_deps(self, repo: ReleaseRepo) -> None:
-        path = self.path(repo)
+    def _bump_toolchain(self, path: Path) -> None:
+        toolchain_file = path / "lean-toolchain"
+        toolchain = get_toolchain_for_version(self.version)
+        toolchain_file.write_text(toolchain + "\n")
 
+    def _bump_toolchain_deps(self, path: Path) -> None:
         lakefile = path / "lakefile.toml"
         if not lakefile.exists():
             lakefile = path / "lakefile.lean"
 
-        text = lakefile.read_text()
-        text = re.sub(
+        edit(
+            lakefile,
             r'rev = "v4\.[0-9]+(\.[0-9]+)?(-rc[0-9]+)?"',
             f'rev = "{self.version}"',
-            text,
         )
-        lakefile.write_text(text)
 
         run("lake", "update", cwd=path)
 
     def _bump_toolchain_mathlib4(self, repo: ReleaseRepo) -> None:
         path = self.path(repo)
-        lakefile = path / "lakefile.lean"
 
         pw = self.github.get_repo(repos.PROOFWIDGETS4.full_name)
         tag = get_proofwidgets_release_for(pw, self.version)
         if not tag:
             raise SystemExit(1)
 
-        text = lakefile.read_text()
-        text = re.sub(
+        edit(
+            path / "lakefile.lean",
             r'"proofwidgets" @ git "v0\.0\.\d+"',
             f'"proofwidgets" @ git "{tag.name}"',
-            text,
         )
-        lakefile.write_text(text)
 
-        self._bump_toolchain_deps(repo)
-
-    def _bump_toolchain_cslib(self, repo: ReleaseRepo) -> None:
-        if prompt("Special instructions executed?") == "n":
-            raise SystemExit(1)
+        self._bump_toolchain_deps(path)
 
     def _bump_toolchain_repl(self, repo: ReleaseRepo) -> None:
-        if prompt("Special instructions executed?") == "n":
-            raise SystemExit(1)
+        path = self.path(repo)
+        self._bump_toolchain_deps(path)
+
+        mathlib = path / "test" / "Mathlib"
+        self._bump_toolchain(mathlib)
+        self._bump_toolchain_deps(mathlib)
+
+        if prompt("Run tests?") == "y":
+            try:
+                run("./test.sh", cwd=path)
+                print("#####################")
+                print("## Tests succeeded ##")
+                print("#####################")
+            except SystemExit as e:
+                print("###################")
+                print("## Tests failed! ##")
+                print("###################")
+                raise e
 
     def _bump_toolchain_verso(self, repo: ReleaseRepo) -> None:
         path = self.path(repo)
-        run("lake", "update", cwd=path)
+        self._bump_toolchain_deps(path)
         run("./update-subverso.sh", cwd=path)
 
     def _bump_toolchain_reference_manual(self, repo: ReleaseRepo) -> None:
-        if prompt("Special instructions executed?") == "n":
-            raise SystemExit(1)
+        path = self.path(repo)
+        self._bump_toolchain_deps(path)
+
+        lean4 = self.github.get_repo("leanprover/lean4")
+        release = lean4.get_release(self.version.tag)
+
+        file = path / get_refman_release_notes_path(self.version)
+        title = get_refman_release_notes_title(self.version, release.created_at)
+        edit(
+            file,
+            r'#doc \(Manual\) "Lean 4\.\d+\.\d+(-rc\d+) \(\d{4}-\d{2}-\d{2}\)" =>',
+            f'#doc (Manual) "{title}" =>',
+        )
 
     def _bump_toolchain_lean_fro_org(self, repo: ReleaseRepo) -> None:
-        if prompt("Special instructions executed?") == "n":
-            raise SystemExit(1)
+        path = self.path(repo)
+        self._bump_toolchain_deps(path)
+
+        hero = path / "examples" / "hero"
+        self._bump_toolchain(hero)
+        self._bump_toolchain_deps(hero)
+
+        run("scripts/update.sh", cwd=path)
 
     def _bump_toolchain_in_worktree(self, repo: ReleaseRepo) -> None:
         path = self.path(repo)
 
-        # Bump toolchain file
-        toolchain_file = path / "lean-toolchain"
-        toolchain = get_toolchain_for_version(self.version)
-        toolchain_file.write_text(toolchain + "\n")
+        self._bump_toolchain(path)
 
         # Special cases
         if repo.full_name == repos.MATHLIB4.full_name:
             self._bump_toolchain_mathlib4(repo)
-        elif repo.full_name == repos.CSLIB.full_name:
-            self._bump_toolchain_cslib(repo)
         elif repo.full_name == repos.REPL.full_name:
             self._bump_toolchain_repl(repo)
         elif repo.full_name == repos.VERSO.full_name:
@@ -173,7 +210,7 @@ class Steps:
         elif repo.full_name == repos.LEAN_FRO_ORG.full_name:
             self._bump_toolchain_lean_fro_org(repo)
         elif repo.dependencies:
-            self._bump_toolchain_deps(repo)
+            self._bump_toolchain_deps(path)
 
         message = get_bump_toolchain_commit_message(self.version)
         run("git", "add", ".", cwd=path)
@@ -196,7 +233,7 @@ class Steps:
         self._bump_toolchain_in_worktree(repo)
         if not prompt(f"Push branch {branch} to origin?") == "y":
             raise SystemExit(1)
-        run("git", "push", "origin", branch, cwd=path)
+        run("git", "push", "-u", "origin", branch, cwd=path)
 
         # Create PR on GitHub
         if not prompt(f"Create PR for branch {branch}?") == "y":

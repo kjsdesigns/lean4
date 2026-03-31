@@ -22,6 +22,8 @@ from util import (
     get_github_instance,
     get_next_proofwidgets_release,
     get_proofwidgets_release_for,
+    get_refman_release_notes_path,
+    get_refman_release_notes_title,
     get_release_branch_name,
     get_toolchain,
     get_toolchain_for_version,
@@ -35,6 +37,7 @@ class RepoChecker:
     def __init__(
         self,
         interactive: bool,
+        fast: bool,
         version: Version,
         steps: Steps,
         completed: set[str],
@@ -42,6 +45,7 @@ class RepoChecker:
         grepo: Repository,
     ) -> None:
         self.interactive = interactive
+        self.fast = fast
         self.version = version
         self.steps = steps
         self.completed = completed
@@ -201,6 +205,8 @@ class RepoChecker:
     def check_mathlib4_version_tags(self) -> None:
         if self.rrepo.full_name != repos.MATHLIB4.full_name:
             return
+        if self.fast:
+            return
 
         path = self.steps.path(self.rrepo)
         self.steps.ensure_repo(self.rrepo)
@@ -245,10 +251,12 @@ class Checker:
     def __init__(
         self,
         interactive: bool,
+        fast: bool,
         version: Version,
         steps: Steps,
     ) -> None:
         self.interactive = interactive
+        self.fast = fast
         self.version = version
         self.steps = steps
 
@@ -378,21 +386,18 @@ class Checker:
     def check_reference_manual_title(self, release: GitRelease) -> None:
         repo = self.github.get_repo(repos.REFERENCE_MANUAL.full_name)
 
-        stem = str(self.version.stable).replace(".", "_")
-        file = f"Manual/Releases/{stem}.lean"
+        file = get_refman_release_notes_path(self.version)
         try:
             text = get_file_contents(repo, repo.default_branch, file)
         except SystemExit:
             self.cl.fail(f"Refman has no release log at [b]{e(file)}[/b]")
             return
 
-        date = release.created_at.astimezone(datetime.timezone.utc).strftime("%Y-%m-%d")
-        title = f"Lean {self.version} ({date})"
+        title = get_refman_release_notes_title(self.version, release.created_at)
         title_line = f'#doc (Manual) "{title}" =>'
-
         for line in text.splitlines():
             if line.strip() == title_line:
-                self.cl.success(f"Release log has title title [b]{e(title)}[/b]")
+                self.cl.success(f"Release log has title [b]{e(title)}[/b]")
                 return
 
         self.cl.fail(f"Release log does not have title [b]{e(title)}[/b]")
@@ -429,6 +434,7 @@ class Checker:
             try:
                 RepoChecker(
                     interactive=self.interactive,
+                    fast=self.fast,
                     version=self.version,
                     steps=self.steps,
                     completed=completed,
@@ -442,11 +448,11 @@ class Checker:
         self.cl.ensure_success()
 
 
-def main(version: Version, interactive: bool) -> None:
+def main(version: Version, interactive: bool = False, fast: bool = False) -> None:
     initialize_rich()
     github = get_github_instance()
     steps = Steps(version=version, github=github)
-    Checker(interactive=interactive, version=version, steps=steps).check()
+    Checker(interactive=interactive, fast=fast, version=version, steps=steps).check()
 
 
 class Args(Namespace):
@@ -458,5 +464,6 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("version", type=Version.parse)
     parser.add_argument("--interactive", "-i", action="store_true")
+    parser.add_argument("--fast", "-f", action="store_true")
     args = parser.parse_args(namespace=Args())
-    main(version=args.version, interactive=args.interactive)
+    main(version=args.version, interactive=args.interactive, fast=args.fast)
