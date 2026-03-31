@@ -11,25 +11,8 @@ from repos import ReleaseRepo
 from rich.markup import escape as e
 from steps import Steps
 
-from util import (
-    Checklist,
-    Version,
-    get_backport_label,
-    get_blocking_label,
-    get_bump_branch_name,
-    get_file_contents,
-    get_github_instance,
-    get_next_proofwidgets_release,
-    get_proofwidgets_release_for,
-    get_refman_release_notes_path,
-    get_refman_release_notes_title,
-    get_release_branch_name,
-    get_toolchain,
-    get_toolchain_for_version,
-    initialize_rich,
-    prompt,
-    run,
-)
+import util
+from util import Checklist, Version
 
 
 class RepoChecker:
@@ -56,7 +39,7 @@ class RepoChecker:
     def prompt(self, message: str) -> bool:
         if not self.interactive:
             return False
-        return prompt(message) == "y"
+        return util.prompt(message) == "y"
 
     def check_dependencies_completed(self) -> None:
         for dep in self.rrepo.dependencies:
@@ -67,8 +50,8 @@ class RepoChecker:
         self.cl.ensure_success()
 
     def check_repo_has_correct_toolchain(self) -> bool:
-        expected = get_toolchain_for_version(self.version)
-        actual = get_toolchain(self.grepo, self.grepo.default_branch)
+        expected = util.get_toolchain_for_version(self.version)
+        actual = util.get_toolchain(self.grepo, self.grepo.default_branch)
 
         if actual == expected:
             self.cl.success(f"Repo uses toolchain [b]{expected}[/b]")
@@ -79,7 +62,7 @@ class RepoChecker:
 
     def check_repo_has_bump_pr(self, fatal: bool = True) -> PullRequest | None:
         base = self.grepo.default_branch
-        head = get_bump_branch_name(self.version)
+        head = util.get_bump_branch_name(self.version)
         owner = self.rrepo.owner
 
         for pr in self.grepo.get_pulls(
@@ -182,14 +165,14 @@ class RepoChecker:
         if self.rrepo.full_name != repos.PROOFWIDGETS4.full_name:
             return
 
-        tag = get_proofwidgets_release_for(self.grepo, self.version)
+        tag = util.get_proofwidgets_release_for(self.grepo, self.version)
         if tag:
             self.cl.success(
                 f"Found tag [b]{e(tag.name)}[/b] with toolchain {self.version}"
             )
             return
 
-        next_release_tag = get_next_proofwidgets_release(self.grepo)
+        next_release_tag = util.get_next_proofwidgets_release(self.grepo)
         if not self.prompt(
             f"No tag found with toolchain [b]{self.version}[/b]. Create [b]{next_release_tag}[/b]?"
         ):
@@ -214,7 +197,7 @@ class RepoChecker:
         script = path / "scripts" / "verify_version_tags.py"
         script = script.resolve()
         try:
-            run("python", script, self.version.tag, cwd=path)
+            util.run("python", script, self.version.tag, cwd=path)
             self.cl.success(f"Version tags verified by [b]{e(script.name)}[/b]")
         except Exception:
             self.cl.fatal(f"Version tag verification by [b]{e(script.name)}[/b] failed")
@@ -267,7 +250,7 @@ class Checker:
         return self.steps.github
 
     def check_release_branch_exists(self, version: Version) -> Branch | None:
-        branch_name = get_release_branch_name(version)
+        branch_name = util.get_release_branch_name(version)
 
         try:
             branch = self.lean4.get_branch(branch_name)
@@ -290,7 +273,7 @@ class Checker:
         release: bool = True,
     ) -> None:
         path = "src/CMakeLists.txt"
-        contents = get_file_contents(self.lean4, branch, path)
+        contents = util.get_file_contents(self.lean4, branch, path)
         lines = {line.strip() for line in contents.splitlines()}
 
         expected = {
@@ -326,7 +309,7 @@ class Checker:
             self.cl.success(f"No open issues labeled [b]{e(label)}[/b] found")
 
     def check_no_open_backport_prs(self) -> None:
-        release_branch = get_release_branch_name(self.version)
+        release_branch = util.get_release_branch_name(self.version)
 
         success = True
         for pr in self.lean4.get_pulls(state="open", base=release_branch):
@@ -385,14 +368,14 @@ class Checker:
     def check_reference_manual_title(self, release: GitRelease) -> None:
         repo = self.github.get_repo(repos.REFERENCE_MANUAL.full_name)
 
-        file = get_refman_release_notes_path(self.version)
+        file = util.get_refman_release_notes_path(self.version)
         try:
-            text = get_file_contents(repo, repo.default_branch, file)
+            text = util.get_file_contents(repo, repo.default_branch, file)
         except SystemExit:
             self.cl.fail(f"Refman has no release log at [b]{e(file)}[/b]")
             return
 
-        title = get_refman_release_notes_title(self.version, release.created_at)
+        title = util.get_refman_release_notes_title(self.version, release.created_at)
         title_line = f'#doc (Manual) "{title}" =>'
         for line in text.splitlines():
             if line.strip() == title_line:
@@ -403,9 +386,9 @@ class Checker:
 
     def check(self) -> None:
         self.cl.section("Prepare release cycle")
-        self.check_label_exists(get_backport_label(self.version))
-        self.check_label_exists(get_blocking_label(self.version))
-        self.check_label_exists(get_blocking_label(self.version.next))
+        self.check_label_exists(util.get_backport_label(self.version))
+        self.check_label_exists(util.get_blocking_label(self.version))
+        self.check_label_exists(util.get_blocking_label(self.version.next))
         release_branch = self.check_release_branch_exists(self.version)
         if release_branch:
             self.check_cmake_version(self.version, release_branch.name)
@@ -416,8 +399,8 @@ class Checker:
         )
 
         self.cl.section("Release")
-        self.check_no_open_issues_labeled(get_backport_label(self.version))
-        self.check_no_open_issues_labeled(get_blocking_label(self.version))
+        self.check_no_open_issues_labeled(util.get_backport_label(self.version))
+        self.check_no_open_issues_labeled(util.get_blocking_label(self.version))
         self.check_no_open_backport_prs()
         release_tag = self.check_tag_exists()
         if release_tag:
@@ -448,8 +431,8 @@ class Checker:
 
 
 def main(version: Version, interactive: bool = False, fast: bool = False) -> None:
-    initialize_rich()
-    github = get_github_instance()
+    util.initialize_rich()
+    github = util.get_github_instance()
     steps = Steps(version=version, github=github)
     Checker(interactive=interactive, fast=fast, version=version, steps=steps).check()
 

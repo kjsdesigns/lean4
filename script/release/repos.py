@@ -207,6 +207,7 @@ QUOTE4 = ReleaseRepo(
 ## Visualization ##
 ###################
 
+
 def print_graphviz_dot() -> None:
     print("digraph G {")
     print("  rankdir=LR;")

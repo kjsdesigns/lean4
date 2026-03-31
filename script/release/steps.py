@@ -8,20 +8,8 @@ import repos
 from github import Github
 from repos import ReleaseRepo
 
-from util import (
-    Version,
-    get_bump_branch_name,
-    get_bump_toolchain_commit_message,
-    get_github_instance,
-    get_proofwidgets_release_for,
-    get_refman_release_notes_path,
-    get_refman_release_notes_title,
-    get_toolchain_for_version,
-    initialize_rich,
-    prompt,
-    run,
-    run_stdout,
-)
+import util
+from util import Version
 
 
 def edit(
@@ -48,7 +36,7 @@ class Steps:
         if path.exists():
             return
 
-        run("gh", "repo", "clone", repo.full_name, path)
+        util.run("gh", "repo", "clone", repo.full_name, path)
 
     def _ensure_remotes(self, repo: ReleaseRepo) -> None:
         path = self.path(repo)
@@ -58,31 +46,34 @@ class Steps:
             target["nightly"] = f"git@github.com:{repo.nightly}.git"
 
         actual = {
-            line.strip() for line in run_stdout("git", "remote", cwd=path).splitlines()
+            line.strip()
+            for line in util.run_stdout("git", "remote", cwd=path).splitlines()
         }
 
         for remote in actual:
             if remote not in target:
-                run("git", "remote", "remove", remote, cwd=path)
+                util.run("git", "remote", "remove", remote, cwd=path)
 
         for remote, url in target.items():
             if remote not in actual:
-                run("git", "remote", "add", remote, url, cwd=path)
+                util.run("git", "remote", "add", remote, url, cwd=path)
             else:
-                run("git", "remote", "set-url", remote, url, cwd=path)
+                util.run("git", "remote", "set-url", remote, url, cwd=path)
 
     def _ensure_ready(self, repo: ReleaseRepo) -> None:
         path = self.path(repo)
 
         # There should be no staged but uncommitted changes
-        run("git", "diff", "--quiet", cwd=path)
+        util.run("git", "diff", "--quiet", cwd=path)
 
         # There should be no stray files lying around
-        run("git", "clean", "-dfx", cwd=path, silent=True)
+        util.run("git", "clean", "-dfx", cwd=path, silent=True)
 
         # The remote tracking branches should be up-to-date
-        run("git", "fetch", "--all", "--prune", "--prune-tags", cwd=path, silent=True)
-        run("git", "fetch", "--all", "--prune", cwd=path, silent=True)
+        util.run(
+            "git", "fetch", "--all", "--prune", "--prune-tags", cwd=path, silent=True
+        )
+        util.run("git", "fetch", "--all", "--prune", cwd=path, silent=True)
 
     def ensure_repo(self, repo: ReleaseRepo) -> None:
         self._ensure_cloned(repo)
@@ -91,7 +82,9 @@ class Steps:
 
     def _get_default_branch(self, repo: ReleaseRepo) -> str:
         path = self.path(repo)
-        ref = run_stdout("git", "rev-parse", "--abbrev-ref", "origin/HEAD", cwd=path)
+        ref = util.run_stdout(
+            "git", "rev-parse", "--abbrev-ref", "origin/HEAD", cwd=path
+        )
         return ref.strip().split("/", 1)[1]
 
     def ensure_branch(
@@ -105,12 +98,12 @@ class Steps:
         if branch is None:
             branch = self._get_default_branch(repo)
 
-        run("git", "switch", "-C", branch, f"{remote}/{branch}", cwd=path)
+        util.run("git", "switch", "-C", branch, f"{remote}/{branch}", cwd=path)
         return branch
 
     def _bump_toolchain(self, path: Path) -> None:
         toolchain_file = path / "lean-toolchain"
-        toolchain = get_toolchain_for_version(self.version)
+        toolchain = util.get_toolchain_for_version(self.version)
         toolchain_file.write_text(toolchain + "\n")
 
     def _bump_toolchain_deps(self, path: Path) -> None:
@@ -124,13 +117,13 @@ class Steps:
             f'rev = "{self.version}"',
         )
 
-        run("lake", "update", cwd=path)
+        util.run("lake", "update", cwd=path)
 
     def _bump_toolchain_mathlib4(self, repo: ReleaseRepo) -> None:
         path = self.path(repo)
 
         pw = self.github.get_repo(repos.PROOFWIDGETS4.full_name)
-        tag = get_proofwidgets_release_for(pw, self.version)
+        tag = util.get_proofwidgets_release_for(pw, self.version)
         if not tag:
             raise SystemExit(1)
 
@@ -150,9 +143,9 @@ class Steps:
         self._bump_toolchain(mathlib)
         self._bump_toolchain_deps(mathlib)
 
-        if prompt("Run tests?") == "y":
+        if util.prompt("Run tests?") == "y":
             try:
-                run("./test.sh", cwd=path)
+                util.run("./test.sh", cwd=path)
                 print("#####################")
                 print("## Tests succeeded ##")
                 print("#####################")
@@ -165,7 +158,7 @@ class Steps:
     def _bump_toolchain_verso(self, repo: ReleaseRepo) -> None:
         path = self.path(repo)
         self._bump_toolchain_deps(path)
-        run("./update-subverso.sh", cwd=path)
+        util.run("./update-subverso.sh", cwd=path)
 
     def _bump_toolchain_reference_manual(self, repo: ReleaseRepo) -> None:
         path = self.path(repo)
@@ -174,8 +167,8 @@ class Steps:
         lean4 = self.github.get_repo("leanprover/lean4")
         release = lean4.get_release(self.version.tag)
 
-        file = path / get_refman_release_notes_path(self.version)
-        title = get_refman_release_notes_title(self.version, release.created_at)
+        file = path / util.get_refman_release_notes_path(self.version)
+        title = util.get_refman_release_notes_title(self.version, release.created_at)
         edit(
             file,
             r'#doc \(Manual\) "Lean 4\.\d+\.\d+(-rc\d+) \(\d{4}-\d{2}-\d{2}\)" =>',
@@ -190,7 +183,7 @@ class Steps:
         self._bump_toolchain(hero)
         self._bump_toolchain_deps(hero)
 
-        run("scripts/update.sh", cwd=path)
+        util.run("scripts/update.sh", cwd=path)
 
     def _bump_toolchain_in_worktree(self, repo: ReleaseRepo) -> None:
         path = self.path(repo)
@@ -211,15 +204,15 @@ class Steps:
         elif repo.dependencies:
             self._bump_toolchain_deps(path)
 
-        message = get_bump_toolchain_commit_message(self.version)
-        run("git", "add", ".", cwd=path)
-        run("git", "commit", "-m", message, cwd=path)
+        message = util.get_bump_toolchain_commit_message(self.version)
+        util.run("git", "add", ".", cwd=path)
+        util.run("git", "commit", "-m", message, cwd=path)
 
     def create_release_pr(self, repo: ReleaseRepo) -> int:
         path = self.path(repo)
         self.ensure_repo(repo)
 
-        branch = get_bump_branch_name(self.version)
+        branch = util.get_bump_branch_name(self.version)
 
         # The remote name is expanded to the default branch by git
         source = "origin"
@@ -228,18 +221,18 @@ class Steps:
             source_remote = "nightly" if repo.nightly else "origin"
             source = f"{source_remote}/bump/{self.version}"
 
-        run("git", "checkout", "-B", branch, source, cwd=path)
+        util.run("git", "checkout", "-B", branch, source, cwd=path)
         self._bump_toolchain_in_worktree(repo)
-        if not prompt(f"Push branch {branch} to origin?") == "y":
+        if not util.prompt(f"Push branch {branch} to origin?") == "y":
             raise SystemExit(1)
-        run("git", "push", "-u", "origin", branch, cwd=path)
+        util.run("git", "push", "-u", "origin", branch, cwd=path)
 
         # Create PR on GitHub
-        if not prompt(f"Create PR for branch {branch}?") == "y":
+        if not util.prompt(f"Create PR for branch {branch}?") == "y":
             raise SystemExit(1)
         grepo = self.github.get_repo(repo.full_name)
         pr = grepo.create_pull(
-            title=get_bump_toolchain_commit_message(self.version),
+            title=util.get_bump_toolchain_commit_message(self.version),
             head=branch,
             base=grepo.default_branch,
         )
@@ -249,9 +242,9 @@ class Steps:
     # Assumes the commit message is predictable
     def _find_release_commit_sha(self, repo: ReleaseRepo) -> str:
         path = self.path(repo)
-        expected = get_bump_toolchain_commit_message(self.version)
+        expected = util.get_bump_toolchain_commit_message(self.version)
 
-        for line in run_stdout(
+        for line in util.run_stdout(
             *("git", "log", "origin"),
             "--pretty=format:%H %s",
             "--max-count=100",
@@ -270,23 +263,23 @@ class Steps:
         tag = tag or self.version.tag
         sha = self._find_release_commit_sha(repo)
 
-        run("git", "tag", "--force", tag, sha, cwd=path)
-        if prompt(f"Push tag {tag} to origin?") == "y":
-            run("git", "push", "origin", tag, cwd=path)
+        util.run("git", "tag", "--force", tag, sha, cwd=path)
+        if util.prompt(f"Push tag {tag} to origin?") == "y":
+            util.run("git", "push", "origin", tag, cwd=path)
 
     def bump_stable_to_release_tag(self, repo: ReleaseRepo) -> None:
         path = self.path(repo)
         self.ensure_repo(repo)
         self.ensure_branch(repo, branch="stable")
 
-        run("git", "merge", "--ff-only", self.version.tag, cwd=path)
-        if prompt("Push branch stable to origin?") == "y":
-            run("git", "push", "origin", "stable", cwd=path)
+        util.run("git", "merge", "--ff-only", self.version.tag, cwd=path)
+        if util.prompt("Push branch stable to origin?") == "y":
+            util.run("git", "push", "origin", "stable", cwd=path)
 
 
 def init(version: Version) -> Steps:
-    initialize_rich()
-    github = get_github_instance()
+    util.initialize_rich()
+    github = util.get_github_instance()
     return Steps(version=version, github=github)
 
 
