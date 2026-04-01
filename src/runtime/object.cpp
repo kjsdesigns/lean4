@@ -415,17 +415,128 @@ static void lean_del_core(object * o, object * & todo) {
     }
 }
 
+// Adaptive deque for lean_dec_ref_cold.
+// Uses a small stack-allocated circular buffer processed in FIFO (BFS) order
+// for better cache locality when freeing wide structures (arrays, multi-field
+// constructors). When the buffer is full, excess objects overflow to the
+// existing in-object linked list (DFS order).
+#define LEAN_DEC_DEQUE_CAP 32u
+#define LEAN_DEC_DEQUE_MASK (LEAN_DEC_DEQUE_CAP - 1u)
+
+struct lean_del_deque {
+    lean_object * buf[LEAN_DEC_DEQUE_CAP];
+    unsigned head;
+    unsigned tail;
+    lean_object * overflow;
+};
+
+static inline void deque_enqueue(lean_del_deque & dq, lean_object * o) {
+    unsigned next_tail = (dq.tail + 1) & LEAN_DEC_DEQUE_MASK;
+    if (LEAN_LIKELY(next_tail != dq.head)) {
+        dq.buf[dq.tail] = o;
+        dq.tail = next_tail;
+    } else {
+        push_back(dq.overflow, o);
+    }
+}
+
+static inline lean_object * deque_pop(lean_del_deque & dq) {
+    if (LEAN_LIKELY(dq.head != dq.tail)) {
+        lean_object * r = dq.buf[dq.head];
+        dq.head = (dq.head + 1) & LEAN_DEC_DEQUE_MASK;
+        return r;
+    }
+    return pop_back(dq.overflow);
+}
+
+static inline bool deque_empty(lean_del_deque const & dq) {
+    return dq.head == dq.tail && dq.overflow == nullptr;
+}
+
+static inline void dec_deque(lean_object * o, lean_del_deque & dq) {
+    if (lean_is_scalar(o))
+        return;
+    if (LEAN_LIKELY(o->m_rc > 1)) {
+        o->m_rc--;
+    } else if (o->m_rc == 1) {
+        deque_enqueue(dq, o);
+    } else if (o->m_rc == 0) {
+        return;
+    } else if (std::atomic_fetch_add_explicit(lean_get_rc_mt_addr(o), 1, std::memory_order_acq_rel) == -1) {
+        deque_enqueue(dq, o);
+    }
+}
+
+static void lean_del_core_deque(object * o, lean_del_deque & dq) {
+    uint8 tag = lean_ptr_tag(o);
+    if (tag <= LeanMaxCtorTag) {
+        object ** it  = lean_ctor_obj_cptr(o);
+        object ** end = it + lean_ctor_num_objs(o);
+        for (; it != end; ++it) dec_deque(*it, dq);
+        lean_free_small_object(o);
+    } else {
+        switch (tag) {
+        case LeanClosure: {
+            object ** it  = lean_closure_arg_cptr(o);
+            object ** end = it + lean_closure_num_fixed(o);
+            for (; it != end; ++it) dec_deque(*it, dq);
+            lean_dealloc(o, lean_closure_byte_size(o));
+            break;
+        }
+        case LeanArray: {
+            object ** it  = lean_array_cptr(o);
+            object ** end = it + lean_array_size(o);
+            for (; it != end; ++it) dec_deque(*it, dq);
+            lean_dealloc(o, lean_array_byte_size(o));
+            break;
+        }
+        case LeanScalarArray:
+            lean_dealloc(o, lean_sarray_byte_size(o));
+            break;
+        case LeanString:
+            lean_dealloc(o, lean_string_byte_size(o));
+            break;
+        case LeanMPZ:
+            to_mpz(o)->m_value.~mpz();
+            lean_free_small_object(o);
+            break;
+        case LeanThunk:
+            if (object * c = lean_to_thunk(o)->m_closure) dec_deque(c, dq);
+            if (object * v = lean_to_thunk(o)->m_value) dec_deque(v, dq);
+            lean_free_small_object(o);
+            break;
+        case LeanRef:
+            if (object * v = lean_to_ref(o)->m_value) dec_deque(v, dq);
+            lean_free_small_object(o);
+            break;
+        case LeanTask:
+            deactivate_task(lean_to_task(o));
+            break;
+        case LeanPromise:
+            deactivate_promise(lean_to_promise(o));
+            break;
+        case LeanExternal:
+            lean_to_external(o)->m_class->m_finalize(lean_to_external(o)->m_data);
+            lean_free_small_object(o);
+            break;
+        default:
+            lean_unreachable();
+        }
+    }
+}
+
 extern "C" LEAN_EXPORT void lean_dec_ref_cold(lean_object * o) {
     if (o->m_rc == 1 || std::atomic_fetch_add_explicit(lean_get_rc_mt_addr(o), 1, std::memory_order_acq_rel) == -1) {
 #ifdef LEAN_LAZY_RC
         push_back(g_to_free, o);
 #else
-        object * todo = nullptr;
-        while (true) {
-            lean_del_core(o, todo);
-            if (todo == nullptr)
-                return;
-            o = pop_back(todo);
+        lean_del_deque dq;
+        dq.head = 0;
+        dq.tail = 0;
+        dq.overflow = nullptr;
+        deque_enqueue(dq, o);
+        while (!deque_empty(dq)) {
+            lean_del_core_deque(deque_pop(dq), dq);
         }
 #endif
     }
