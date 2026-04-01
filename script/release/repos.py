@@ -35,6 +35,11 @@ class ReleaseRepo:
         return BY_FULL_NAME[full_name]
 
 
+LEAN4 = ReleaseRepo(
+    owner="leanprover",
+    name="lean4",
+)  # Don't register this repo!
+
 ##################
 ## Repositories ##
 ##################

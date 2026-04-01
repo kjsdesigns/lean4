@@ -101,6 +101,62 @@ class Steps:
         util.run("git", "switch", "-C", branch, f"{remote}/{branch}", cwd=path)
         return branch
 
+    def _bump_cmake_version(
+        self,
+        path: Path,
+        version: Version,
+        release: bool,
+    ) -> None:
+        cmakelists = path / "src" / "CMakeLists.txt"
+        edit(
+            cmakelists,
+            r"set\(LEAN_VERSION_MAJOR \d+ ",
+            f"set(LEAN_VERSION_MAJOR {version.major} ",
+        )
+        edit(
+            cmakelists,
+            r"set\(LEAN_VERSION_MINOR \d+ ",
+            f"set(LEAN_VERSION_MINOR {version.minor} ",
+        )
+        edit(
+            cmakelists,
+            r"set\(LEAN_VERSION_PATCH \d+ ",
+            f"set(LEAN_VERSION_PATCH {version.patch} ",
+        )
+        edit(
+            cmakelists,
+            r"set\(LEAN_VERSION_IS_RELEASE \d+ ",
+            f"set(LEAN_VERSION_IS_RELEASE {int(release)} ",
+        )
+
+    def create_dev_cycle_pr(self) -> int:
+        path = self.path(repos.LEAN4)
+        self.ensure_repo(repos.LEAN4)
+
+        # Create branch
+        branch = util.get_dev_cycle_branch_name(self.version)
+        util.run("git", "checkout", "-B", branch, "origin/master", cwd=path)
+
+        # Edit
+        self._bump_cmake_version(path, self.version.next, release=False)
+
+        # Commit
+        message = util.get_dev_cycle_commit_message(self.version)
+        util.run("git", "add", ".", cwd=path)
+        util.run("git", "commit", "-m", message, cwd=path)
+
+        # Push to GitHub
+        if not util.prompt(f"Push branch {branch} to origin?") == "y":
+            raise SystemExit(1)
+        util.run("git", "push", "-u", "origin", branch, cwd=path)
+
+        # Create PR on GitHub
+        if not util.prompt(f"Create PR for branch {branch}?") == "y":
+            raise SystemExit(1)
+        grepo = self.github.get_repo(repos.LEAN4.full_name)
+        pr = grepo.create_pull(title=message, head=branch, base=grepo.default_branch)
+        return pr.number
+
     def _bump_toolchain(self, path: Path) -> None:
         toolchain_file = path / "lean-toolchain"
         toolchain = util.get_toolchain_for_version(self.version)
@@ -164,7 +220,7 @@ class Steps:
         path = self.path(repo)
         self._bump_toolchain_deps(path)
 
-        lean4 = self.github.get_repo("leanprover/lean4")
+        lean4 = self.github.get_repo(repos.LEAN4.full_name)
         release = lean4.get_release(self.version.tag)
 
         file = path / util.get_refman_release_notes_path(self.version)

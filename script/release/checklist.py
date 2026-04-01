@@ -63,15 +63,9 @@ class RepoChecker:
     def check_repo_has_bump_pr(self, fatal: bool = True) -> PullRequest | None:
         base = self.grepo.default_branch
         head = util.get_bump_branch_name(self.version)
-        owner = self.rrepo.owner
 
-        for pr in self.grepo.get_pulls(
-            state="all",
-            head=f"{owner}:{head}",
-            base=base,
-            sort="created",
-            direction="desc",
-        ):
+        pr = util.get_pr_from_branch(repo=self.grepo, base=base, head=head)
+        if pr:
             self.cl.success(
                 f"Found PR #{pr.number} [b u link={pr.html_url}]{e(pr.title)}[/]"
             )
@@ -243,11 +237,16 @@ class Checker:
         self.steps = steps
 
         self.cl = Checklist()
-        self.lean4 = self.github.get_repo("leanprover/lean4")
+        self.lean4 = self.github.get_repo(repos.LEAN4.full_name)
 
     @property
     def github(self) -> Github:
         return self.steps.github
+
+    def prompt(self, message: str) -> bool:
+        if not self.interactive:
+            return False
+        return util.prompt(message) == "y"
 
     def check_release_branch_exists(self, version: Version) -> Branch | None:
         branch_name = util.get_release_branch_name(version)
@@ -259,19 +258,48 @@ class Checker:
         except UnknownObjectException:
             self.cl.fail(f"Release branch [b]{e(branch_name)}[/] does not exist")
 
-    def check_label_exists(self, label: str) -> None:
+    def _check_label_exists(
+        self,
+        name: str,
+        color: str,
+        description: str | None = None,
+    ) -> None:
         try:
-            self.lean4.get_label(label)
-            self.cl.success(f"Label [b]{e(label)}[/b] exists")
+            self.lean4.get_label(name)
+            self.cl.success(f"Label [b]{e(name)}[/b] exists")
+            return
         except UnknownObjectException:
-            self.cl.fail(f"Label [b]{e(label)}[/] does not exist")
+            pass
+
+        if not self.prompt(f"Label [b]{e(name)}[/b] does not exist. Create?"):
+            self.cl.fail(f"Label [b]{e(name)}[/] does not exist")
+            return
+
+        if description is None:
+            self.lean4.create_label(name=name, color=color)
+        else:
+            self.lean4.create_label(name=name, color=color, description=description)
+        self.cl.success(f"Label [b]{e(name)}[/b] created")
+
+    def check_backport_label_exists(self, version: Version) -> None:
+        self._check_label_exists(
+            name=util.get_backport_label(version),
+            color="1d76db",
+        )
+
+    def check_blocking_label_exists(self, version: Version) -> None:
+        self._check_label_exists(
+            name=util.get_blocking_label(version),
+            color="b60205",
+            description=f"Blocks the next {version.base} release candidate or release from being published.",
+        )
 
     def check_cmake_version(
         self,
         version: Version,
         branch: str,
         release: bool = True,
-    ) -> None:
+    ) -> bool:
         path = "src/CMakeLists.txt"
         contents = util.get_file_contents(self.lean4, branch, path)
         lines = {line.strip() for line in contents.splitlines()}
@@ -295,6 +323,49 @@ class Checker:
 
         if success:
             self.cl.success(f"CMake version settings on [b]{e(branch)}[/b] are correct")
+
+        return success
+
+    def check_repo_has_dev_cycle_pr(self, fatal: bool = True) -> PullRequest | None:
+        base = self.lean4.default_branch
+        head = util.get_dev_cycle_branch_name(self.version)
+
+        pr = util.get_pr_from_branch(repo=self.lean4, base=base, head=head)
+        if pr:
+            self.cl.success(
+                f"Found PR #{pr.number} [b u link={pr.html_url}]{e(pr.title)}[/]"
+            )
+            return pr
+
+        if not fatal:
+            self.cl.success(f"No PR found from [b]{e(head)}[/b] to [b]{e(base)}[/b]")
+            return
+
+        if not self.prompt(f"No PR found from [b]{head}[/b] to [b]{base}[/b]. Create?"):
+            self.cl.fatal(f"No PR found from [b]{e(head)}[/b] to [b]{e(base)}[/b]")
+
+        number = self.steps.create_dev_cycle_pr()
+        pr = self.lean4.get_pull(number)
+        self.cl.success(
+            f"Created PR #{pr.number} [b u link={pr.html_url}]{e(pr.title)}[/]"
+        )
+        return pr
+
+    def check_dev_cycle_pr_is_merged(self, pr: PullRequest) -> None:
+        if pr.merged:
+            self.cl.success("PR is merged")
+        elif pr.state == "closed":
+            self.cl.success("PR is closed")
+        else:
+            self.cl.fail("PR is not merged")
+            return
+
+        # Ideally, we clean up after ourselves
+        try:
+            pr.head.repo.get_git_ref(f"heads/{pr.head.ref}")
+            self.cl.warn("PR branch has not been deleted")
+        except UnknownObjectException:
+            self.cl.success("PR branch has been deleted")
 
     def check_no_open_issues_labeled(self, label: str) -> None:
         success = True
@@ -338,6 +409,7 @@ class Checker:
         runs = list(runs)
         if len(runs) == 0:
             self.cl.fail("No release workflow runs found")
+            return
 
         run = runs[0]
 
@@ -345,11 +417,13 @@ class Checker:
             self.cl.blocked(
                 f"[b u link={run.html_url}]Release workflow run {run.id}[/] is still running"
             )
+            return
 
         if run.conclusion != "success":
             self.cl.fail(
                 f"[b u link={run.html_url}]Release workflow run {run.id}[/] failed"
             )
+            return
 
         self.cl.success(
             f"[b u link={run.html_url}]Release workflow run {run.id}[/] finished"
@@ -386,17 +460,21 @@ class Checker:
 
     def check(self) -> None:
         self.cl.section("Prepare release cycle")
-        self.check_label_exists(util.get_backport_label(self.version))
-        self.check_label_exists(util.get_blocking_label(self.version))
-        self.check_label_exists(util.get_blocking_label(self.version.next))
+        self.check_backport_label_exists(self.version)
+        self.check_blocking_label_exists(self.version)
+        self.check_blocking_label_exists(self.version.next)
         release_branch = self.check_release_branch_exists(self.version)
         if release_branch:
             self.check_cmake_version(self.version, release_branch.name)
-        self.check_cmake_version(
+
+        cmake = self.check_cmake_version(
             self.version.next,
             self.lean4.default_branch,
             release=False,
         )
+        pr = self.check_repo_has_dev_cycle_pr(fatal=not cmake)
+        if pr:
+            self.check_dev_cycle_pr_is_merged(pr)
 
         self.cl.section("Release")
         self.check_no_open_issues_labeled(util.get_backport_label(self.version))

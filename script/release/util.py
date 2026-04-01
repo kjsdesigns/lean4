@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import NoReturn, Self
 
 from github import Auth, Github, UnknownObjectException
+from github.PullRequest import PullRequest
 from github.Repository import Repository
 from github.Tag import Tag
 from rich import get_console, print, reconfigure
@@ -167,6 +168,14 @@ def get_bump_toolchain_commit_message(version: Version) -> str:
     return f"chore: bump toolchain to {version}"
 
 
+def get_dev_cycle_branch_name(version: Version) -> str:
+    return f"dev-cycle-{version.next}"
+
+
+def get_dev_cycle_commit_message(version: Version) -> str:
+    return f"chore: begin development cycle for {version.next}"
+
+
 def get_toolchain_for_version(version: Version) -> str:
     return f"leanprover/lean4:{version.tag}"
 
@@ -191,6 +200,18 @@ def get_file_contents(repo: Repository, ref: str, path: str) -> str:
 
 def get_toolchain(repo: Repository, ref: str) -> str:
     return get_file_contents(repo, ref, "lean-toolchain").strip()
+
+
+def get_pr_from_branch(repo: Repository, base: str, head: str) -> PullRequest | None:
+    owner = repo.owner.login
+    for pr in repo.get_pulls(
+        state="all",
+        head=f"{owner}:{head}",
+        base=base,
+        sort="created",
+        direction="desc",
+    ):
+        return pr
 
 
 def get_proofwidgets_release_for(repo: Repository, version: Version) -> Tag | None:
